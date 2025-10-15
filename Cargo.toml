@@ -1,5 +1,6 @@
 [package]
 name = "apk-info"
+description = "APK file parser"
 license-file = "LICENSE"
 version.workspace = true
 edition.workspace = true
