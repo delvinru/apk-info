@@ -73,3 +73,6 @@ docs/_build/
 
 # direnv
 .direnv/*
+
+# custom check scripts
+checks/
