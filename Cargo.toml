@@ -11,10 +11,18 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.25.0"
+zip.workspace = true
 
 [workspace]
 resolver = "2"
+members = ["zip"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+
+[workspace.dependencies]
+zip = {path = "zip"}
+flate2 = "1.1.4"
+memchr = "2.7.6"
+winnow = "0.7.13"

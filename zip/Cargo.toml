@@ -1,0 +1,9 @@
+[package]
+name = "zip"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+memchr = { workspace = true }
+flate2 = { workspace = true }
+winnow = { workspace = true }
