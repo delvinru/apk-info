@@ -1,0 +1,19 @@
+[package]
+name = "apk-info"
+license-file = "LICENSE"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "apk_info"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.25.0"
+
+[workspace]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
