@@ -14,6 +14,8 @@ version = "0.1.0"
 dependencies = [
  "axml",
  "pyo3",
+ "serde",
+ "serde_json",
  "zip",
 ]
 

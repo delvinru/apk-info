@@ -13,6 +13,8 @@ crate-type = ["cdylib"]
 pyo3 = "0.26.0"
 zip.workspace = true
 axml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [workspace]
 resolver = "2"
