@@ -26,3 +26,32 @@ class APK:
         List of the filenames included in the central directory
         """
         ...
+
+    def get_package_name(self) -> str | None:
+        """
+        Retrieves the package name declared in the `<manifest>` element.
+
+        Returns:
+            str | None: The package name (e.g., "com.example.app") if found,
+            otherwise `None`.
+        """
+        ...
+
+    def get_min_sdk_version(self) -> str | None:
+        """
+        Extracts the minimum supported SDK version (`minSdkVersion`)
+        from the APK's manifest.
+
+        Returns:
+            str | None: The minimum SDK version as a string, or `None` if not specified.
+        """
+        ...
+
+    def get_max_sdk_version(self) -> str | None:
+        """
+        Retrieves the maximum supported SDK version (`maxSdkVersion`) if declared.
+
+        Returns:
+            str | None: The maximum SDK version as a string, or `None` if not specified.
+        """
+        ...

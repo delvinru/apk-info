@@ -1,5 +1,6 @@
 use std::{fs, path::PathBuf};
 
+use axml::axml::AXML;
 use pyo3::{
     exceptions::{PyFileNotFoundError, PyIOError, PyTypeError, PyValueError},
     prelude::*,
@@ -12,6 +13,7 @@ pub struct APK {
     #[pyo3(get)]
     path: PathBuf,
     zip: ZipEntry,
+    axml: AXML,
 }
 
 #[pymethods]
@@ -43,7 +45,11 @@ impl APK {
                 .read("AndroidManifest.xml")
                 .map_err(|_| PyValueError::new_err("can't find AndroidManifest.xml, is it apk?"))?;
 
-            return Ok(APK { path: p, zip });
+            let axml = AXML::new(&mut &manifest[..]).map_err(|e| {
+                PyValueError::new_err(format!("got error while parsing axml: {:?}", e))
+            })?;
+
+            return Ok(APK { path: p, zip, axml });
         }
 
         Err(PyTypeError::new_err("expected str | Path"))
@@ -73,6 +79,21 @@ impl APK {
     /// List of the filenames included in the central directory
     fn get_files(&self) -> Vec<&String> {
         self.zip.namelist().collect()
+    }
+
+    /// Retrieves the package name defined in the `<manifest>` tag.
+    fn get_package_name(&self) -> Option<&str> {
+        self.axml.get_attribute_value("manifest", "package")
+    }
+
+    /// Retrieves the minimum SDK version required by the app.
+    fn get_min_sdk_version(&self) -> Option<&str> {
+        self.axml.get_attribute_value("uses-sdk", "minSdkVersion")
+    }
+
+    /// Retrieves the maximum SDK version supported by the app.
+    fn get_max_sdk_version(&self) -> Option<&str> {
+        self.axml.get_attribute_value("uses-sdk", "maxSdkVersion")
     }
 }
 
