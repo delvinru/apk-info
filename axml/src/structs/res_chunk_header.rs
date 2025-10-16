@@ -3,7 +3,7 @@ use winnow::{
     prelude::*,
 };
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Eq, PartialOrd, Ord)]
 #[repr(u16)]
 pub enum ResourceType {
     #[default]

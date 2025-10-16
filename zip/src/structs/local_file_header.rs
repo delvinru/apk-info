@@ -76,6 +76,7 @@ impl LocalFileHeader {
     /// Get structure size
     ///
     /// 4 (MAGIC) + 26 (DATA) + file_name length + extra field length
+    #[inline]
     pub fn size(&self) -> usize {
         30 + self.file_name.len() + self.extra_field.len()
     }

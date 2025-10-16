@@ -50,6 +50,28 @@ impl From<u8> for ResourceValueType {
     }
 }
 
+#[derive(Debug)]
+pub struct XMLResourceMap {
+    pub header: ResChunkHeader,
+    pub resource_ids: Vec<u32>,
+}
+
+impl XMLResourceMap {
+    pub fn parse(input: &mut &[u8]) -> ModalResult<XMLResourceMap> {
+        let header = ResChunkHeader::parse(input)?;
+        let resource_ids = repeat(
+            (header.size.saturating_sub(header.header_size as u32) / 4) as usize,
+            le_u32,
+        )
+        .parse_next(input)?;
+
+        Ok(XMLResourceMap {
+            header,
+            resource_ids,
+        })
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct XMLHeader {
     pub header: ResChunkHeader,
@@ -58,8 +80,7 @@ pub struct XMLHeader {
 }
 
 impl XMLHeader {
-    pub fn parse(input: &mut &[u8]) -> ModalResult<XMLHeader> {
-        let header = ResChunkHeader::parse(input)?;
+    pub fn parse(input: &mut &[u8], header: ResChunkHeader) -> ModalResult<XMLHeader> {
         let (line_number, comment) = (le_u32, le_u32).parse_next(input)?;
 
         Ok(XMLHeader {

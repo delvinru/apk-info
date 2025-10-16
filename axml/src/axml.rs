@@ -1,5 +1,9 @@
 use minidom::Element;
-use winnow::prelude::*;
+use winnow::{
+    error::{ContextError, ErrMode},
+    prelude::*,
+    token::take,
+};
 
 use crate::{
     errors::AXMLError,
@@ -7,10 +11,9 @@ use crate::{
         res_chunk_header::{ResChunkHeader, ResourceType},
         res_string_pool::StringPool,
         xml_elements::{
-            XMLHeader, XmlAttributeElement, XmlCData, XmlElement, XmlEndElement, XmlEndNamespace,
-            XmlNodeElements, XmlStartElement, XmlStartNamespace,
+            XMLHeader, XMLResourceMap, XmlAttributeElement, XmlCData, XmlElement, XmlEndElement,
+            XmlEndNamespace, XmlNodeElements, XmlStartElement, XmlStartNamespace,
         },
-        xml_resource_map::XmlResourceMapType,
     },
     system_types::SYSTEM_TYPES,
 };
@@ -20,7 +23,7 @@ pub struct AXML {
     pub header: ResChunkHeader,
     pub is_tampered: bool,
     pub string_pool: StringPool,
-    pub xml_resource: XmlResourceMapType,
+    pub xml_resource: XMLResourceMap,
     pub root: Element,
 }
 
@@ -48,7 +51,7 @@ impl AXML {
         let string_pool = StringPool::parse(input).map_err(|_| AXMLError::StringPool)?;
 
         // parse resource map
-        let xml_resource = XmlResourceMapType::parse(input).map_err(|_| AXMLError::ResourceMap)?;
+        let xml_resource = XMLResourceMap::parse(input).map_err(|_| AXMLError::ResourceMap)?;
 
         // parse xml tree
         let elements = Self::parse_xml_tree(input).map_err(|_| AXMLError::XmlTree)?;
@@ -66,10 +69,39 @@ impl AXML {
     }
 
     fn parse_xml_tree(input: &mut &[u8]) -> ModalResult<Vec<XmlNodeElements>> {
+        // NOTE: very bad sample, need research - dcafcffab0cc9a435c23ac4aac76afb329893ccdc535b7e4d57175e05706efba
+        // NOTE: somehow aapt2 extracts all informations from this
+
         let mut elements: Vec<XmlNodeElements> = Vec::new();
 
         loop {
-            let xml_header = match XMLHeader::parse(input) {
+            let chunk_header = match ResChunkHeader::parse(input) {
+                Ok(v) => v,
+                Err(ErrMode::Backtrack(_)) => return Ok(elements),
+                Err(e) => return Err(e),
+            };
+
+            // some junk malware tries tamper axml
+            if chunk_header.type_ < ResourceType::XmlStartNamespace
+                || chunk_header.type_ > ResourceType::XmlLastChunk
+            {
+                // TODO: show warning or just silently ignore, idk for now
+                eprintln!("not a xml resource chunk: {:?}", chunk_header);
+                let _ = take::<u32, &[u8], ContextError>(chunk_header.size - 8).parse_next(input);
+                continue;
+            };
+
+            // another junk malware techniques
+            if chunk_header.header_size != 0x10 {
+                eprintln!(
+                    "xml resource chunk header size is not 16: {:?}",
+                    chunk_header
+                );
+                let _ = take::<u32, &[u8], ContextError>(chunk_header.size - 8).parse_next(input);
+                continue;
+            }
+
+            let xml_header = match XMLHeader::parse(input, chunk_header) {
                 Ok(v) => v,
                 Err(_) => return Ok(elements),
             };
@@ -108,7 +140,7 @@ impl AXML {
     fn get_xml_tree<'a>(
         elements: &[XmlNodeElements],
         string_pool: &'a StringPool,
-        xml_resource: &'a XmlResourceMapType,
+        xml_resource: &'a XMLResourceMap,
     ) -> Element {
         let mut stack: Vec<Element> = vec![];
 
@@ -164,7 +196,7 @@ impl AXML {
     fn get_attribute_name<'a>(
         attribute: &XmlAttributeElement,
         string_pool: &'a StringPool,
-        xml_resource: &'a XmlResourceMapType,
+        xml_resource: &'a XMLResourceMap,
     ) -> Option<&'a String> {
         if let Some(v) = string_pool.get(attribute.name) {
             if !v.is_empty() {

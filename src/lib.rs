@@ -36,6 +36,12 @@ impl APK {
 
         match zip.read("AndroidManifest.xml") {
             Ok((manifest, _)) => {
+                if manifest.is_empty() {
+                    return Err(PyValueError::new_err(
+                        "AndroidManifest.xml is empty, not a valid apk",
+                    ));
+                }
+
                 let axml = AXML::new(&mut &manifest[..]).map_err(|e| {
                     PyValueError::new_err(format!("got error while parsing axml: {:?}", e))
                 })?;
@@ -66,6 +72,12 @@ impl APK {
                         "can't find AndroidManifest.xml in inner apk, not a valid apk/xapk",
                     )
                 })?;
+
+                if inner_manifest.is_empty() {
+                    return Err(PyValueError::new_err(
+                        "AndroidManifest.xml in inner apk is empty, not a valid xapk",
+                    ));
+                }
 
                 let axml = AXML::new(&mut &inner_manifest[..]).map_err(|e| {
                     PyValueError::new_err(format!(

@@ -122,8 +122,10 @@ impl ZipEntry {
                     FlushDecompress::Finish,
                 );
 
+                // check if decompression was actually successfull
+                let is_valid = decompressor.total_in() == compressed_data.len() as u64;
                 match status {
-                    Ok(Status::Ok) => {
+                    Ok(Status::Ok) | Ok(Status::StreamEnd) if is_valid => {
                         Ok((uncompressed_data, FileCompressionType::DeflatedTampered))
                     }
                     _ => {
