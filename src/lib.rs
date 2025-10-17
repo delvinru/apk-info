@@ -29,7 +29,7 @@ pub struct APK {
 impl APK {
     fn init_zip_and_axml(p: &Path) -> PyResult<(ZipEntry, AXML)> {
         let input = fs::read(p).map_err(|_| PyIOError::new_err("can't open given file"))?;
-        if input.len() == 0 {
+        if input.is_empty() {
             return Err(PyValueError::new_err(format!("{:?} is empty", p)));
         }
 
@@ -102,10 +102,8 @@ impl APK {
     pub fn new(path: &Bound<'_, PyAny>) -> PyResult<APK> {
         let resolved: Option<PathBuf> = if let Ok(s) = path.extract::<&str>() {
             Some(PathBuf::from(s))
-        } else if let Ok(p) = path.extract::<PathBuf>() {
-            Some(p)
         } else {
-            None
+            path.extract::<PathBuf>().ok()
         };
 
         let p = resolved.ok_or_else(|| PyTypeError::new_err("expected str | Path"))?;
