@@ -29,6 +29,9 @@ pub struct APK {
 impl APK {
     fn init_zip_and_axml(p: &Path) -> PyResult<(ZipEntry, AXML)> {
         let input = fs::read(p).map_err(|_| PyIOError::new_err("can't open given file"))?;
+        if input.len() == 0 {
+            return Err(PyValueError::new_err(format!("{:?} is empty", p)));
+        }
 
         let zip = ZipEntry::new(input).map_err(|e| {
             PyValueError::new_err(format!("got error while parsing zip entry: {:?}", e))
@@ -162,6 +165,8 @@ impl APK {
 
 #[pymodule]
 fn _apk(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    env_logger::init();
+
     m.add_class::<APK>()?;
     Ok(())
 }

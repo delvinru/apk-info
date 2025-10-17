@@ -1,3 +1,4 @@
+use log::warn;
 use winnow::{
     binary::{le_u16, le_u32, le_u8},
     combinator::repeat,
@@ -7,24 +8,54 @@ use winnow::{
 
 use crate::structs::{res_chunk_header::ResChunkHeader, res_string_pool::StringPool};
 
+/// Type of the data value
 #[derive(Debug, Default)]
 #[repr(u8)]
 pub enum ResourceValueType {
+    /// The 'data' is either 0 or 1, specifying this resource is either undefined or empty, respectively.
     #[default]
     Null = 0x00,
+
+    /// The 'data' holds a ResTable_ref — a reference to another resource table entry.
     Reference = 0x01,
+
+    /// The 'data' holds an attribute resource identifier.
     Attribute = 0x02,
+
+    /// The 'data' holds an index into the containing resource table's global value string pool.
     String = 0x03,
+
+    /// The 'data' holds a single-precision floating point number.
     Float = 0x04,
+
+    /// The 'data' holds a complex number encoding a dimension value, such as "100in".
     Dimension = 0x05,
+
+    /// The 'data' holds a complex number encoding a fraction of a container.
     Fraction = 0x06,
+
+    /// The 'data' is a raw integer value of the form n..n.
     Dec = 0x10,
+
+    /// The 'data' is a raw integer value of the form 0xn..n.
     Hex = 0x11,
+
+    /// The 'data' is either 0 or 1, for input "false" or "true" respectively.
     Boolean = 0x12,
+
+    /// The 'data' is a raw integer value of the form #aarrggbb.
     ColorArgb8 = 0x1c,
+
+    /// The 'data' is a raw integer value of the form #rrggbb.
     ColorRgb8 = 0x1d,
+
+    /// The 'data' is a raw integer value of the form #argb.
     ColorArgb4 = 0x1e,
+
+    /// The 'data' is a raw integer value of the form #rgb.
     ColorRgb4 = 0x1f,
+
+    /// Unknown type value
     Unknown(u8),
 }
 
@@ -72,10 +103,15 @@ impl XMLResourceMap {
     }
 }
 
+/// Basic XML tree node. A single item in the XML document.
 #[derive(Debug, Default)]
 pub struct XMLHeader {
-    pub header: ResChunkHeader,
+    pub(crate) header: ResChunkHeader,
+
+    /// Line number in original source file at which this element appeared
     pub line_number: u32,
+
+    // Optional XML comment that was associated with this element; -1 if none
     pub comment: u32,
 }
 
@@ -89,6 +125,13 @@ impl XMLHeader {
             comment,
         })
     }
+
+    /// Get the size of the data without taking into account the size of the structure itself
+    #[inline(always)]
+    pub fn content_size(&self) -> u32 {
+        // u32 (line_number) + u32 (comment)
+        self.header.content_size().saturating_sub(4 + 4)
+    }
 }
 
 pub trait XmlElement {
@@ -97,21 +140,25 @@ pub trait XmlElement {
         Self: Sized;
 }
 
+/// Extended XML tree node for namespace start/end nodes
 #[derive(Debug)]
-pub struct XmlStartNamespace {
+pub struct XmlNamespace {
     pub header: XMLHeader,
+    /// The prefix of the namespace
     pub prefix: u32,
+
+    /// The URI of the namespace
     pub uri: u32,
 }
 
-impl XmlElement for XmlStartNamespace {
+impl XmlElement for XmlNamespace {
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
     {
         let (prefix, uri) = (le_u32, le_u32).parse_next(input)?;
 
-        Ok(XmlStartNamespace {
+        Ok(XmlNamespace {
             header,
             prefix,
             uri,
@@ -119,33 +166,19 @@ impl XmlElement for XmlStartNamespace {
     }
 }
 
-#[derive(Debug)]
-pub struct XmlEndNamespace {
-    pub header: XMLHeader,
-    pub prefix: u32,
-    pub uri: u32,
-}
-
-impl XmlElement for XmlEndNamespace {
-    fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
-    where
-        Self: Sized,
-    {
-        let (prefix, uri) = (le_u32, le_u32).parse_next(input)?;
-
-        Ok(XmlEndNamespace {
-            header,
-            prefix,
-            uri,
-        })
-    }
-}
-
+/// Representation of a value in a resource, supplying type information
 #[derive(Debug, Default)]
 pub struct ResourceValue {
+    /// Number of bytes in this structure
     pub size: u16,
+
+    /// Always set to 0
     pub res: u8,
+
+    /// Type of the data value
     pub data_type: ResourceValueType,
+
+    /// Data itself
     pub data: u32,
 }
 
@@ -155,6 +188,7 @@ impl ResourceValue {
     const COMPLEX_UNIT_MASK: u32 = 0x0F;
     const FRACTION_UNITS: [&str; 2] = ["%", "%p"];
 
+    #[inline]
     pub fn parse(input: &mut &[u8]) -> ModalResult<ResourceValue> {
         (le_u16, le_u8, le_u8, le_u32)
             .map(|(size, res, data_type, data)| ResourceValue {
@@ -212,9 +246,16 @@ impl ResourceValue {
 
 #[derive(Debug, Default)]
 pub struct XmlAttributeElement {
+    /// Namespace of this attribute
     pub namespace_uri: u32,
+
+    /// Name of this attribute
     pub name: u32,
+
+    /// The original raw string value of this attribute
     pub value: u32,
+
+    /// Processed typed value of this attribute
     pub typed_value: ResourceValue,
 
     attribute_name: String,
@@ -224,6 +265,7 @@ pub struct XmlAttributeElement {
 impl XmlAttributeElement {
     const DEFAULT_ATTRIBUTE_SIZE: u16 = 0x14;
 
+    #[inline]
     pub fn parse(
         attribute_size: u16,
     ) -> impl FnMut(&mut &[u8]) -> ModalResult<XmlAttributeElement> {
@@ -231,7 +273,7 @@ impl XmlAttributeElement {
             let (namespace_uri, name, value) = (le_u32, le_u32, le_u32).parse_next(input)?;
             let typed_value = ResourceValue::parse(input)?;
 
-            // sometimes attribute size != 0x20, need to scroll through the data
+            // sometimes attribute size != 20, need to scroll through the data
             let _ = take(attribute_size.saturating_sub(Self::DEFAULT_ATTRIBUTE_SIZE))
                 .parse_next(input)?;
 
@@ -269,24 +311,34 @@ impl XmlAttributeElement {
 #[derive(Debug, Default)]
 pub struct XmlStartElement {
     pub header: XMLHeader,
+    /// String of the full namespace of this element
     pub namespace_uri: u32,
+
+    /// String name of this node
     pub name: u32,
+
+    /// Byte offset from the start of this structure where the attributes start
     pub attribute_start: u16,
+
+    /// Size of the ...
     pub attribute_size: u16,
+
+    /// Number of attributes associated with element
     pub attribute_count: u16,
+
+    /// Index (1-based) of the "id" attribute. 0 if none.
     pub id_index: u16,
+
+    /// Index (1-based) of the "class" attribute. 0 if none.
     pub class_index: u16,
+
+    /// Index (1-based) of the "style" attribute. 0 if none.
     pub style_index: u16,
+
+    /// List of associated attributes
     pub attributes: Vec<XmlAttributeElement>,
 
-    // emit additional attributes
-    pub tampered_xml: bool,
-
     element_name: String,
-}
-
-impl XmlStartElement {
-    const BASE_SIZE: u32 = 36;
 }
 
 impl XmlElement for XmlStartElement {
@@ -294,6 +346,8 @@ impl XmlElement for XmlStartElement {
     where
         Self: Sized,
     {
+        let start = input.len();
+
         let (
             namespace_uri,
             name,
@@ -315,19 +369,31 @@ impl XmlElement for XmlStartElement {
         )
             .parse_next(input)?;
 
+        // TODO: need somehow show this "garbage" indicator
+        // consume some garbage until attribute_start - probably packing techniques, idk
+        // default "attribute_start" is 0x14, so we take garbage value and subtract
+        let tampered_attribute_size =
+            attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE);
+        if tampered_attribute_size != 0 {
+            warn!("skip tampered attribute size: {}", attribute_start);
+            take(attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE))
+                .parse_next(input)?;
+        }
+
         let attributes = repeat(
             attribute_count as usize,
             XmlAttributeElement::parse(attribute_size),
         )
         .parse_next(input)?;
 
-        // check if garbage data at the end, often in malware
-        let mut tampered_xml = false;
-        let readed_bytes = Self::BASE_SIZE + (attribute_count * attribute_size) as u32;
-        let remaining_bytes = header.header.size.saturating_sub(readed_bytes);
-        if remaining_bytes != 0 {
-            tampered_xml = true;
-            let _ = take(remaining_bytes as usize).parse_next(input)?;
+        let readed_bytes = start - input.len();
+
+        // TODO: need somehow show this "garbage" indicator
+        // consume garbage data after readed chunk
+        let tampered_chunk_size = header.content_size().saturating_sub(readed_bytes as u32);
+        if tampered_chunk_size != 0 {
+            warn!("skip garbage bytes in chunk: {}", tampered_chunk_size);
+            take(tampered_chunk_size).parse_next(input)?;
         }
 
         Ok(XmlStartElement {
@@ -341,7 +407,6 @@ impl XmlElement for XmlStartElement {
             class_index,
             style_index,
             attributes,
-            tampered_xml,
             ..XmlStartElement::default()
         })
     }
@@ -392,10 +457,15 @@ impl XmlEndElement {
     }
 }
 
+/// Extended XML tree node for CDATA tags - includes the CDATA string.
 #[derive(Debug)]
 pub struct XmlCData {
     pub header: XMLHeader,
+
+    // The raw CDATA character data
     pub data: u32,
+
+    // The typed value of the character data if this is a CDATA node
     pub typed_data: ResourceValue,
 }
 
@@ -417,8 +487,8 @@ impl XmlElement for XmlCData {
 
 #[derive(Debug)]
 pub enum XmlNodeElements {
-    XmlStartNamespace(XmlStartNamespace),
-    XmlEndNamespace(XmlEndNamespace),
+    XmlStartNamespace(XmlNamespace),
+    XmlEndNamespace(XmlNamespace),
     XmlStartElement(XmlStartElement),
     XmlEndElement(XmlEndElement),
     XmlCData(XmlCData),

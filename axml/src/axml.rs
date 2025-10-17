@@ -1,3 +1,4 @@
+use log::warn;
 use minidom::Element;
 use winnow::{
     error::{ContextError, ErrMode},
@@ -11,12 +12,14 @@ use crate::{
         res_chunk_header::{ResChunkHeader, ResourceType},
         res_string_pool::StringPool,
         xml_elements::{
-            XMLHeader, XMLResourceMap, XmlAttributeElement, XmlCData, XmlElement, XmlEndElement,
-            XmlEndNamespace, XmlNodeElements, XmlStartElement, XmlStartNamespace,
+            XMLHeader, XMLResourceMap, XmlCData, XmlElement, XmlEndElement, XmlNamespace,
+            XmlNodeElements, XmlStartElement,
         },
     },
     system_types::SYSTEM_TYPES,
 };
+
+const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
 
 #[derive(Debug)]
 pub struct AXML {
@@ -37,14 +40,17 @@ impl AXML {
         // parse header
         let header = ResChunkHeader::parse(input).map_err(|_| AXMLError::Header)?;
 
+        let mut is_tampered = false;
+
+        // some malware tamper this parameter
+        // 25cd28cbf4886ea29e6c378dbcdc3b077c2b33a8c58053bbaefb368f4df11529
+        if header.type_ != ResourceType::Xml {
+            is_tampered = true;
+        }
+
         // header size must be 8 bytes, otherwise is non valid axml
         if header.header_size != 8 {
             return Err(AXMLError::HeaderSize);
-        }
-
-        let mut is_tampered = false;
-        if header.type_ != ResourceType::Xml {
-            is_tampered = true;
         }
 
         // parse string pool
@@ -81,23 +87,23 @@ impl AXML {
                 Err(e) => return Err(e),
             };
 
-            // some junk malware tries tamper axml
+            // skip non xml chunks
             if chunk_header.type_ < ResourceType::XmlStartNamespace
                 || chunk_header.type_ > ResourceType::XmlLastChunk
             {
-                // TODO: show warning or just silently ignore, idk for now
-                eprintln!("not a xml resource chunk: {:?}", chunk_header);
-                let _ = take::<u32, &[u8], ContextError>(chunk_header.size - 8).parse_next(input);
+                warn!("not a xml resource chunk: {chunk_header:?}");
+                let _ =
+                    take::<u32, &[u8], ContextError>(chunk_header.content_size()).parse_next(input);
+
                 continue;
             };
 
             // another junk malware techniques
             if chunk_header.header_size != 0x10 {
-                eprintln!(
-                    "xml resource chunk header size is not 16: {:?}",
-                    chunk_header
-                );
-                let _ = take::<u32, &[u8], ContextError>(chunk_header.size - 8).parse_next(input);
+                warn!("xml resource chunk header size is not 0x10: {chunk_header:?}");
+                let _ =
+                    take::<u32, &[u8], ContextError>(chunk_header.content_size()).parse_next(input);
+
                 continue;
             }
 
@@ -108,11 +114,11 @@ impl AXML {
 
             let element = match xml_header.header.type_ {
                 ResourceType::XmlStartNamespace => {
-                    let e = XmlStartNamespace::parse(input, xml_header)?;
+                    let e = XmlNamespace::parse(input, xml_header)?;
                     XmlNodeElements::XmlStartNamespace(e)
                 }
                 ResourceType::XmlEndNamespace => {
-                    let e = XmlEndNamespace::parse(input, xml_header)?;
+                    let e = XmlNamespace::parse(input, xml_header)?;
                     XmlNodeElements::XmlEndNamespace(e)
                 }
                 ResourceType::XmlStartElement => {
@@ -154,18 +160,24 @@ impl AXML {
                     let mut element = Element::builder(name, "android");
 
                     if name == "manifest" {
-                        element = element.attr(
-                            "xmlns:android",
-                            "http://schemas.android.com/apk/res/android",
-                        );
+                        element = element.attr("xmlns:android", ANDROID_NAMESPACE);
                     }
 
                     for attribute in &node.attributes {
-                        let attribute_name =
-                            match Self::get_attribute_name(attribute, string_pool, xml_resource) {
-                                Some(name) => name,
-                                None => continue,
-                            };
+                        let attribute_name = match Self::get_string_from_pool(
+                            attribute.name,
+                            string_pool,
+                            xml_resource,
+                        ) {
+                            Some(name) => name,
+                            None => continue,
+                        };
+
+                        // skip garbage strings
+                        if attribute_name.contains(char::is_whitespace) {
+                            warn!("skipped garbage attribute name: {:?}", attribute_name);
+                            continue;
+                        }
 
                         element = element
                             .attr(attribute_name, attribute.typed_value.to_string(string_pool));
@@ -193,19 +205,19 @@ impl AXML {
         stack.remove(0)
     }
 
-    fn get_attribute_name<'a>(
-        attribute: &XmlAttributeElement,
+    fn get_string_from_pool<'a>(
+        idx: u32,
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
     ) -> Option<&'a String> {
-        if let Some(v) = string_pool.get(attribute.name) {
+        if let Some(v) = string_pool.get(idx) {
             if !v.is_empty() {
                 return Some(v);
             }
         }
         xml_resource
             .resource_ids
-            .get(attribute.name as usize)
+            .get(idx as usize)
             .and_then(|v| SYSTEM_TYPES.get_attribute_name(v))
     }
 

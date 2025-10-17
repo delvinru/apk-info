@@ -3,6 +3,7 @@ use winnow::{
     prelude::*,
 };
 
+/// See: https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=237
 #[derive(Debug, PartialEq, Default, Eq, PartialOrd, Ord)]
 #[repr(u16)]
 pub enum ResourceType {
@@ -66,8 +67,7 @@ impl From<u16> for ResourceType {
 /// See: https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=220?q=ResourceTypes.h&ss=android
 #[derive(Debug, Default)]
 pub struct ResChunkHeader {
-    /// Type identifier for this chunk.  The meaning of this value depends
-    /// on the containing chunk.
+    /// Type identifier for this chunk. The meaning of this value depends on the containing chunk.
     pub type_: ResourceType,
 
     /// Size of the chunk header (in bytes).  Adding this value to
@@ -93,5 +93,12 @@ impl ResChunkHeader {
                 size,
             })
             .parse_next(input)
+    }
+
+    /// Get the size of the data without taking into account the size of the structure itself
+    #[inline(always)]
+    pub fn content_size(&self) -> u32 {
+        // u16 (type_) + u16 (header_size) + u32 (size)
+        self.size.saturating_sub(2 + 2 + 4)
     }
 }
