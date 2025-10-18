@@ -27,10 +27,9 @@ pub(crate) fn command_show(paths: &[PathBuf]) -> Result<()> {
 fn show(path: &Path) -> Result<()> {
     let apk = Apk::new(path).with_context(|| format!("got error while parsing apk: {:?}", path))?;
 
-    let package_name = apk.get_package_name().unwrap_or_default();
-    let min_sdk = apk.get_min_sdk_version().unwrap_or_default();
+    let info = apk.get_all_information(true);
 
-    println!("{} ({})", package_name, min_sdk);
+    println!("{}", info);
 
     Ok(())
 }

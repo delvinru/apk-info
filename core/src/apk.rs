@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fs,
     io::{self},
     path::Path,
@@ -11,7 +12,7 @@ use apk_info_zip::{
 };
 use serde::Deserialize;
 
-use crate::errors::APKError;
+use crate::{errors::APKError, models::ApkJson};
 
 #[derive(Deserialize)]
 struct XAPKManifest {
@@ -97,6 +98,44 @@ impl Apk {
         Ok(Apk { zip, axml })
     }
 
+    pub fn get_all_information(&self, pretty: bool) -> String {
+        let info = ApkJson {
+            package_name: self.get_package_name().map(String::from),
+            min_sdk_version: self.get_min_sdk_version().map(String::from),
+            target_sdk_version: self.get_target_sdk_version().map(String::from),
+            max_sdk_version: self.get_max_sdk_version().map(String::from),
+            declared_permissions: self
+                .get_declared_permissions()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            shared_user_id: self.get_shared_user_id().map(String::from),
+            shared_user_label: self.get_shared_user_label().map(String::from),
+            shared_user_max_sdk_version: self.get_shared_user_max_sdk_version().map(String::from),
+            version_code: self.get_version_code().map(String::from),
+            version_name: self.get_version_name().map(String::from),
+            install_location: self.get_install_location().map(String::from),
+            features: self.get_features().into_iter().map(String::from).collect(),
+            permissions: self
+                .get_permissions()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            permissions_sdk23: self
+                .get_permissions_sdk23()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+        };
+
+        // TODO: remove unwrap
+        if pretty {
+            serde_json::to_string_pretty(&info).unwrap()
+        } else {
+            serde_json::to_string(&info).unwrap()
+        }
+    }
+
     /// Read data from zip by filename
     pub fn read(&self, filename: &str) -> Result<(Vec<u8>, FileCompressionType), ZipError> {
         self.zip.read(filename)
@@ -107,18 +146,89 @@ impl Apk {
         self.zip.namelist().collect()
     }
 
+    // extract information from manifest tag
+
     /// Retrieves the package name defined in the `<manifest>` tag.
     pub fn get_package_name(&self) -> Option<&str> {
         self.axml.get_attribute_value("manifest", "package")
     }
 
+    pub fn get_shared_user_id(&self) -> Option<&str> {
+        self.axml.get_attribute_value("manifest", "sharedUserId")
+    }
+
+    pub fn get_shared_user_label(&self) -> Option<&str> {
+        self.axml.get_attribute_value("manifest", "sharedUserLabel")
+    }
+
+    pub fn get_shared_user_max_sdk_version(&self) -> Option<&str> {
+        self.axml
+            .get_attribute_value("manifest", "sharedUserMaxSdkVersion")
+    }
+
+    pub fn get_version_code(&self) -> Option<&str> {
+        self.axml.get_attribute_value("manifest", "versionCode")
+    }
+
+    pub fn get_version_name(&self) -> Option<&str> {
+        self.axml.get_attribute_value("manifest", "versionName")
+    }
+
+    pub fn get_install_location(&self) -> Option<&str> {
+        self.axml.get_attribute_value("manifest", "installLocation")
+    }
+
+    // extract information from other tags
+
+    pub fn get_features(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("uses-feature", "name")
+            .collect()
+    }
+
+    pub fn get_permissions(&self) -> HashSet<&str> {
+        // TODO: some apk uses "<android:uses-permission", wtf this is
+        self.axml
+            .get_all_attribute_values("uses-permission", "name")
+            .collect()
+    }
+
+    pub fn get_permissions_sdk23(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("uses-permission-sdk-23", "name")
+            .collect()
+    }
+
+    // extract information from sdk
+
     /// Retrieves the minimum SDK version required by the app.
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/uses-sdk-element#min
     pub fn get_min_sdk_version(&self) -> Option<&str> {
         self.axml.get_attribute_value("uses-sdk", "minSdkVersion")
     }
 
+    /// Retrieves the target SDK version requested by the app.
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/uses-sdk-element#target
+    pub fn get_target_sdk_version(&self) -> Option<&str> {
+        self.axml
+            .get_attribute_value("uses-sdk", "targetSdkVersion")
+    }
+
     /// Retrieves the maximum SDK version supported by the app.
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/uses-sdk-element#max
     pub fn get_max_sdk_version(&self) -> Option<&str> {
         self.axml.get_attribute_value("uses-sdk", "maxSdkVersion")
+    }
+
+    // extract information from permission tag
+
+    pub fn get_declared_permissions(&self) -> HashSet<&str> {
+        // TODO: maybe create some kind of structure, idk
+        self.axml
+            .get_all_attribute_values("permission", "name")
+            .collect()
     }
 }
