@@ -5,7 +5,10 @@ use std::{
 };
 
 use apk_info_axml::axml::AXML;
-use apk_info_zip::entry::ZipEntry;
+use apk_info_zip::{
+    entry::ZipEntry,
+    errors::{FileCompressionType, ZipError},
+};
 use serde::Deserialize;
 
 use crate::errors::APKError;
@@ -94,6 +97,11 @@ impl APK {
         let (zip, axml) = Self::init_zip_and_axml(&path)?;
 
         Ok(APK { zip, axml })
+    }
+
+    /// Read data from zip by filename
+    pub fn read(&self, filename: &str) -> Result<(Vec<u8>, FileCompressionType), ZipError> {
+        self.zip.read(filename)
     }
 
     /// List of the filenames included in the central directory

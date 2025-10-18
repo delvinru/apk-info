@@ -13,8 +13,6 @@ tests = ["pytest"]
 
 [tool.maturin]
 profile = "release"
-python-source = "python"
-module-name = "apk_info._apk"
 features = ["pyo3/extension-module"]
 strip = true
 
