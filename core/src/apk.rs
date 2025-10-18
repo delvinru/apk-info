@@ -12,7 +12,10 @@ use apk_info_zip::{
 };
 use serde::Deserialize;
 
-use crate::{errors::APKError, models::ApkJson};
+use crate::{
+    errors::APKError,
+    models::{ApkJson, Application},
+};
 
 #[derive(Deserialize)]
 struct XAPKManifest {
@@ -125,6 +128,30 @@ impl Apk {
                 .into_iter()
                 .map(String::from)
                 .collect(),
+            application: Application {
+                allow_task_reparenting: self.get_application_task_reparenting().map(String::from),
+                allow_backup: self.get_application_allow_backup().map(String::from),
+                app_category: self.get_application_category().map(String::from),
+                backup_agent: self.get_application_backup_agent().map(String::from),
+                debuggable: self.get_application_debuggable().map(String::from),
+                description: self.get_application_description().map(String::from),
+                label: self.get_application_label().map(String::from),
+                name: self.get_application_name().map(String::from),
+            },
+            main_activities: self
+                .get_main_activities()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            libraries: self.get_libraries().into_iter().map(String::from).collect(),
+            activities: self
+                .get_activities()
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            services: self.get_services().into_iter().map(String::from).collect(),
+            receivers: self.get_receivers().into_iter().map(String::from).collect(),
+            providers: self.get_providers().into_iter().map(String::from).collect(),
         };
 
         // TODO: remove unwrap
@@ -177,12 +204,64 @@ impl Apk {
         self.axml.get_attribute_value("manifest", "installLocation")
     }
 
-    // extract information from other tags
-
-    pub fn get_features(&self) -> HashSet<&str> {
+    /// Extract information from `<application android:allowTaskReparenting="true | false">`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#reparent
+    pub fn get_application_task_reparenting(&self) -> Option<&str> {
         self.axml
-            .get_all_attribute_values("uses-feature", "name")
-            .collect()
+            .get_attribute_value("application", "allowTaskReparenting")
+    }
+
+    /// Extract information from `<application android:allowBackup="true | false"`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#allowbackup
+    pub fn get_application_allow_backup(&self) -> Option<&str> {
+        self.axml.get_attribute_value("application", "allowBackup")
+    }
+
+    /// Extract information from `<application android:appCategory=["accessibility" | "audio" | "game" | "image" | "maps" | "news" | "productivity" | "social" | "video"]`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#appCategory
+    pub fn get_application_category(&self) -> Option<&str> {
+        self.axml.get_attribute_value("application", "appCategory")
+    }
+
+    /// Extract information from `<application android:backupAgent="string">`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#agent
+    pub fn get_application_backup_agent(&self) -> Option<&str> {
+        self.axml.get_attribute_value("application", "backupAgent")
+    }
+
+    /// Extract information from `<application android:debuggable=["true" | "false"]>`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#debug
+    pub fn get_application_debuggable(&self) -> Option<&str> {
+        self.axml.get_attribute_value("application", "debuggable")
+    }
+
+    /// Extract information from `<application android:descriptionr="string resource">`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#desc
+    pub fn get_application_description(&self) -> Option<&str> {
+        // TODO: resolve with resources
+        self.axml.get_attribute_value("application", "description")
+    }
+
+    /// Extract information from `<application android:label="string resource">`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#label
+    pub fn get_application_label(&self) -> Option<&str> {
+        // TODO: probably not so easy
+        self.axml.get_attribute_value("application", "label")
+    }
+
+    /// Extract information form `<application android;name="string">`
+    ///
+    /// See: https://developer.android.com/guide/topics/manifest/application-element#nm
+    pub fn get_application_name(&self) -> Option<&str> {
+        // TODO: probably not so easy
+        self.axml.get_attribute_value("application", "name")
     }
 
     pub fn get_permissions(&self) -> HashSet<&str> {
@@ -197,8 +276,6 @@ impl Apk {
             .get_all_attribute_values("uses-permission-sdk-23", "name")
             .collect()
     }
-
-    // extract information from sdk
 
     /// Retrieves the minimum SDK version required by the app.
     ///
@@ -222,12 +299,57 @@ impl Apk {
         self.axml.get_attribute_value("uses-sdk", "maxSdkVersion")
     }
 
-    // extract information from permission tag
+    /// Retrieves all libraries declared by the app.
+    pub fn get_libraries(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("uses-library", "name")
+            .collect()
+    }
+
+    /// Retrieves all features declared by the app.
+    pub fn get_features(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("uses-feature", "name")
+            .collect()
+    }
 
     pub fn get_declared_permissions(&self) -> HashSet<&str> {
         // TODO: maybe create some kind of structure, idk
         self.axml
             .get_all_attribute_values("permission", "name")
+            .collect()
+    }
+
+    /// Retrieves all **main** activities declared by the app.
+    pub fn get_main_activities(&self) -> HashSet<&str> {
+        self.axml.get_main_activities().collect()
+    }
+
+    /// Retrieves all activities declared by the app.
+    pub fn get_activities(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("activity", "name")
+            .collect()
+    }
+
+    /// Retrieves all services declared by the app.
+    pub fn get_services(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("service", "name")
+            .collect()
+    }
+
+    /// Retrieves all receivers declared by the app.
+    pub fn get_receivers(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("receiver", "name")
+            .collect()
+    }
+
+    /// Retrieves all providers declared by the app.
+    pub fn get_providers(&self) -> HashSet<&str> {
+        self.axml
+            .get_all_attribute_values("provider", "name")
             .collect()
     }
 }
