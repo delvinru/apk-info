@@ -1,37 +1,26 @@
-[package]
-name = "apk-info"
-description = "APK file parser"
-license-file = "LICENSE"
-version.workspace = true
-edition.workspace = true
-
-[lib]
-name = "apk_info"
-crate-type = ["cdylib"]
-
-[dependencies]
-axml.workspace = true
-env_logger.workspace = true
-pyo3.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-zip.workspace = true
-
 [workspace]
 resolver = "2"
-members = ["zip"]
+members = ["cli", "core", "crates/axml", "crates/zip", "python"]
 
 [workspace.package]
+authors = ["Alexey <delvinru@gmail.com>"]
+description = "APK full featured parser"
+edition = "2024"
+license = "Apache License 2.0"
+readme = "README.md"
 version = "0.1.0"
-edition = "2021"
 
 [workspace.dependencies]
-# self crates
-axml = { path = "axml" }
-zip = { path = "zip" }
+# internal
+apk-info-axml = { path = "crates/axml" }
+apk-info-zip = { path = "crates/zip" }
+apk-info = { path = "core" }
 
+# external
+anyhow = "1.0.100"
 bitflags = "2.9.4"
-env_logger = "0.11.8"
+clap = { version = "4.5.49", features = ["derive"] }
+env_logger = { version = "0.11.8", features = ["auto-color"] }
 flate2 = "1.1.4"
 log = "0.4.28"
 memchr = "2.7.6"
@@ -42,4 +31,6 @@ quick-xml = "0.38.3"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 signer = { path = "signer" }
+thiserror = "2"
+walkdir = "2.5.0"
 winnow = { version = "0.7.13", features = ["simd"] }

@@ -1,0 +1,15 @@
+[package]
+name = "apk-info-python"
+description.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+version.workspace = true
+
+[lib]
+name = "apk_info"
+crate-type = ["cdylib"]
+
+[dependencies]
+apk-info.workspace = true
+pyo3.workspace = true

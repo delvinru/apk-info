@@ -1,0 +1,12 @@
+[package]
+name = "apk-info-zip"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+flate2.workspace = true
+memchr.workspace = true
+thiserror.workspace = true
+winnow.workspace = true

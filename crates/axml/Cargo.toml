@@ -1,0 +1,19 @@
+[package]
+name = "apk-info-axml"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bitflags.workspace = true
+log.workspace = true
+minidom.workspace = true
+once_cell.workspace = true
+quick-xml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+winnow.workspace = true
+
+[[bin]]
+name = "xml-converter"
+path = "src/bin/xml-converter.rs"

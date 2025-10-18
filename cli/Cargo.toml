@@ -1,0 +1,19 @@
+[package]
+name = "apk-info-cli"
+description = "A command-line tool to get information from apk"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+apk-info.workspace = true
+clap.workspace = true
+env_logger.workspace = true
+log.workspace = true
+walkdir.workspace = true
+
+[[bin]]
+name = "apk-info"
+path = "src/main.rs"
