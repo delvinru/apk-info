@@ -1,7 +1,7 @@
 use std::{
     fs,
     io::{self},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use apk_info_axml::axml::AXML;
@@ -18,21 +18,21 @@ struct XAPKManifest {
     package_name: String,
 }
 
-pub struct APK {
+pub struct Apk {
     zip: ZipEntry,
     axml: AXML,
 }
 
 /// Implementation of internal methods
-impl APK {
+impl Apk {
     fn init_zip_and_axml(p: &Path) -> Result<(ZipEntry, AXML), APKError> {
-        let input = fs::read(p).map_err(|e| APKError::IoError(e))?;
+        let input = fs::read(p).map_err(APKError::IoError)?;
 
         if input.is_empty() {
             return Err(APKError::InvalidInput("got empty file"));
         }
 
-        let zip = ZipEntry::new(input).map_err(|e| APKError::ZipError(e))?;
+        let zip = ZipEntry::new(input).map_err(APKError::ZipError)?;
 
         match zip.read("AndroidManifest.xml") {
             Ok((manifest, _)) => {
@@ -42,7 +42,7 @@ impl APK {
                     ));
                 }
 
-                let axml = AXML::new(&mut &manifest[..]).map_err(|e| APKError::ManifestError(e))?;
+                let axml = AXML::new(&mut &manifest[..]).map_err(APKError::ManifestError)?;
                 Ok((zip, axml))
             }
             Err(_) => {
@@ -58,15 +58,14 @@ impl APK {
                     .map_err(|_| APKError::InvalidInput("can't parse manifest.json"))?;
 
                 let package_name = format!("{}.apk", manifest_json.package_name);
-                let (inner_apk_data, _) =
-                    zip.read(&package_name).map_err(|e| APKError::ZipError(e))?;
+                let (inner_apk_data, _) = zip.read(&package_name).map_err(APKError::ZipError)?;
 
-                let inner_apk = ZipEntry::new(inner_apk_data).map_err(|e| APKError::ZipError(e))?;
+                let inner_apk = ZipEntry::new(inner_apk_data).map_err(APKError::ZipError)?;
 
                 // try again read AndroidManifest.xml from inner apk
                 let (inner_manifest, _) = inner_apk
                     .read("AndroidManifest.xml")
-                    .map_err(|e| APKError::ZipError(e))?;
+                    .map_err(APKError::ZipError)?;
 
                 if inner_manifest.is_empty() {
                     return Err(APKError::InvalidInput(
@@ -74,8 +73,7 @@ impl APK {
                     ));
                 }
 
-                let axml =
-                    AXML::new(&mut &inner_manifest[..]).map_err(|e| APKError::ManifestError(e))?;
+                let axml = AXML::new(&mut &inner_manifest[..]).map_err(APKError::ManifestError)?;
 
                 // Возвращаем оригинальный zip и axml (по ТЗ)
                 Ok((zip, axml))
@@ -84,8 +82,8 @@ impl APK {
     }
 }
 
-impl APK {
-    pub fn new(path: &PathBuf) -> Result<APK, APKError> {
+impl Apk {
+    pub fn new(path: &Path) -> Result<Apk, APKError> {
         // perform basic sanity check
         if !path.exists() {
             return Err(APKError::IoError(io::Error::new(
@@ -94,9 +92,9 @@ impl APK {
             )));
         }
 
-        let (zip, axml) = Self::init_zip_and_axml(&path)?;
+        let (zip, axml) = Self::init_zip_and_axml(path)?;
 
-        Ok(APK { zip, axml })
+        Ok(Apk { zip, axml })
     }
 
     /// Read data from zip by filename

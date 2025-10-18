@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use ::apk_info::apk::APK as APKRust;
+use ::apk_info::apk::Apk as ApkRust;
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::types::PyString;
 use pyo3::{Bound, PyAny, PyResult, pyclass, pymethods};
@@ -8,16 +8,16 @@ use pyo3::{create_exception, prelude::*};
 
 create_exception!(m, APKError, PyException, "Got error while parsing apk");
 
-#[pyclass]
-struct APK {
+#[pyclass(name = "APK")]
+struct Apk {
     /// Store rust object in memory
-    apkrs: APKRust,
+    apkrs: ApkRust,
 }
 
 #[pymethods]
-impl APK {
+impl Apk {
     #[new]
-    pub fn new(path: &Bound<'_, PyAny>) -> PyResult<APK> {
+    pub fn new(path: &Bound<'_, PyAny>) -> PyResult<Apk> {
         let resolved: Option<PathBuf> = if let Ok(s) = path.extract::<&str>() {
             Some(PathBuf::from(s))
         } else {
@@ -32,9 +32,9 @@ impl APK {
             )));
         }
 
-        let apkrs = APKRust::new(&path).map_err(|e| APKError::new_err(e.to_string()))?;
+        let apkrs = ApkRust::new(&path).map_err(|e| APKError::new_err(e.to_string()))?;
 
-        Ok(APK { apkrs })
+        Ok(Apk { apkrs })
     }
 
     /// Read data from zip by filename
@@ -78,6 +78,6 @@ impl APK {
 fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("APKError", m.py().get_type::<APKError>())?;
 
-    m.add_class::<APK>()?;
+    m.add_class::<Apk>()?;
     Ok(())
 }

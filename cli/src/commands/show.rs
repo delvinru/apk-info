@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use apk_info::apk::APK;
+use apk_info::apk::Apk;
 use walkdir::WalkDir;
 
 pub(crate) fn command_show(paths: &[PathBuf]) -> Result<()> {
@@ -17,15 +17,15 @@ pub(crate) fn command_show(paths: &[PathBuf]) -> Result<()> {
                 show(&apk_path)?
             }
         } else if path.is_file() {
-            show(&path)?
+            show(path)?
         }
     }
 
     Ok(())
 }
 
-fn show(path: &PathBuf) -> Result<()> {
-    let apk = APK::new(path).with_context(|| format!("got error while parsing apk: {:?}", path))?;
+fn show(path: &Path) -> Result<()> {
+    let apk = Apk::new(path).with_context(|| format!("got error while parsing apk: {:?}", path))?;
 
     let package_name = apk.get_package_name().unwrap_or_default();
     let min_sdk = apk.get_min_sdk_version().unwrap_or_default();

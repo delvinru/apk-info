@@ -27,7 +27,7 @@ impl ZipEntry {
             .map_err(|_| ZipError::ParseError)?;
 
         let central_directory =
-            CentralDirectory::parse(&mut &input, &eocd).map_err(|_| ZipError::ParseError)?;
+            CentralDirectory::parse(&input, &eocd).map_err(|_| ZipError::ParseError)?;
 
         let local_headers = central_directory
             .entries

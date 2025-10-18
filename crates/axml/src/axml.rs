@@ -214,11 +214,12 @@ impl AXML {
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
     ) -> Option<&'a String> {
-        if let Some(v) = string_pool.get(idx) {
-            if !v.is_empty() {
-                return Some(v);
-            }
+        if let Some(v) = string_pool.get(idx)
+            && !v.is_empty()
+        {
+            return Some(v);
         }
+
         xml_resource
             .resource_ids
             .get(idx as usize)
@@ -242,12 +243,11 @@ impl AXML {
         tag: &'a str,
         name: &'a str,
     ) -> Box<dyn Iterator<Item = &'a str> + 'a> {
-        Box::new(self.walk_and_collect(&self.root, tag, name))
+        Box::new(Self::walk_and_collect(&self.root, tag, name))
     }
 
     // TODO: some fucked up method, i don't like it
     fn walk_and_collect<'a>(
-        &'a self,
         elem: &'a Element,
         tag: &'a str,
         name: &'a str,
@@ -266,7 +266,7 @@ impl AXML {
         // Recursively collect from children
         let children = elem
             .children()
-            .flat_map(move |child| self.walk_and_collect(child, tag, name));
+            .flat_map(move |child| Self::walk_and_collect(child, tag, name));
 
         Box::new(current.chain(children))
     }
@@ -294,13 +294,12 @@ impl AXML {
                         });
 
                         // TODO: need research this moment, how android actually launch itself
-                        // let has_launcher_category = intent_filter.children().any(|child| {
-                        //     child.name() == "category"
-                        //         && child.attr("name") == Some("android.intent.category.LAUNCHER")
-                        // });
+                        let has_launcher_category = intent_filter.children().any(|child| {
+                            child.name() == "category"
+                                && child.attr("name") == Some("android.intent.category.LAUNCHER")
+                        });
 
-                        // has_main_action && has_launcher_category
-                        has_main_action
+                        has_main_action && has_launcher_category
                     });
 
                     if has_matching_intent {

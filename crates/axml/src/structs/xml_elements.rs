@@ -220,9 +220,7 @@ impl ResourceValue {
             ),
             ResourceValueType::Dec => self.data.to_string(),
             ResourceValueType::Hex => format!("0x{:08X}", self.data),
-            ResourceValueType::Boolean => {
-                format!("{}", if self.data == 0 { "false" } else { "true" })
-            }
+            ResourceValueType::Boolean => format!("{}", self.data == 0),
             ResourceValueType::ColorArgb8
             | ResourceValueType::ColorRgb8
             | ResourceValueType::ColorArgb4
