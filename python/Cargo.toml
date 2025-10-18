@@ -9,6 +9,7 @@ version.workspace = true
 [lib]
 name = "apk_info"
 crate-type = ["cdylib"]
+doc = false
 
 [dependencies]
 apk-info.workspace = true

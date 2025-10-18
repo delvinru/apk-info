@@ -185,7 +185,7 @@ impl Apk {
 
     /// Extract information from `<application android:allowTaskReparenting="true | false">`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#reparent
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#reparent>
     pub fn get_application_task_reparenting(&self) -> Option<&str> {
         self.axml
             .get_attribute_value("application", "allowTaskReparenting")
@@ -193,35 +193,35 @@ impl Apk {
 
     /// Extract information from `<application android:allowBackup="true | false"`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#allowbackup
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#allowbackup>
     pub fn get_application_allow_backup(&self) -> Option<&str> {
         self.axml.get_attribute_value("application", "allowBackup")
     }
 
     /// Extract information from `<application android:appCategory=["accessibility" | "audio" | "game" | "image" | "maps" | "news" | "productivity" | "social" | "video"]`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#appCategory
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#appCategory>
     pub fn get_application_category(&self) -> Option<&str> {
         self.axml.get_attribute_value("application", "appCategory")
     }
 
     /// Extract information from `<application android:backupAgent="string">`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#agent
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#agent>
     pub fn get_application_backup_agent(&self) -> Option<&str> {
         self.axml.get_attribute_value("application", "backupAgent")
     }
 
     /// Extract information from `<application android:debuggable=["true" | "false"]>`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#debug
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#debug>
     pub fn get_application_debuggable(&self) -> Option<&str> {
         self.axml.get_attribute_value("application", "debuggable")
     }
 
     /// Extract information from `<application android:descriptionr="string resource">`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#desc
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#desc>
     pub fn get_application_description(&self) -> Option<&str> {
         // TODO: resolve with resources
         self.axml.get_attribute_value("application", "description")
@@ -229,7 +229,7 @@ impl Apk {
 
     /// Extract information from `<application android:label="string resource">`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#label
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#label>
     pub fn get_application_label(&self) -> Option<&str> {
         // TODO: probably not so easy
         self.axml.get_attribute_value("application", "label")
@@ -237,7 +237,7 @@ impl Apk {
 
     /// Extract information form `<application android;name="string">`
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/application-element#nm
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#nm>
     pub fn get_application_name(&self) -> Option<&str> {
         // TODO: probably not so easy
         self.axml.get_attribute_value("application", "name")
@@ -256,14 +256,14 @@ impl Apk {
 
     /// Retrieves the minimum SDK version required by the app.
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/uses-sdk-element#min
+    /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#min>
     pub fn get_min_sdk_version(&self) -> Option<&str> {
         self.axml.get_attribute_value("uses-sdk", "minSdkVersion")
     }
 
     /// Retrieves the target SDK version requested by the app.
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/uses-sdk-element#target
+    /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#target>
     pub fn get_target_sdk_version(&self) -> Option<&str> {
         self.axml
             .get_attribute_value("uses-sdk", "targetSdkVersion")
@@ -271,7 +271,7 @@ impl Apk {
 
     /// Retrieves the maximum SDK version supported by the app.
     ///
-    /// See: https://developer.android.com/guide/topics/manifest/uses-sdk-element#max
+    /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#max>
     pub fn get_max_sdk_version(&self) -> Option<&str> {
         self.axml.get_attribute_value("uses-sdk", "maxSdkVersion")
     }

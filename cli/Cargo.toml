@@ -17,3 +17,4 @@ walkdir.workspace = true
 [[bin]]
 name = "apk-info"
 path = "src/main.rs"
+doc = false
