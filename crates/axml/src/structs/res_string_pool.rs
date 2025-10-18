@@ -1,5 +1,6 @@
 #![allow(unused)]
 
+use log::warn;
 use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed};
@@ -111,7 +112,18 @@ impl StringPool {
         let mut strings = Vec::with_capacity(string_header.string_count as usize);
 
         for &offset in string_offsets {
-            if let Ok(s) = Self::parse_string(&mut &slice[offset as usize..], is_utf8) {
+            let mut slice_at_offset = match slice.get(offset as usize..) {
+                Some(v) => v,
+                None => {
+                    warn!("can't get string at offset: 0x{:02x}", offset);
+                    // append empty string to preserve index order
+                    strings.push(String::new());
+
+                    continue;
+                }
+            };
+
+            if let Ok(s) = Self::parse_string(&mut slice_at_offset, is_utf8) {
                 strings.push(s);
             }
         }
