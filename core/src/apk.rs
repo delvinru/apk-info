@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     fs,
     io::{self},
     path::Path,
@@ -106,28 +105,16 @@ impl Apk {
             min_sdk_version: self.get_min_sdk_version().map(String::from),
             target_sdk_version: self.get_target_sdk_version().map(String::from),
             max_sdk_version: self.get_max_sdk_version().map(String::from),
-            declared_permissions: self
-                .get_declared_permissions()
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            declared_permissions: self.get_declared_permissions().map(String::from).collect(),
             shared_user_id: self.get_shared_user_id().map(String::from),
             shared_user_label: self.get_shared_user_label().map(String::from),
             shared_user_max_sdk_version: self.get_shared_user_max_sdk_version().map(String::from),
             version_code: self.get_version_code().map(String::from),
             version_name: self.get_version_name().map(String::from),
             install_location: self.get_install_location().map(String::from),
-            features: self.get_features().into_iter().map(String::from).collect(),
-            permissions: self
-                .get_permissions()
-                .into_iter()
-                .map(String::from)
-                .collect(),
-            permissions_sdk23: self
-                .get_permissions_sdk23()
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            features: self.get_features().map(String::from).collect(),
+            permissions: self.get_permissions().map(String::from).collect(),
+            permissions_sdk23: self.get_permissions_sdk23().map(String::from).collect(),
             application: Application {
                 allow_task_reparenting: self.get_application_task_reparenting().map(String::from),
                 allow_backup: self.get_application_allow_backup().map(String::from),
@@ -138,20 +125,12 @@ impl Apk {
                 label: self.get_application_label().map(String::from),
                 name: self.get_application_name().map(String::from),
             },
-            main_activities: self
-                .get_main_activities()
-                .into_iter()
-                .map(String::from)
-                .collect(),
-            libraries: self.get_libraries().into_iter().map(String::from).collect(),
-            activities: self
-                .get_activities()
-                .into_iter()
-                .map(String::from)
-                .collect(),
-            services: self.get_services().into_iter().map(String::from).collect(),
-            receivers: self.get_receivers().into_iter().map(String::from).collect(),
-            providers: self.get_providers().into_iter().map(String::from).collect(),
+            main_activities: self.get_main_activities().map(String::from).collect(),
+            libraries: self.get_libraries().map(String::from).collect(),
+            activities: self.get_activities().map(String::from).collect(),
+            services: self.get_services().map(String::from).collect(),
+            receivers: self.get_receivers().map(String::from).collect(),
+            providers: self.get_providers().map(String::from).collect(),
         };
 
         // TODO: remove unwrap
@@ -168,8 +147,8 @@ impl Apk {
     }
 
     /// List of the filenames included in the central directory
-    pub fn get_files(&self) -> Vec<&String> {
-        self.zip.namelist().collect()
+    pub fn get_files(&self) -> impl Iterator<Item = &String> {
+        self.zip.namelist()
     }
 
     // extract information from manifest tag
@@ -264,17 +243,15 @@ impl Apk {
         self.axml.get_attribute_value("application", "name")
     }
 
-    pub fn get_permissions(&self) -> HashSet<&str> {
+    pub fn get_permissions(&self) -> impl Iterator<Item = &str> {
         // TODO: some apk uses "<android:uses-permission", wtf this is
         self.axml
             .get_all_attribute_values("uses-permission", "name")
-            .collect()
     }
 
-    pub fn get_permissions_sdk23(&self) -> HashSet<&str> {
+    pub fn get_permissions_sdk23(&self) -> impl Iterator<Item = &str> {
         self.axml
             .get_all_attribute_values("uses-permission-sdk-23", "name")
-            .collect()
     }
 
     /// Retrieves the minimum SDK version required by the app.
@@ -300,56 +277,42 @@ impl Apk {
     }
 
     /// Retrieves all libraries declared by the app.
-    pub fn get_libraries(&self) -> HashSet<&str> {
-        self.axml
-            .get_all_attribute_values("uses-library", "name")
-            .collect()
+    pub fn get_libraries(&self) -> impl Iterator<Item = &str> {
+        self.axml.get_all_attribute_values("uses-library", "name")
     }
 
     /// Retrieves all features declared by the app.
-    pub fn get_features(&self) -> HashSet<&str> {
-        self.axml
-            .get_all_attribute_values("uses-feature", "name")
-            .collect()
+    pub fn get_features(&self) -> impl Iterator<Item = &str> {
+        self.axml.get_all_attribute_values("uses-feature", "name")
     }
 
-    pub fn get_declared_permissions(&self) -> HashSet<&str> {
+    pub fn get_declared_permissions(&self) -> impl Iterator<Item = &str> {
         // TODO: maybe create some kind of structure, idk
-        self.axml
-            .get_all_attribute_values("permission", "name")
-            .collect()
+        self.axml.get_all_attribute_values("permission", "name")
     }
 
     /// Retrieves all **main** activities declared by the app.
-    pub fn get_main_activities(&self) -> HashSet<&str> {
-        self.axml.get_main_activities().collect()
+    pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {
+        self.axml.get_main_activities()
     }
 
     /// Retrieves all activities declared by the app.
-    pub fn get_activities(&self) -> HashSet<&str> {
-        self.axml
-            .get_all_attribute_values("activity", "name")
-            .collect()
+    pub fn get_activities(&self) -> impl Iterator<Item = &str> {
+        self.axml.get_all_attribute_values("activity", "name")
     }
 
     /// Retrieves all services declared by the app.
-    pub fn get_services(&self) -> HashSet<&str> {
-        self.axml
-            .get_all_attribute_values("service", "name")
-            .collect()
+    pub fn get_services(&self) -> impl Iterator<Item = &str> {
+        self.axml.get_all_attribute_values("service", "name")
     }
 
     /// Retrieves all receivers declared by the app.
-    pub fn get_receivers(&self) -> HashSet<&str> {
-        self.axml
-            .get_all_attribute_values("receiver", "name")
-            .collect()
+    pub fn get_receivers(&self) -> impl Iterator<Item = &str> {
+        self.axml.get_all_attribute_values("receiver", "name")
     }
 
     /// Retrieves all providers declared by the app.
-    pub fn get_providers(&self) -> HashSet<&str> {
-        self.axml
-            .get_all_attribute_values("provider", "name")
-            .collect()
+    pub fn get_providers(&self) -> impl Iterator<Item = &str> {
+        self.axml.get_all_attribute_values("provider", "name")
     }
 }

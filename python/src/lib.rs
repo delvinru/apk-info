@@ -55,7 +55,7 @@ impl Apk {
 
     /// List of the filenames included in the central directory
     pub fn get_files(&self) -> Vec<&String> {
-        self.apkrs.get_files()
+        self.apkrs.get_files().collect()
     }
 
     /// Retrieves the package name defined in the `<manifest>` tag.

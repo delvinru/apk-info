@@ -246,72 +246,64 @@ impl AXML {
         &'a self,
         tag: &'a str,
         name: &'a str,
-    ) -> Box<dyn Iterator<Item = &'a str> + 'a> {
-        Box::new(Self::walk_and_collect(&self.root, tag, name))
-    }
+    ) -> impl Iterator<Item = &'a str> + 'a {
+        let mut stack = vec![&self.root];
 
-    // TODO: some fucked up method, i don't like it
-    fn walk_and_collect<'a>(
-        elem: &'a Element,
-        tag: &'a str,
-        name: &'a str,
-    ) -> Box<dyn Iterator<Item = &'a str> + 'a> {
-        // Collect attribute values from the current element if it matches the tag
-        let current = if elem.name() == tag {
-            Box::new(
-                elem.attrs()
-                    .filter(move |(attr_name, _)| attr_name == &name)
-                    .map(|(_, attr_value)| attr_value),
-            ) as Box<dyn Iterator<Item = &'a str> + 'a>
-        } else {
-            Box::new(std::iter::empty()) as Box<dyn Iterator<Item = &'a str> + 'a>
-        };
+        std::iter::from_fn(move || {
+            while let Some(elem) = stack.pop() {
+                // Push children in original order (no `.rev()`)
+                for child in elem.children() {
+                    stack.push(child);
+                }
 
-        // Recursively collect from children
-        let children = elem
-            .children()
-            .flat_map(move |child| Self::walk_and_collect(child, tag, name));
-
-        Box::new(current.chain(children))
-    }
-
-    pub fn get_main_activities<'a>(&'a self) -> Box<dyn Iterator<Item = &'a str> + 'a> {
-        Box::new(
-            self.root
-                .children()
-                .filter(|c| c.name() == "application")
-                .flat_map(|app| {
-                    app.children().filter(|c| {
-                        (c.name() == "activity" || c.name() == "activity-alias")
-                            && c.attr("enabled") != Some("false")
-                    })
-                })
-                .filter_map(|activity| {
-                    let has_matching_intent = activity.children().any(|intent_filter| {
-                        if intent_filter.name() != "intent-filter" {
-                            return false;
+                // If tag matches, yield the attribute value
+                if elem.name() == tag {
+                    for (attr_name, attr_value) in elem.attrs() {
+                        if attr_name == name {
+                            return Some(attr_value);
                         }
+                    }
+                }
+            }
+            None
+        })
+    }
 
-                        let has_main_action = intent_filter.children().any(|child| {
-                            child.name() == "action"
-                                && child.attr("name") == Some("android.intent.action.MAIN")
-                        });
+    pub fn get_main_activities<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+        self.root
+            .children()
+            .filter(|c| c.name() == "application")
+            .flat_map(|app| {
+                app.children().filter(|c| {
+                    (c.name() == "activity" || c.name() == "activity-alias")
+                        && c.attr("enabled") != Some("false")
+                })
+            })
+            .filter_map(|activity| {
+                let has_matching_intent = activity.children().any(|intent_filter| {
+                    if intent_filter.name() != "intent-filter" {
+                        return false;
+                    }
 
-                        // TODO: need research this moment, how android actually launch itself
-                        let has_launcher_category = intent_filter.children().any(|child| {
-                            child.name() == "category"
-                                && child.attr("name") == Some("android.intent.category.LAUNCHER")
-                        });
-
-                        has_main_action && has_launcher_category
+                    let has_main_action = intent_filter.children().any(|child| {
+                        child.name() == "action"
+                            && child.attr("name") == Some("android.intent.action.MAIN")
                     });
 
-                    if has_matching_intent {
-                        activity.attr("name")
-                    } else {
-                        None
-                    }
-                }),
-        )
+                    // TODO: need research this moment, how android actually launch itself
+                    let has_launcher_category = intent_filter.children().any(|child| {
+                        child.name() == "category"
+                            && child.attr("name") == Some("android.intent.category.LAUNCHER")
+                    });
+
+                    has_main_action && has_launcher_category
+                });
+
+                if has_matching_intent {
+                    activity.attr("name")
+                } else {
+                    None
+                }
+            })
     }
 }
