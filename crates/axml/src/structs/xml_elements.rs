@@ -11,11 +11,10 @@ use winnow::{
 use crate::structs::{res_chunk_header::ResChunkHeader, res_string_pool::StringPool};
 
 /// Type of the data value
-#[derive(Debug, Default)]
+#[derive(Debug)]
 #[repr(u8)]
 pub(crate) enum ResourceValueType {
     /// The 'data' is either 0 or 1, specifying this resource is either undefined or empty, respectively.
-    #[default]
     Null = 0x00,
 
     /// The 'data' holds a ResTable_ref — a reference to another resource table entry.
@@ -169,7 +168,7 @@ impl XmlElement for XmlNamespace {
 }
 
 /// Representation of a value in a resource, supplying type information
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct ResourceValue {
     /// Number of bytes in this structure
     pub(crate) size: u16,
@@ -218,9 +217,15 @@ impl ResourceValue {
                 self.complex_to_float() * 100f64,
                 Self::FRACTION_UNITS[(self.data & Self::COMPLEX_UNIT_MASK) as usize]
             ),
-            ResourceValueType::Dec => self.data.to_string(),
+            ResourceValueType::Dec => format!("{}", self.data),
             ResourceValueType::Hex => format!("0x{:08X}", self.data),
-            ResourceValueType::Boolean => format!("{}", self.data == 0),
+            ResourceValueType::Boolean => {
+                if self.data == 0 {
+                    "false".to_owned()
+                } else {
+                    "true".to_owned()
+                }
+            }
             ResourceValueType::ColorArgb8
             | ResourceValueType::ColorRgb8
             | ResourceValueType::ColorArgb4
@@ -240,7 +245,7 @@ impl ResourceValue {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct XmlAttributeElement {
     /// Namespace of this attribute
     pub(crate) namespace_uri: u32,
@@ -253,9 +258,6 @@ pub(crate) struct XmlAttributeElement {
 
     /// Processed typed value of this attribute
     pub(crate) typed_value: ResourceValue,
-
-    attribute_name: String,
-    attribute_value: String,
 }
 
 impl XmlAttributeElement {
@@ -278,33 +280,12 @@ impl XmlAttributeElement {
                 name,
                 value,
                 typed_value,
-                ..XmlAttributeElement::default()
             })
         }
     }
-
-    #[inline]
-    pub fn set_name(&mut self, name: String) {
-        self.attribute_name = name
-    }
-
-    #[inline]
-    pub fn name(&self) -> &str {
-        &self.attribute_name
-    }
-
-    #[inline]
-    pub fn set_value(&mut self, value: String) {
-        self.attribute_value = value
-    }
-
-    #[inline]
-    pub fn value(&self) -> &str {
-        &self.attribute_value
-    }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct XmlStartElement {
     pub(crate) header: XMLHeader,
     /// String of the full namespace of this element
@@ -333,8 +314,6 @@ pub(crate) struct XmlStartElement {
 
     /// List of associated attributes
     pub(crate) attributes: Vec<XmlAttributeElement>,
-
-    element_name: String,
 }
 
 impl XmlElement for XmlStartElement {
@@ -403,28 +382,15 @@ impl XmlElement for XmlStartElement {
             class_index,
             style_index,
             attributes,
-            ..XmlStartElement::default()
         })
     }
 }
 
-impl XmlStartElement {
-    pub fn set_name(&mut self, name: String) {
-        self.element_name = name
-    }
-
-    pub fn name(&self) -> &str {
-        &self.element_name
-    }
-}
-
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct XmlEndElement {
     pub(crate) header: XMLHeader,
     pub(crate) namespace_uri: u32,
     pub(crate) name: u32,
-
-    element_name: String,
 }
 
 impl XmlElement for XmlEndElement {
@@ -438,18 +404,7 @@ impl XmlElement for XmlEndElement {
             header,
             namespace_uri,
             name,
-            ..XmlEndElement::default()
         })
-    }
-}
-
-impl XmlEndElement {
-    pub fn set_name(&mut self, name: String) {
-        self.element_name = name
-    }
-
-    pub fn name(&self) -> &str {
-        &self.element_name
     }
 }
 

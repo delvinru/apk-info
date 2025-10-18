@@ -29,7 +29,7 @@ pub(crate) struct CentralDirectoryEntry {
     pub(crate) external_attrs: u32,
     pub(crate) local_header_offset: u32,
 
-    pub(crate) file_name: Vec<u8>,
+    pub(crate) file_name: String,
     pub(crate) extra_field: Vec<u8>,
     pub(crate) file_comment: Vec<u8>,
 }
@@ -101,7 +101,7 @@ impl CentralDirectoryEntry {
             internal_attrs,
             external_attrs,
             local_header_offset,
-            file_name: file_name.to_vec(),
+            file_name: String::from_utf8_lossy(file_name).to_string(),
             extra_field: extra_field.to_vec(),
             file_comment: file_comment.to_vec(), // can't use lifetime parameters due python limitations
         })
@@ -125,7 +125,7 @@ impl CentralDirectory {
         Ok(CentralDirectory {
             entries: entries
                 .into_iter()
-                .map(|entry| (String::from_utf8_lossy(&entry.file_name).to_string(), entry))
+                .map(|entry| (entry.file_name.clone(), entry))
                 .collect(),
         })
     }

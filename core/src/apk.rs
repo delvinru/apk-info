@@ -76,7 +76,6 @@ impl Apk {
 
                 let axml = AXML::new(&mut &inner_manifest[..]).map_err(APKError::ManifestError)?;
 
-                // Возвращаем оригинальный zip и axml (по ТЗ)
                 Ok((zip, axml))
             }
         }
