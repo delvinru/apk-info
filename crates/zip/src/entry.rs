@@ -20,6 +20,11 @@ pub struct ZipEntry {
 
 impl ZipEntry {
     pub fn new(input: Vec<u8>) -> Result<ZipEntry, ZipError> {
+        // perform basic sanity check
+        if !input.starts_with(b"PK\x03\x04") {
+            return Err(ZipError::InvalidHeader);
+        }
+
         let eocd_offset =
             EndOfCentralDirectory::find_eocd(&input, 4096).ok_or(ZipError::NotFoundEOCD)?;
 

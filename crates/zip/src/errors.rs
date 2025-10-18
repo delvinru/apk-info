@@ -2,6 +2,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ZipError {
+    /// Basic sanity check
+    #[error("provided file is not a zip archive")]
+    InvalidHeader,
+
     /// Got error while decompressing object
     #[error("got error while decompressing object")]
     DecompressionError,

@@ -25,7 +25,7 @@
         toolchain =
           with fenix-pkgs;
           combine [
-            (stable.withComponents [
+            (latest.withComponents [
               "cargo"
               "clippy"
               "rust-src"
@@ -37,11 +37,12 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
+            cargo-fuzz
             maturin
             openssl
             pkg-config
             toolchain
-            fenix-pkgs.stable.rust-analyzer
+            fenix-pkgs.latest.rust-analyzer
           ];
         };
 

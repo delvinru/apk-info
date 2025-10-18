@@ -207,16 +207,16 @@ impl ResourceValue {
             ResourceValueType::Attribute => format!("?{}{:08X}", self.fmt_package(), self.data),
             ResourceValueType::String => string_pool.get(self.data).cloned().unwrap_or_default(),
             ResourceValueType::Float => f32::from_bits(self.data).to_string(),
-            ResourceValueType::Dimension => format!(
-                "{}{}",
-                self.complex_to_float(),
-                Self::DIMENSION_UNITS[(self.data & Self::COMPLEX_UNIT_MASK) as usize]
-            ),
-            ResourceValueType::Fraction => format!(
-                "{}{}",
-                self.complex_to_float() * 100f64,
-                Self::FRACTION_UNITS[(self.data & Self::COMPLEX_UNIT_MASK) as usize]
-            ),
+            ResourceValueType::Dimension => {
+                let idx = (self.data & Self::COMPLEX_UNIT_MASK) as usize;
+                let unit = Self::DIMENSION_UNITS.get(idx).unwrap_or(&"");
+                format!("{}{}", self.complex_to_float(), unit)
+            }
+            ResourceValueType::Fraction => {
+                let idx = (self.data & Self::COMPLEX_UNIT_MASK) as usize;
+                let unit = Self::FRACTION_UNITS.get(idx).unwrap_or(&"");
+                format!("{}{}", self.complex_to_float() * 100f64, unit)
+            }
             ResourceValueType::Dec => format!("{}", self.data),
             ResourceValueType::Hex => format!("0x{:08X}", self.data),
             ResourceValueType::Boolean => {

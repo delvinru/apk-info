@@ -26,6 +26,9 @@ pub enum AXMLError {
     #[error("got error while parsing xml tree")]
     XmlTreeError,
 
+    #[error("can't get root for xml tree")]
+    MissingRoot,
+
     /// Got error while parsing manifest
     #[error("got error while parsing manifest")]
     ParseError,

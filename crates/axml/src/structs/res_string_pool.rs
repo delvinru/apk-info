@@ -71,8 +71,12 @@ impl StringPool {
         let mut string_header = ResStringPoolHeader::parse(input)?;
 
         let mut invalid_string_count = false;
-        let calculated_string_count =
-            (string_header.strings_start - (string_header.style_count * 4 + 28)) / 4;
+        let calculated_string_count = string_header.strings_start.saturating_sub(
+            string_header
+                .style_count
+                .saturating_mul(4)
+                .saturating_add(28),
+        ) / 4;
 
         if calculated_string_count != string_header.string_count {
             string_header.string_count = calculated_string_count;
@@ -100,7 +104,10 @@ impl StringPool {
         string_header: &ResStringPoolHeader,
         string_offsets: &Vec<u32>,
     ) -> ModalResult<Vec<String>> {
-        let string_pool_size = (string_header.header.size - string_header.strings_start) as usize;
+        let string_pool_size = string_header
+            .header
+            .size
+            .saturating_sub(string_header.strings_start) as usize;
 
         // take just string chunk, because malware likes tampering string pool
         let (slice, rest) = input

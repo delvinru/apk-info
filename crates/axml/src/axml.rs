@@ -67,7 +67,8 @@ impl AXML {
         let elements = Self::parse_xml_tree(input).map_err(|_| AXMLError::XmlTreeError)?;
 
         // create xml treee
-        let root = Self::get_xml_tree(&elements, &string_pool, &xml_resource);
+        let root = Self::get_xml_tree(&elements, &string_pool, &xml_resource)
+            .ok_or(AXMLError::MissingRoot)?;
 
         Ok(AXML {
             is_tampered,
@@ -151,7 +152,7 @@ impl AXML {
         elements: &[XmlNodeElements],
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
-    ) -> Element {
+    ) -> Option<Element> {
         let mut stack: Vec<Element> = vec![];
 
         for node in elements {
@@ -200,13 +201,16 @@ impl AXML {
                     let Some(data) = string_pool.get(node.data) else {
                         continue;
                     };
-                    stack.last_mut().unwrap().append_text(data);
+
+                    if let Some(el) = stack.last_mut() {
+                        el.append_text(data);
+                    }
                 }
                 _ => continue,
             }
         }
 
-        stack.remove(0)
+        (!stack.is_empty()).then(|| stack.remove(0))
     }
 
     fn get_string_from_pool<'a>(

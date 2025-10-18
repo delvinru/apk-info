@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cli", "core", "crates/axml", "crates/zip", "python"]
+members = ["cli", "core", "crates/axml", "crates/zip", "python", "fuzz"]
 
 [workspace.package]
 authors = ["Alexey <delvinru@gmail.com>"]
