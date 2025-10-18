@@ -1,5 +1,7 @@
 from pathlib import Path
 
+__version__: str
+
 class APK:
     def __init__(self, path: str | Path) -> None:
         """
