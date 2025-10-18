@@ -10,14 +10,14 @@ pub enum APKError {
     IoError(#[from] io::Error),
 
     /// Got invalid input (for example, empty file or not apk)
-    #[error("invalid input")]
+    #[error("got invalid input: {0}")]
     InvalidInput(&'static str),
 
     /// Error occurred while parsing AndroidManifest.xml
-    #[error("got error while parsing AndroidManifest.xml")]
+    #[error("got error while parsing AndroidManifest.xml: {0}")]
     ManifestError(#[from] AXMLError),
 
     /// Error occurred while parsing apk as zip archive
-    #[error("got error while parsing apk archive")]
+    #[error("got error while parsing apk archive: {0}")]
     ZipError(#[from] ZipError),
 }
