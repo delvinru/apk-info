@@ -20,6 +20,7 @@ apk-info = { path = "core" }
 anyhow = "1.0.100"
 bitflags = "2.9.4"
 clap = { version = "4.5.49", features = ["derive"] }
+const-hex = "1.17.0"
 env_logger = { version = "0.11.8", features = ["auto-color"] }
 flate2 = "1.1.4"
 log = "0.4.28"

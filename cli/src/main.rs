@@ -22,9 +22,9 @@ enum Commands {
             short,
             long,
             default_value_t = false,
-            help = "show information about certificates"
+            help = "show information about signatures"
         )]
-        certs: bool,
+        sigs: bool,
     },
 }
 
@@ -34,7 +34,7 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match &cli.commands {
-        Some(Commands::Show { paths, certs }) => command_show(paths, certs),
+        Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
         None => Ok(()),
     };
 

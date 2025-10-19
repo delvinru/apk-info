@@ -1,6 +1,10 @@
+#![allow(unused)]
+
 use flate2::Decompress;
 use flate2::FlushDecompress;
 use flate2::Status;
+use log::info;
+use log::warn;
 use openssl::hash::MessageDigest;
 use openssl::pkcs7::Pkcs7;
 use openssl::pkcs7::Pkcs7Flags;
@@ -20,6 +24,7 @@ use crate::signature::CertificateInfo;
 use crate::signature::Signature;
 use crate::signature::SignatureV1;
 use crate::signature::SignatureV2;
+use crate::signature::SignatureV3;
 use crate::{
     errors::{FileCompressionType, ZipError},
     structs::{
@@ -165,55 +170,72 @@ impl ZipEntry {
 }
 
 /// Implementation for certificate parsing
+///
+/// Very cool research about this: <https://goa2023.nullcon.net/doc/goa-2023/Android-SigMorph-Covert-Communication-Exploiting-Android-Signing-Schemes.pdf>
 impl ZipEntry {
     const APK_SIGNATURE_MAGIC: &[u8] = b"APK Sig Block 42";
     const SIGNATURE_V2_MAGIC: u32 = 0x7109871a;
     const SIGNATURE_V3_MAGIC: u32 = 0xf05368c0;
+    const SIGNATURE_V31_MAGIC: u32 = 0x1b93ad61;
 
-    const SOURCE_STAMP_BLOCK_ID: u32 = 0x6dff800d;
+    /// Includes metadata such as timestamp of the build,
+    /// the version of the build tools, source code's git commit hash, etc
+    const V1_SOURCE_STAMP_BLOCK_ID: u32 = 0x2b09189e;
+    const V2_SOURCE_STAMP_BLOCK_ID: u32 = 0x6dff800d;
 
-    /// Unknown stuff
+    /// Used to increase the size of the signing block (including the length and magic) to a mulitple 4096
     ///
     /// More info: <https://android.googlesource.com/platform/tools/apksig/+/refs/heads/master/src/main/java/com/android/apksig/internal/apk/ApkSigningBlockUtils.java#100>
     const VERITY_PADDING_BLOCK_ID: u32 = 0x42726577;
 
-    /// Signing block id for SDK dependency block
+    /// Block that contains dependency metadata, which is saved by the Android Gradle plugin
+    /// to identify any issues related to dependencies
     const DEPENDENCY_INFO_BLOCK_ID: u32 = 0x504b4453;
 
     /// Attribute to check whether a newer APK Signature Scheme signature was stripped
     const STRIPPING_PROTECTION_ATTR_ID: u32 = 0xbeeff00d;
 
+    /// Used to track channels of distribution for an APK, mostly Chinese APKs have this
+    const APK_CHANNEL_BLOCK: u32 = 0x71777777;
+
+    /// Google Play Frosting ID
+    ///
+    /// TODO: this maybe actually usefull, need some how extract this signature
+    const GOOGLE_PLAY_FROSTING_ID: u32 = 0x2146444e;
+
     fn get_certificate_info(
         &self,
         certificate: &X509Ref,
     ) -> Result<CertificateInfo, CertificateError> {
-        let serial_number = certificate
-            .serial_number()
-            .to_bn()
-            .map_err(CertificateError::StackError)?
-            .to_vec()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join("");
+        fn digest_hex(cert: &X509Ref, md: MessageDigest) -> Result<String, CertificateError> {
+            Ok(const_hex::encode(
+                cert.digest(md).map_err(CertificateError::StackError)?,
+            ))
+        }
+
+        let serial_number = {
+            let bn = certificate
+                .serial_number()
+                .to_bn()
+                .map_err(CertificateError::StackError)?;
+
+            const_hex::encode(bn.to_vec())
+        };
 
         let subject = certificate
             .subject_name()
             .entries()
-            .map(|entry| {
+            .filter_map(|entry| {
                 let key = entry.object().nid().short_name().unwrap_or_default();
-                let value = match entry.data().as_utf8() {
-                    Ok(v) => v.to_string(),
-                    Err(_) => String::new(),
-                };
-
-                format!("{}={}", key, value)
+                let value = entry.data().as_utf8().ok()?.to_string();
+                Some(format!("{}={}", key, value))
             })
             .collect::<Vec<_>>()
             .join(" ");
 
         let valid_from = certificate.not_before().to_string();
         let valid_until = certificate.not_after().to_string();
+
         let signature_type = certificate
             .signature_algorithm()
             .object()
@@ -222,32 +244,9 @@ impl ZipEntry {
             .map_err(CertificateError::StackError)?
             .to_string();
 
-        let md5_fingerprint = certificate
-            .digest(MessageDigest::md5())
-            .map_err(CertificateError::StackError)?
-            .to_vec()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join("");
-
-        let sha1_fingerprint = certificate
-            .digest(MessageDigest::sha1())
-            .map_err(CertificateError::StackError)?
-            .to_vec()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join("");
-
-        let sha256_fingerprint = certificate
-            .digest(MessageDigest::sha256())
-            .map_err(CertificateError::StackError)?
-            .to_vec()
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<Vec<_>>()
-            .join("");
+        let md5_fingerprint = digest_hex(certificate, MessageDigest::md5())?;
+        let sha1_fingerprint = digest_hex(certificate, MessageDigest::sha1())?;
+        let sha256_fingerprint = digest_hex(certificate, MessageDigest::sha256())?;
 
         Ok(CertificateInfo {
             serial_number,
@@ -262,7 +261,7 @@ impl ZipEntry {
     }
 
     /// Get information from v1 certificate
-    pub fn get_certificates_v1(&self) -> Result<Vec<Signature>, CertificateError> {
+    pub fn get_signatures_v1(&self) -> Result<Vec<Signature>, CertificateError> {
         let signature_file = match self.namelist().find(|name| {
             name.starts_with("META-INF/")
                 && (name.ends_with(".DSA") || name.ends_with(".EC") || name.ends_with(".RSA"))
@@ -294,7 +293,8 @@ impl ZipEntry {
         Ok(certificates)
     }
 
-    pub fn get_certificates_v2(&self) -> Result<Vec<Signature>, CertificateError> {
+    // TODO: need create "universal" parser for all blocks inside signing block, not just signatures
+    pub fn get_signatures_v2_v3(&self) -> Result<Vec<Signature>, CertificateError> {
         let offset = self.eocd.central_dir_offset as usize;
         let mut slice = match self.input.get(offset.saturating_sub(24)..offset) {
             Some(v) => v,
@@ -343,21 +343,9 @@ impl ZipEntry {
 
     fn parse_digest<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
-            let _ = le_u32.parse_next(input)?;
-            // println!("digest_length: 0x{:08X}", digest_length);
-
-            let signature_algorithm_id = le_u32.parse_next(input)?;
-            // println!("signature_algorithm_id: 0x{:08X}", signature_algorithm_id);
-
-            let digest_data_length = le_u32.parse_next(input)?;
-            // println!("digest_data_length: 0x{:08X}", digest_data_length);
-
+            let (_, signature_algorithm_id, digest_data_length) =
+                (le_u32, le_u32, le_u32).parse_next(input)?;
             let digest = take(digest_data_length).parse_next(input)?;
-            // print!("digest: ");
-            // for byte in digest {
-            //     print!("{:02X}", byte);
-            // }
-            // println!();
 
             Ok((signature_algorithm_id, digest))
         }
@@ -366,14 +354,7 @@ impl ZipEntry {
     fn parse_certificates<'a>() -> impl Parser<&'a [u8], X509, ContextError> {
         move |input: &mut &'a [u8]| {
             let certificate_length = le_u32.parse_next(input)?;
-            // println!("certificate_length: 0x{:08X}", certificate_length);
-
             let certificate = take(certificate_length).parse_next(input)?;
-            // print!("certificate: ");
-            // for byte in certificate {
-            //     print!("{:02X}", byte);
-            // }
-            // println!();
 
             // TODO: remove unwrap block
             Ok(X509::from_der(certificate).unwrap())
@@ -382,14 +363,22 @@ impl ZipEntry {
 
     fn parse_attributes<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
-            let attribute_length = le_u32.parse_next(input)?;
-            // println!("attribute_length: 0x{:08x}", attribute_length);
-
-            let id = le_u32.parse_next(input)?;
-            // println!("attribute id: 0x{:08x}", id);
-
+            let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
             let value = take(attribute_length.saturating_sub(4)).parse_next(input)?;
-            // println!("value: {:02x?}", value);
+
+            Ok((id, value))
+        }
+    }
+
+    fn parse_attributes_v3<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
+        move |input: &mut &'a [u8]| {
+            let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
+            let value = take(attribute_length.saturating_sub(4)).parse_next(input)?;
+
+            // TODO: i really need to check that id is equal 0x3ba06f8c ?
+            let const_id = le_u32.parse_next(input)?;
+
+            // TODO: proof of rotation struct - just skip for now
 
             Ok((id, value))
         }
@@ -406,6 +395,55 @@ impl ZipEntry {
         }
     }
 
+    fn parse_signature_v3_like<'a>(
+        &self,
+        input: &mut &'a [u8],
+    ) -> Result<Vec<CertificateInfo>, ContextError> {
+        let _signers_length = le_u32.parse_next(input)?;
+        let _signer_length = le_u32.parse_next(input)?;
+        let _signed_data_length = le_u32.parse_next(input)?;
+
+        // parse digest
+        let digests_length = le_u32.parse_next(input)?;
+        let mut digest_bytes = take(digests_length).parse_next(input)?;
+        let _digests: Vec<(u32, &[u8])> =
+            repeat(0.., Self::parse_digest()).parse_next(&mut digest_bytes)?;
+
+        // parse certificates
+        let certificates_length = le_u32.parse_next(input)?;
+        let mut certificates_bytes = take(certificates_length).parse_next(input)?;
+        let certificates: Vec<X509> =
+            repeat(0.., Self::parse_certificates()).parse_next(&mut certificates_bytes)?;
+
+        let _ = (le_u32, le_u32).parse_next(input)?; // min/max sdk
+
+        // attributes
+        let attributes_length = le_u32.parse_next(input)?;
+        let mut attributes_bytes = take(attributes_length).parse_next(input)?;
+        let _attributes: Vec<(u32, &[u8])> =
+            repeat(0.., Self::parse_attributes()).parse_next(&mut attributes_bytes)?;
+
+        // duplicate min/max sdk
+        let _ = (le_u32, le_u32).parse_next(input)?;
+
+        // signatures
+        let signatures_length = le_u32.parse_next(input)?;
+        let mut signatures_bytes = take(signatures_length).parse_next(input)?;
+        let _signatures: Vec<(u32, &[u8])> =
+            repeat(0.., Self::parse_signatures()).parse_next(&mut signatures_bytes)?;
+
+        let public_key_length = le_u32.parse_next(input)?;
+        let _public_key = take(public_key_length).parse_next(input)?;
+
+        // filter certificates
+        let certificates = certificates
+            .iter()
+            .filter_map(|cert| self.get_certificate_info(cert).ok())
+            .collect();
+
+        Ok(certificates)
+    }
+
     fn parse_apk_signatures<'a>(&self) -> impl Parser<&'a [u8], Signature, ContextError> {
         move |input: &mut &'a [u8]| {
             let (size, id) = (le_u64, le_u32).parse_next(input)?;
@@ -414,66 +452,42 @@ impl ZipEntry {
             match id {
                 Self::SIGNATURE_V2_MAGIC => {
                     let signers_length = le_u32.parse_next(input)?;
-                    // println!("signers_length: 0x{:08X}", signers_length);
-
                     // TODO: need parse several signers
 
                     // parse signer
                     let signer_length = le_u32.parse_next(input)?;
-                    // println!("signer_length: 0x{:08X}", signer_length);
 
                     // parse signed data
                     let signed_data_length = le_u32.parse_next(input)?;
-                    // println!("signed_data_length: 0x{:08X}", signed_data_length);
 
                     // parse digests
                     let digests_length = le_u32.parse_next(input)?;
-                    // println!("digests_length: 0x{:08X}", digests_length);
                     let mut digest_bytes = take(digests_length).parse_next(input)?;
                     let digests: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_digest()).parse_next(&mut digest_bytes)?;
 
-                    // println!("{digests:?}");
-
                     let certificates_length = le_u32.parse_next(input)?;
-                    // println!("certificates_length: 0x{:08X}", certificates_length);
-
                     let mut certificates_bytes = take(certificates_length).parse_next(input)?;
-
                     let certificates: Vec<X509> = repeat(0.., Self::parse_certificates())
                         .parse_next(&mut certificates_bytes)?;
-                    // println!("certificates: {:?}", certificates);
 
                     let attributes_length = le_u32.parse_next(input)?;
-                    // println!("attributes length: 0x{:08x}", attributes_length);
                     let mut attributes_bytes = take(attributes_length).parse_next(input)?;
-
                     // often attributes is zero size
                     let attributes: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_attributes()).parse_next(&mut attributes_bytes)?;
-                    // println!("attributes: {:?}", attributes);
 
                     // i honestly don't know i need consume another 4 zero bytes, but this is happens in apk
-                    // not documented stuff, i can't find this in source code
+                    // not documented stuff, i can't figure out this from source code
                     let _ = le_u32.parse_next(input)?;
 
                     let signatures_length = le_u32.parse_next(input)?;
-                    // println!("signatures_length: {:08x}", signatures_length);
                     let mut signatures_bytes = take(signatures_length).parse_next(input)?;
                     let signatures: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_signatures()).parse_next(&mut signatures_bytes)?;
 
-                    // println!("signatures: {:?}", signatures);
-
                     let public_key_length = le_u32.parse_next(input)?;
-                    // println!("public_key_length: {:08x}", public_key_length);
                     let public_key = take(public_key_length).parse_next(input)?;
-
-                    // print!("public key: ");
-                    // for byte in public_key {
-                    // print!("{:02X}", byte);
-                    // }
-                    // println!();
 
                     let certificates = certificates
                         .iter()
@@ -483,13 +497,38 @@ impl ZipEntry {
                     Ok(Signature::V2(SignatureV2 { certificates }))
                 }
                 Self::SIGNATURE_V3_MAGIC => {
-                    println!("got v3 magic (not yet implemented) - 0x{:08x}", id);
-                    let _ = take(size.saturating_sub(4)).parse_next(input)?;
+                    let certificates = self.parse_signature_v3_like(input)?;
 
-                    Ok(Signature::V3)
+                    Ok(Signature::V3(SignatureV3 { certificates }))
+                }
+                Self::SIGNATURE_V31_MAGIC => {
+                    let certificates = self.parse_signature_v3_like(input)?;
+
+                    Ok(Signature::V31(SignatureV3 { certificates }))
+                }
+                Self::APK_CHANNEL_BLOCK => {
+                    let data = take(size.saturating_sub(4)).parse_next(input)?;
+
+                    Ok(Signature::ApkChannelBlock(
+                        String::from_utf8_lossy(data).to_string(),
+                    ))
+                }
+                // some maybe usefull block that we don't parse yet
+                Self::VERITY_PADDING_BLOCK_ID
+                | Self::DEPENDENCY_INFO_BLOCK_ID
+                | Self::V1_SOURCE_STAMP_BLOCK_ID
+                | Self::V2_SOURCE_STAMP_BLOCK_ID
+                | Self::GOOGLE_PLAY_FROSTING_ID => {
+                    let _ = take(size.saturating_sub(4)).parse_next(input)?;
+                    // maybe even remove this message, idk for now
+                    info!(
+                        "got known id block - 0x{:08x} (0x{:08x}), don't know yet how to parse it",
+                        id, size
+                    );
+                    Ok(Signature::Unknown)
                 }
                 _ => {
-                    println!("got unknown block skip - 0x{:08x}", id);
+                    warn!("got unknown id block - 0x{:08x} (0x{:08x})", id, size);
                     let _ = take(size.saturating_sub(4)).parse_next(input)?;
 
                     Ok(Signature::Unknown)

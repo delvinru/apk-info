@@ -317,15 +317,25 @@ impl Apk {
         self.axml.get_all_attribute_values("provider", "name")
     }
 
-    pub fn get_certificate_v1(&self) -> Result<Vec<Signature>, APKError> {
+    pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
+        Ok(self
+            .zip
+            .get_signatures_v1()
+            .into_iter()
+            .chain(self.zip.get_signatures_v2_v3())
+            .flatten() // разворачиваем Vec<Signature> в Signature
+            .collect())
+    }
+
+    pub fn get_signatures_v1(&self) -> Result<Vec<Signature>, APKError> {
         self.zip
-            .get_certificates_v1()
+            .get_signatures_v1()
             .map_err(APKError::CertificateError)
     }
 
-    pub fn get_certificate_v2(&self) -> Result<Vec<Signature>, APKError> {
+    pub fn get_signatures_v2_v3(&self) -> Result<Vec<Signature>, APKError> {
         self.zip
-            .get_certificates_v2()
+            .get_signatures_v2_v3()
             .map_err(APKError::CertificateError)
     }
 }

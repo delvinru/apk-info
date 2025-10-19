@@ -16,17 +16,19 @@ pub enum Signature {
     /// APK signature scheme v3
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v3>
-    V3,
+    V3(SignatureV3),
 
     /// APK signature scheme v3.1
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v3-1>
-    V31,
+    V31(SignatureV3),
 
     /// APK signature scheme v4
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v4>
     V4,
+
+    ApkChannelBlock(String),
 
     /// Got something that we don't know
     Unknown,
@@ -130,6 +132,13 @@ pub struct SignatureV1 {
 /// Information from v2 signature
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct SignatureV2 {
+    /// Extracted information from certificate
+    pub certificates: Vec<CertificateInfo>,
+}
+
+/// Information from v3 signature
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct SignatureV3 {
     /// Extracted information from certificate
     pub certificates: Vec<CertificateInfo>,
 }
