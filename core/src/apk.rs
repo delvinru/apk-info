@@ -8,6 +8,7 @@ use apk_info_axml::axml::AXML;
 use apk_info_zip::{
     entry::ZipEntry,
     errors::{FileCompressionType, ZipError},
+    signature::Signature,
 };
 use serde::Deserialize;
 
@@ -314,5 +315,17 @@ impl Apk {
     /// Retrieves all providers declared by the app.
     pub fn get_providers(&self) -> impl Iterator<Item = &str> {
         self.axml.get_all_attribute_values("provider", "name")
+    }
+
+    pub fn get_certificate_v1(&self) -> Result<Vec<Signature>, APKError> {
+        self.zip
+            .get_certificates_v1()
+            .map_err(APKError::CertificateError)
+    }
+
+    pub fn get_certificate_v2(&self) -> Result<Vec<Signature>, APKError> {
+        self.zip
+            .get_certificates_v2()
+            .map_err(APKError::CertificateError)
     }
 }

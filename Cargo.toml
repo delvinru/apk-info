@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["cli", "core", "crates/axml", "crates/zip", "python", "fuzz"]
+members = ["cli", "core", "crates/axml", "crates/zip", "fuzz", "python"]
 
 [workspace.package]
 authors = ["Alexey <delvinru@gmail.com>"]
@@ -26,6 +26,8 @@ log = "0.4.28"
 memchr = "2.7.6"
 minidom = "0.17.0"
 once_cell = "1.21.3"
+openssl = "0.10.74"
+openssl-sys = "0.9.110"
 pyo3 = "0.26.0"
 quick-xml = "0.38.3"
 serde = { version = "1.0.228", features = ["derive"] }

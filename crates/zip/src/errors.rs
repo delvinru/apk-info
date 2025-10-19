@@ -1,3 +1,4 @@
+use openssl::error::ErrorStack;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -43,4 +44,22 @@ pub enum FileCompressionType {
     /// There was an attempt to break the parser,
     /// but actually use the deflated method for decompression
     DeflatedTampered,
+}
+
+#[derive(Error, Debug)]
+pub enum CertificateError {
+    #[error("got error while parsing certificate")]
+    ParseError,
+
+    #[error("got zip error while parsing certificate: {0}")]
+    ZipError(#[from] ZipError),
+
+    #[error("got stack error: {0}")]
+    StackError(#[from] ErrorStack),
+
+    #[error("got signer error")]
+    SignerError,
+
+    #[error("size of blocks not equals (required by format) - (start - {0}, end - {1})")]
+    InvalidFormat(u64, u64),
 }

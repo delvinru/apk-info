@@ -17,6 +17,14 @@ enum Commands {
     Show {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
+
+        #[arg(
+            short,
+            long,
+            default_value_t = false,
+            help = "show information about certificates"
+        )]
+        certs: bool,
     },
 }
 
@@ -26,7 +34,7 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match &cli.commands {
-        Some(Commands::Show { paths }) => command_show(paths),
+        Some(Commands::Show { paths, certs }) => command_show(paths, certs),
         None => Ok(()),
     };
 

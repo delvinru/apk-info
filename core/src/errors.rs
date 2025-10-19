@@ -1,5 +1,5 @@
 use apk_info_axml::errors::AXMLError;
-use apk_info_zip::errors::ZipError;
+use apk_info_zip::errors::{CertificateError, ZipError};
 use std::io;
 use thiserror::Error;
 
@@ -20,4 +20,7 @@ pub enum APKError {
     /// Error occurred while parsing apk as zip archive
     #[error("got error while parsing apk archive: {0}")]
     ZipError(#[from] ZipError),
+
+    #[error("got error while parsing certificates")]
+    CertificateError(#[from] CertificateError),
 }
