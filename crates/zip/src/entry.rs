@@ -395,9 +395,9 @@ impl ZipEntry {
         }
     }
 
-    fn parse_signature_v3_like<'a>(
+    fn parse_signature_v3_like(
         &self,
-        input: &mut &'a [u8],
+        input: &mut &[u8],
     ) -> Result<Vec<CertificateInfo>, ContextError> {
         let _signers_length = le_u32.parse_next(input)?;
         let _signer_length = le_u32.parse_next(input)?;
