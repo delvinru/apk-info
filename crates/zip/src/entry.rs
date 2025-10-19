@@ -508,11 +508,11 @@ impl ZipEntry {
                     ))
                 }
                 // some maybe usefull block that we don't parse yet
-                Self::VERITY_PADDING_BLOCK_ID
-                | Self::DEPENDENCY_INFO_BLOCK_ID
+                Self::DEPENDENCY_INFO_BLOCK_ID
+                | Self::GOOGLE_PLAY_FROSTING_ID
                 | Self::V1_SOURCE_STAMP_BLOCK_ID
                 | Self::V2_SOURCE_STAMP_BLOCK_ID
-                | Self::GOOGLE_PLAY_FROSTING_ID => {
+                | Self::VERITY_PADDING_BLOCK_ID => {
                     let _ = take(size.saturating_sub(4)).parse_next(input)?;
                     // maybe even remove this message, idk for now
                     info!(

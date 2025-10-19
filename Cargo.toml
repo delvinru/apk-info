@@ -37,3 +37,7 @@ signer = { path = "signer" }
 thiserror = "2"
 walkdir = "2.5.0"
 winnow = { version = "0.7.13", features = ["simd"] }
+
+[profile.release]
+codegen-units = 1
+panic = "abort"
