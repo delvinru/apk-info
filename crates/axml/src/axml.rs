@@ -269,7 +269,7 @@ impl AXML {
         })
     }
 
-    pub fn get_main_activities<'a>(&'a self) -> impl Iterator<Item = &'a str> {
+    pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {
         self.root
             .children()
             .filter(|c| c.name() == "application")

@@ -273,7 +273,7 @@ impl ZipEntry {
         };
 
         let (data, _) = self
-            .read(&signature_file)
+            .read(signature_file)
             .map_err(CertificateError::ZipError)?;
 
         let info = Pkcs7::from_der(&data).map_err(CertificateError::StackError)?;
@@ -480,9 +480,7 @@ impl ZipEntry {
                         .filter_map(|cert| self.get_certificate_info(cert).ok())
                         .collect();
 
-                    Ok(Signature::V2(SignatureV2 {
-                        certificates: certificates,
-                    }))
+                    Ok(Signature::V2(SignatureV2 { certificates }))
                 }
                 Self::SIGNATURE_V3_MAGIC => {
                     println!("got v3 magic (not yet implemented) - 0x{:08x}", id);
