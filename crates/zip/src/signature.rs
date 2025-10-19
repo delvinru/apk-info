@@ -66,7 +66,7 @@ pub struct CertificateInfo {
 ///
 /// More info: <https://source.android.com/docs/security/features/apksigning/v2#signature-algorithm-ids>
 #[repr(u16)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SignatureAlgorithm {
     /// RSASSA-PSS with SHA2-256 digest, SHA2-256 MGF1, 32 bytes of salt, trailer: 0xbc
     RsassaPssSha256 = 0x0101,
@@ -92,7 +92,7 @@ pub enum SignatureAlgorithm {
 
 impl SignatureAlgorithm {
     /// Parse from a numeric algorithm ID
-    pub fn from_id(id: u16) -> Option<Self> {
+    pub fn from_id(id: u32) -> Option<Self> {
         use SignatureAlgorithm::*;
         Some(match id {
             0x0101 => RsassaPssSha256,
@@ -130,6 +130,8 @@ pub struct SignatureV1 {
 }
 
 /// Information from v2 signature
+///
+/// TODO: maybe export a little bit more information
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct SignatureV2 {
     /// Extracted information from certificate
@@ -137,6 +139,8 @@ pub struct SignatureV2 {
 }
 
 /// Information from v3 signature
+///
+/// TODO: maybe export a little bit more information
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct SignatureV3 {
     /// Extracted information from certificate

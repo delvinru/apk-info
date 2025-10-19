@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use flate2::Decompress;
 use flate2::FlushDecompress;
 use flate2::Status;
@@ -192,15 +190,10 @@ impl ZipEntry {
     /// to identify any issues related to dependencies
     const DEPENDENCY_INFO_BLOCK_ID: u32 = 0x504b4453;
 
-    /// Attribute to check whether a newer APK Signature Scheme signature was stripped
-    const STRIPPING_PROTECTION_ATTR_ID: u32 = 0xbeeff00d;
-
     /// Used to track channels of distribution for an APK, mostly Chinese APKs have this
     const APK_CHANNEL_BLOCK: u32 = 0x71777777;
 
     /// Google Play Frosting ID
-    ///
-    /// TODO: this maybe actually usefull, need some how extract this signature
     const GOOGLE_PLAY_FROSTING_ID: u32 = 0x2146444e;
 
     fn get_certificate_info(
@@ -376,7 +369,7 @@ impl ZipEntry {
             let value = take(attribute_length.saturating_sub(4)).parse_next(input)?;
 
             // TODO: i really need to check that id is equal 0x3ba06f8c ?
-            let const_id = le_u32.parse_next(input)?;
+            let _const_id = le_u32.parse_next(input)?;
 
             // TODO: proof of rotation struct - just skip for now
 
@@ -386,9 +379,8 @@ impl ZipEntry {
 
     fn parse_signatures<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
-            let _ = le_u32.parse_next(input)?;
-            let signature_algorithm_id = le_u32.parse_next(input)?;
-            let signature_data_length = le_u32.parse_next(input)?;
+            let (_signature_length, signature_algorithm_id, signature_data_length) =
+                (le_u32, le_u32, le_u32).parse_next(input)?;
             let signature = take(signature_data_length).parse_next(input)?;
 
             Ok((signature_algorithm_id, signature))
@@ -400,6 +392,8 @@ impl ZipEntry {
         input: &mut &[u8],
     ) -> Result<Vec<CertificateInfo>, ContextError> {
         let _signers_length = le_u32.parse_next(input)?;
+
+        // TODO: parse several signers
         let _signer_length = le_u32.parse_next(input)?;
         let _signed_data_length = le_u32.parse_next(input)?;
 
@@ -415,16 +409,16 @@ impl ZipEntry {
         let certificates: Vec<X509> =
             repeat(0.., Self::parse_certificates()).parse_next(&mut certificates_bytes)?;
 
-        let _ = (le_u32, le_u32).parse_next(input)?; // min/max sdk
+        let (_min_sdk, _max_sdk) = (le_u32, le_u32).parse_next(input)?;
 
         // attributes
         let attributes_length = le_u32.parse_next(input)?;
         let mut attributes_bytes = take(attributes_length).parse_next(input)?;
         let _attributes: Vec<(u32, &[u8])> =
-            repeat(0.., Self::parse_attributes()).parse_next(&mut attributes_bytes)?;
+            repeat(0.., Self::parse_attributes_v3()).parse_next(&mut attributes_bytes)?;
 
         // duplicate min/max sdk
-        let _ = (le_u32, le_u32).parse_next(input)?;
+        let (_duplicate_min_sdk, _duplicate_max_sdk) = (le_u32, le_u32).parse_next(input)?;
 
         // signatures
         let signatures_length = le_u32.parse_next(input)?;
@@ -451,19 +445,19 @@ impl ZipEntry {
 
             match id {
                 Self::SIGNATURE_V2_MAGIC => {
-                    let signers_length = le_u32.parse_next(input)?;
+                    let _signers_length = le_u32.parse_next(input)?;
                     // TODO: need parse several signers
 
                     // parse signer
-                    let signer_length = le_u32.parse_next(input)?;
+                    let _signer_length = le_u32.parse_next(input)?;
 
                     // parse signed data
-                    let signed_data_length = le_u32.parse_next(input)?;
+                    let _signed_data_length = le_u32.parse_next(input)?;
 
                     // parse digests
                     let digests_length = le_u32.parse_next(input)?;
                     let mut digest_bytes = take(digests_length).parse_next(input)?;
-                    let digests: Vec<(u32, &[u8])> =
+                    let _digests: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_digest()).parse_next(&mut digest_bytes)?;
 
                     let certificates_length = le_u32.parse_next(input)?;
@@ -474,7 +468,7 @@ impl ZipEntry {
                     let attributes_length = le_u32.parse_next(input)?;
                     let mut attributes_bytes = take(attributes_length).parse_next(input)?;
                     // often attributes is zero size
-                    let attributes: Vec<(u32, &[u8])> =
+                    let _attributes: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_attributes()).parse_next(&mut attributes_bytes)?;
 
                     // i honestly don't know i need consume another 4 zero bytes, but this is happens in apk
@@ -483,11 +477,11 @@ impl ZipEntry {
 
                     let signatures_length = le_u32.parse_next(input)?;
                     let mut signatures_bytes = take(signatures_length).parse_next(input)?;
-                    let signatures: Vec<(u32, &[u8])> =
+                    let _signatures: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_signatures()).parse_next(&mut signatures_bytes)?;
 
                     let public_key_length = le_u32.parse_next(input)?;
-                    let public_key = take(public_key_length).parse_next(input)?;
+                    let _public_key = take(public_key_length).parse_next(input)?.to_vec();
 
                     let certificates = certificates
                         .iter()
