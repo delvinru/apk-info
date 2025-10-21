@@ -59,28 +59,121 @@ impl Apk {
         self.apkrs.get_files().collect()
     }
 
-    /// Retrieves the package name defined in the `<manifest>` tag.
     pub fn get_package_name(&self) -> Option<&str> {
         self.apkrs.get_package_name()
     }
 
-    /// Retrieves the minimum SDK version required by the app.
+    pub fn get_shared_user_id(&self) -> Option<&str> {
+        self.apkrs.get_shared_user_id()
+    }
+
+    pub fn get_shared_user_label(&self) -> Option<&str> {
+        self.apkrs.get_shared_user_label()
+    }
+
+    pub fn get_shared_user_max_sdk_version(&self) -> Option<&str> {
+        self.apkrs.get_shared_user_max_sdk_version()
+    }
+
+    pub fn get_version_code(&self) -> Option<&str> {
+        self.apkrs.get_version_code()
+    }
+
+    pub fn get_version_name(&self) -> Option<&str> {
+        self.apkrs.get_version_name()
+    }
+
+    pub fn get_install_location(&self) -> Option<&str> {
+        self.apkrs.get_install_location()
+    }
+
+    pub fn get_application_task_reparenting(&self) -> Option<&str> {
+        self.apkrs.get_application_task_reparenting()
+    }
+
+    pub fn get_application_allow_backup(&self) -> Option<&str> {
+        self.apkrs.get_application_allow_backup()
+    }
+
+    pub fn get_application_category(&self) -> Option<&str> {
+        self.apkrs.get_application_category()
+    }
+
+    pub fn get_application_backup_agent(&self) -> Option<&str> {
+        self.apkrs.get_application_backup_agent()
+    }
+
+    pub fn get_application_debuggable(&self) -> Option<&str> {
+        self.apkrs.get_application_debuggable()
+    }
+
+    pub fn get_application_description(&self) -> Option<&str> {
+        self.apkrs.get_application_description()
+    }
+
+    pub fn get_application_label(&self) -> Option<&str> {
+        self.apkrs.get_application_label()
+    }
+
+    pub fn get_application_name(&self) -> Option<&str> {
+        self.apkrs.get_application_name()
+    }
+
+    pub fn get_permissions(&self) -> HashSet<&str> {
+        self.apkrs.get_permissions().collect()
+    }
+
+    pub fn get_permissions_sdk23(&self) -> HashSet<&str> {
+        self.apkrs.get_permissions_sdk23().collect()
+    }
+
     pub fn get_min_sdk_version(&self) -> Option<&str> {
         self.apkrs.get_min_sdk_version()
     }
 
-    /// Retrieves the maximum SDK version supported by the app.
+    pub fn get_target_sdk_version(&self) -> Option<&str> {
+        self.apkrs.get_target_sdk_version()
+    }
+
     pub fn get_max_sdk_version(&self) -> Option<&str> {
         self.apkrs.get_max_sdk_version()
+    }
+
+    pub fn get_libraries(&self) -> HashSet<&str> {
+        self.apkrs.get_libraries().collect()
+    }
+
+    pub fn get_features(&self) -> HashSet<&str> {
+        self.apkrs.get_features().collect()
+    }
+
+    pub fn get_declared_permissions(&self) -> HashSet<&str> {
+        self.apkrs.get_declared_permissions().collect()
     }
 
     pub fn get_main_activities(&self) -> HashSet<&str> {
         self.apkrs.get_main_activities().collect()
     }
 
-    pub fn get_permissions(&self) -> HashSet<&str> {
-        self.apkrs.get_permissions().collect()
+    pub fn get_activities(&self) -> HashSet<&str> {
+        self.apkrs.get_activities().collect()
     }
+
+    pub fn get_services(&self) -> HashSet<&str> {
+        self.apkrs.get_services().collect()
+    }
+
+    pub fn get_receivers(&self) -> HashSet<&str> {
+        self.apkrs.get_receivers().collect()
+    }
+
+    pub fn get_providers(&self) -> HashSet<&str> {
+        self.apkrs.get_providers().collect()
+    }
+
+    // pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
+    //     self.apkrs.get_signatures()
+    // }
 }
 
 #[pymodule]
