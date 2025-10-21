@@ -18,11 +18,7 @@ use winnow::prelude::*;
 use winnow::token::take;
 
 use crate::errors::CertificateError;
-use crate::signature::CertificateInfo;
-use crate::signature::Signature;
-use crate::signature::SignatureV1;
-use crate::signature::SignatureV2;
-use crate::signature::SignatureV3;
+use crate::signature::{CertificateInfo, Signature};
 use crate::{
     errors::{FileCompressionType, ZipError},
     structs::{
@@ -254,14 +250,14 @@ impl ZipEntry {
     }
 
     /// Get information from v1 certificate
-    pub fn get_signatures_v1(&self) -> Result<Vec<Signature>, CertificateError> {
+    pub fn get_signature_v1(&self) -> Result<Signature, CertificateError> {
         let signature_file = match self.namelist().find(|name| {
             name.starts_with("META-INF/")
                 && (name.ends_with(".DSA") || name.ends_with(".EC") || name.ends_with(".RSA"))
         }) {
             Some(v) => v,
             // just apk without signatures
-            None => return Ok(Vec::new()),
+            None => return Ok(Signature::Unknown),
         };
 
         let (data, _) = self
@@ -276,18 +272,14 @@ impl ZipEntry {
 
         let certificates = signers
             .iter()
-            .map(|signer| {
-                Ok(Signature::V1(SignatureV1 {
-                    certificate: self.get_certificate_info(signer)?,
-                }))
-            })
-            .collect::<Result<Vec<Signature>, CertificateError>>()?;
+            .map(|signer| self.get_certificate_info(signer))
+            .collect::<Result<Vec<CertificateInfo>, CertificateError>>()?;
 
-        Ok(certificates)
+        Ok(Signature::V1(certificates))
     }
 
-    // TODO: need create "universal" parser for all blocks inside signing block, not just signatures
-    pub fn get_signatures_v2_v3(&self) -> Result<Vec<Signature>, CertificateError> {
+    /// Parse APK signature block and extract usefull information
+    pub fn get_signatures_other(&self) -> Result<Vec<Signature>, CertificateError> {
         let offset = self.eocd.central_dir_offset as usize;
         let mut slice = match self.input.get(offset.saturating_sub(24)..offset) {
             Some(v) => v,
@@ -321,17 +313,18 @@ impl ZipEntry {
             ));
         }
 
-        // TODO: refactor this code
-        let blocks: Vec<Signature> = repeat(0.., self.parse_apk_signatures())
+        let signatures: Vec<Signature> =
+            repeat::<&[u8], Signature, Vec<Signature>, ContextError, _>(
+                0..,
+                self.parse_apk_signatures(),
+            )
             .parse_next(&mut slice)
-            .map_err(|_| CertificateError::ParseError)?;
-
-        let filtered: Vec<Signature> = blocks
+            .map_err(|_| CertificateError::ParseError)?
             .into_iter()
-            .filter(|signature| *signature != Signature::Unknown)
+            .filter(|signature| signature != &Signature::Unknown)
             .collect();
 
-        Ok(filtered)
+        Ok(signatures)
     }
 
     fn parse_digest<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
@@ -488,17 +481,17 @@ impl ZipEntry {
                         .filter_map(|cert| self.get_certificate_info(cert).ok())
                         .collect();
 
-                    Ok(Signature::V2(SignatureV2 { certificates }))
+                    Ok(Signature::V2(certificates))
                 }
                 Self::SIGNATURE_V3_MAGIC => {
                     let certificates = self.parse_signature_v3_like(input)?;
 
-                    Ok(Signature::V3(SignatureV3 { certificates }))
+                    Ok(Signature::V3(certificates))
                 }
                 Self::SIGNATURE_V31_MAGIC => {
                     let certificates = self.parse_signature_v3_like(input)?;
 
-                    Ok(Signature::V31(SignatureV3 { certificates }))
+                    Ok(Signature::V31(certificates))
                 }
                 Self::APK_CHANNEL_BLOCK => {
                     let data = take(size.saturating_sub(4)).parse_next(input)?;

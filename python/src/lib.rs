@@ -2,12 +2,138 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use ::apk_info::apk::Apk as ApkRust;
+use ::apk_info_zip::signature::CertificateInfo as ZipCertificateInfo;
+use ::apk_info_zip::signature::Signature as ZipSignature;
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::types::PyString;
 use pyo3::{Bound, PyAny, PyResult, pyclass, pymethods};
 use pyo3::{create_exception, prelude::*};
 
 create_exception!(m, APKError, PyException, "Got error while parsing apk");
+
+#[pyclass(eq, frozen)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct CertificateInfo {
+    #[pyo3(get)]
+    pub serial_number: String,
+
+    #[pyo3(get)]
+    pub subject: String,
+
+    #[pyo3(get)]
+    pub valid_from: String,
+
+    #[pyo3(get)]
+    pub valid_until: String,
+
+    #[pyo3(get)]
+    pub signature_type: String,
+
+    #[pyo3(get)]
+    pub md5_fingerprint: String,
+
+    #[pyo3(get)]
+    pub sha1_fingerprint: String,
+
+    #[pyo3(get)]
+    pub sha256_fingerprint: String,
+}
+
+impl CertificateInfo {
+    fn from(certificate: ZipCertificateInfo) -> Self {
+        Self {
+            serial_number: certificate.serial_number,
+            subject: certificate.subject,
+            valid_from: certificate.valid_from,
+            valid_until: certificate.valid_until,
+            signature_type: certificate.signature_type,
+            md5_fingerprint: certificate.md5_fingerprint,
+            sha1_fingerprint: certificate.sha1_fingerprint,
+            sha256_fingerprint: certificate.sha256_fingerprint,
+        }
+    }
+}
+
+#[pymethods]
+impl CertificateInfo {
+    fn __repr__(&self) -> String {
+        format!(
+            "CertificateInfo(serial_number='{}', subject='{}', valid_from='{}', valid_until='{}', signature_type='{}', md5_fingerprint='{}', sha1_fingerprint='{}', sha256_fingerprint='{}')",
+            self.serial_number,
+            self.subject,
+            self.valid_from,
+            self.valid_until,
+            self.signature_type,
+            self.md5_fingerprint,
+            self.sha1_fingerprint,
+            self.sha256_fingerprint
+        )
+    }
+}
+
+#[pyclass(eq, frozen)]
+#[derive(PartialEq, Eq, Hash)]
+enum Signature {
+    V1 { certificates: Vec<CertificateInfo> },
+    V2 { certificates: Vec<CertificateInfo> },
+    V3 { certificates: Vec<CertificateInfo> },
+    V31 { certificates: Vec<CertificateInfo> },
+    ApkChannelBlock { value: String },
+}
+
+impl Signature {
+    fn from<'py>(py: Python<'py>, signature: ZipSignature) -> Option<Bound<'py, Signature>> {
+        match signature {
+            ZipSignature::V1(v) => Signature::V1 {
+                certificates: v.into_iter().map(CertificateInfo::from).collect(),
+            }
+            .into_pyobject(py)
+            .ok(),
+            ZipSignature::V2(v) => Signature::V2 {
+                certificates: v.into_iter().map(CertificateInfo::from).collect(),
+            }
+            .into_pyobject(py)
+            .ok(),
+            ZipSignature::V3(v) => Signature::V3 {
+                certificates: v.into_iter().map(CertificateInfo::from).collect(),
+            }
+            .into_pyobject(py)
+            .ok(),
+            ZipSignature::V31(v) => Signature::V31 {
+                certificates: v.into_iter().map(CertificateInfo::from).collect(),
+            }
+            .into_pyobject(py)
+            .ok(),
+            ZipSignature::ApkChannelBlock(v) => Signature::ApkChannelBlock { value: v }
+                .into_pyobject(py)
+                .ok(),
+            _ => None,
+        }
+    }
+}
+
+#[pymethods]
+impl Signature {
+    fn __repr__(&self) -> String {
+        match self {
+            Signature::V1 { certificates } => {
+                format!("Signature.V1(certificates={:?})", certificates)
+            }
+            Signature::V2 { certificates } => {
+                format!("Signature.V2(certificates={:?})", certificates)
+            }
+            Signature::V3 { certificates } => {
+                format!("Signature.V3(certificates={:?})", certificates)
+            }
+            Signature::V31 { certificates } => {
+                format!("Signature.V31(certificates={:?})", certificates)
+            }
+            Signature::ApkChannelBlock { value } => {
+                format!("Signature.ApkChannelBlock(channel='{}')", value)
+            }
+        }
+    }
+}
 
 #[pyclass(name = "APK")]
 struct Apk {
@@ -171,15 +297,24 @@ impl Apk {
         self.apkrs.get_providers().collect()
     }
 
-    // pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
-    //     self.apkrs.get_signatures()
-    // }
+    // TODO: need somehow converts rust enum into python, idk yet
+    pub fn get_signatures<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, Signature>>> {
+        Ok(self
+            .apkrs
+            .get_signatures()
+            .map_err(|e| APKError::new_err(format!("failed to get signatures: {:?}", e)))?
+            .into_iter()
+            .filter_map(|x| Signature::from(py, x))
+            .collect())
+    }
 }
 
 #[pymodule]
 fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("APKError", m.py().get_type::<APKError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add_class::<CertificateInfo>()?;
+    m.add_class::<Signature>()?;
 
     m.add_class::<Apk>()?;
     Ok(())

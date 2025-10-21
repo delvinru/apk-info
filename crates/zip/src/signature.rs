@@ -6,28 +6,31 @@ pub enum Signature {
     /// Default signature scheme based on JAR signing
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v2#v1-verification>
-    V1(SignatureV1),
+    V1(Vec<CertificateInfo>),
 
     /// APK signature scheme v2
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v2>
-    V2(SignatureV2),
+    V2(Vec<CertificateInfo>),
 
     /// APK signature scheme v3
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v3>
-    V3(SignatureV3),
+    V3(Vec<CertificateInfo>),
 
     /// APK signature scheme v3.1
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v3-1>
-    V31(SignatureV3),
+    V31(Vec<CertificateInfo>),
 
     /// APK signature scheme v4
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v4>
+    ///
+    /// NOTE: not yet implemented and will never?
     V4,
 
+    /// Some usefull information from apk channel block
     ApkChannelBlock(String),
 
     /// Got something that we don't know
@@ -118,31 +121,4 @@ impl SignatureAlgorithm {
             Self::DsaSha256 => "DSA (SHA2-256)",
         }
     }
-}
-
-/// Information from v1 signature
-///
-/// No fancy attributes, just certificate information
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SignatureV1 {
-    /// Extracted information from certificate
-    pub certificate: CertificateInfo,
-}
-
-/// Information from v2 signature
-///
-/// TODO: maybe export a little bit more information
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SignatureV2 {
-    /// Extracted information from certificate
-    pub certificates: Vec<CertificateInfo>,
-}
-
-/// Information from v3 signature
-///
-/// TODO: maybe export a little bit more information
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SignatureV3 {
-    /// Extracted information from certificate
-    pub certificates: Vec<CertificateInfo>,
 }

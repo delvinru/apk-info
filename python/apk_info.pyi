@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from pathlib import Path
 
 __version__: str
@@ -314,7 +315,7 @@ class APK:
         """
         ...
 
-    def get_signatures(self) -> list[str]:
+    def get_signatures(self) -> list[SignatureType]:
         """
         Retrieves all APK signing signatures (v1, v2, v3, and v3.1).
 
@@ -324,3 +325,38 @@ class APK:
             list[str]: A list of certificate signature strings.
         """
         ...
+
+@dataclass(frozen=True)
+class CertificateInfo:
+    serial_number: str
+    subject: str
+    valid_from: str
+    valid_until: str
+    signature_type: str
+    md5_fingerprint: str
+    sha1_fingerprint: str
+    sha256_fingerprint: str
+
+@dataclass(frozen=True)
+class Signature:
+    @dataclass(frozen=True)
+    class V1:
+        certificates: list[CertificateInfo]
+
+    @dataclass(frozen=True)
+    class V2:
+        certificates: list[CertificateInfo]
+
+    @dataclass(frozen=True)
+    class V3:
+        certificates: list[CertificateInfo]
+
+    @dataclass(frozen=True)
+    class V31:
+        certificates: list[CertificateInfo]
+
+    @dataclass(frozen=True)
+    class ApkChannelBlock:
+        value: str
+
+SignatureType = Signature.V1 | Signature.V2 | Signature.V3 | Signature.V31 | Signature.ApkChannelBlock

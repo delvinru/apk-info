@@ -13,4 +13,5 @@ doc = false
 
 [dependencies]
 apk-info.workspace = true
+apk-info-zip.workspace = true
 pyo3.workspace = true
