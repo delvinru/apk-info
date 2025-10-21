@@ -37,6 +37,7 @@ pub(crate) struct CentralDirectoryEntry {
 impl CentralDirectoryEntry {
     const MAGIC: u32 = 0x02014b50;
 
+    #[inline(always)]
     fn parse(input: &mut &[u8]) -> ModalResult<CentralDirectoryEntry> {
         let (
             _,

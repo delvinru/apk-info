@@ -269,41 +269,67 @@ impl AXML {
         })
     }
 
+    /// Get main activities from APK
+    ///
+    /// Algorithm:
+    ///     - Search for all <activity> and <activity-alias> tags
+    ///     - Search for Intent.ACTION_MAIN with
+    ///
+    /// See: <https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/core/java/android/app/ApplicationPackageManager.java;l=310?q=getLaunchIntentForPackage>
     pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {
         self.root
             .children()
             .filter(|c| c.name() == "application")
-            .flat_map(|app| {
-                app.children().filter(|c| {
-                    (c.name() == "activity" || c.name() == "activity-alias")
-                        && c.attr("enabled") != Some("false")
-                })
-            })
+            .flat_map(|app| app.children())
             .filter_map(|activity| {
+                // check tag and enabled state
+                let tag = activity.name();
+                if (tag != "activity" && tag != "activity-alias")
+                    || activity.attr("enabled") == Some("false")
+                {
+                    return None;
+                }
+
+                // find <intent-filter> with MAIN action + LAUNCHER/INFO category
                 let has_matching_intent = activity.children().any(|intent_filter| {
                     if intent_filter.name() != "intent-filter" {
                         return false;
                     }
 
-                    let has_main_action = intent_filter.children().any(|child| {
-                        child.name() == "action"
-                            && child.attr("name") == Some("android.intent.action.MAIN")
-                    });
+                    let mut has_main = false;
+                    let mut has_launcher = false;
 
-                    // TODO: need research this moment, how android actually launch itself
-                    let has_launcher_category = intent_filter.children().any(|child| {
-                        child.name() == "category"
-                            && child.attr("name") == Some("android.intent.category.LAUNCHER")
-                    });
+                    for child in intent_filter.children() {
+                        match child.name() {
+                            "action"
+                                if child.attr("name") == Some("android.intent.action.MAIN") =>
+                            {
+                                has_main = true;
+                            }
+                            "category"
+                                if matches!(
+                                    child.attr("name"),
+                                    Some("android.intent.category.LAUNCHER")
+                                        | Some("android.intent.category.INFO")
+                                ) =>
+                            {
+                                has_launcher = true;
+                            }
+                            _ => {}
+                        }
 
-                    has_main_action && has_launcher_category
+                        if has_main && has_launcher {
+                            return true;
+                        }
+                    }
+
+                    false
                 });
 
                 if has_matching_intent {
-                    activity.attr("name")
-                } else {
-                    None
+                    return activity.attr("name");
                 }
+                None
             })
     }
 }

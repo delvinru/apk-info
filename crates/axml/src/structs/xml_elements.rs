@@ -263,7 +263,6 @@ pub(crate) struct XmlAttributeElement {
 impl XmlAttributeElement {
     const DEFAULT_ATTRIBUTE_SIZE: u16 = 0x14;
 
-    #[inline]
     pub fn parse(
         attribute_size: u16,
     ) -> impl FnMut(&mut &[u8]) -> ModalResult<XmlAttributeElement> {
@@ -272,8 +271,11 @@ impl XmlAttributeElement {
             let typed_value = ResourceValue::parse(input)?;
 
             // sometimes attribute size != 20, need to scroll through the data
-            let _ = take(attribute_size.saturating_sub(Self::DEFAULT_ATTRIBUTE_SIZE))
-                .parse_next(input)?;
+            if let Some(extra) = attribute_size.checked_sub(Self::DEFAULT_ATTRIBUTE_SIZE)
+                && extra > 0
+            {
+                take(extra).parse_next(input)?;
+            }
 
             Ok(XmlAttributeElement {
                 namespace_uri,

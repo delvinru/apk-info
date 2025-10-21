@@ -24,6 +24,7 @@ pub(crate) struct LocalFileHeader {
 impl LocalFileHeader {
     const MAGIC: u32 = 0x04034b50;
 
+    #[inline(always)]
     pub fn parse(input: &[u8], offset: usize) -> ModalResult<LocalFileHeader> {
         let mut input = input
             .get(offset..)

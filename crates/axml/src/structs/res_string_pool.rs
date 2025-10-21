@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use log::warn;
 use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::combinator::repeat;
@@ -25,6 +23,9 @@ pub(crate) struct ResStringPoolHeader {
     pub(crate) style_count: u32,
     pub(crate) flags: u32,
     pub(crate) strings_start: u32,
+
+    // currently not using, but maybe?
+    #[allow(unused)]
     pub(crate) styles_start: u32,
 }
 
@@ -44,7 +45,9 @@ impl ResStringPoolHeader {
         })
     }
 
+    // currently not using, but maybe in the future
     #[inline]
+    #[allow(unused)]
     pub fn is_sorted(&self) -> bool {
         StringType::from_bits_truncate(self.flags).contains(StringType::Sorted)
     }
@@ -57,12 +60,19 @@ impl ResStringPoolHeader {
 
 #[derive(Debug)]
 pub(crate) struct StringPool {
+    #[allow(unused)]
     pub(crate) header: ResStringPoolHeader,
+
+    #[allow(unused)]
     pub(crate) string_offsets: Vec<u32>,
+
+    #[allow(unused)]
     pub(crate) style_offsets: Vec<u32>,
+
     pub(crate) strings: Vec<String>,
 
     // emit additional properties
+    #[allow(unused)]
     pub(crate) invalid_string_count: bool,
 }
 
@@ -118,20 +128,25 @@ impl StringPool {
         let is_utf8 = string_header.is_utf8();
         let mut strings = Vec::with_capacity(string_header.string_count as usize);
 
+        // There is no streaming parsing because malware often "plays" with strings,
+        // so it is much safer to read the entire chunk and already work with it.
         for &offset in string_offsets {
-            let mut slice_at_offset = match slice.get(offset as usize..) {
-                Some(v) => v,
-                None => {
-                    warn!("can't get string at offset: 0x{:02x}", offset);
-                    // append empty string to preserve index order
+            if offset as usize >= slice.len() {
+                warn!("invalid string offset: 0x{:08x}", offset);
+                // push empty string to preserve index order
+                strings.push(String::new());
+                continue;
+            }
+
+            let mut string_data = &slice[offset as usize..];
+
+            match Self::parse_string(&mut string_data, is_utf8) {
+                Ok(s) => strings.push(s),
+                Err(e) => {
+                    warn!("failed to parse string at offset 0x{:08x}: {:?}", offset, e);
+                    // push empty string to preserve index order
                     strings.push(String::new());
-
-                    continue;
                 }
-            };
-
-            if let Ok(s) = Self::parse_string(&mut slice_at_offset, is_utf8) {
-                strings.push(s);
             }
         }
 
@@ -139,14 +154,15 @@ impl StringPool {
     }
 
     fn parse_string(input: &mut &[u8], is_utf8: bool) -> ModalResult<String> {
-        let string = if !is_utf8 {
+        if !is_utf8 {
             // utf-16
             let u16len = le_u16(input)?;
 
             // check if regular utf-16 or with fixup
             let real_len = if u16len & 0x8000 != 0 {
-                let u16len_fix: u16 = le_u16(input)?;
-                (((u16len & 0x7FFF) as u32) << 16 | u16len_fix as u32) as usize
+                let hi = (u16len & 0x7fff) as u32;
+                let lo = le_u16(input)? as u32;
+                ((hi << 16) | lo) as usize
             } else {
                 u16len as usize
             };
@@ -155,7 +171,7 @@ impl StringPool {
             // skip last two bytes
             let _ = le_u16(input)?;
 
-            Self::read_utf16(content, real_len)
+            Ok(Self::read_utf16(content, real_len))
         } else {
             // utf-8
             let (length1, length2) = (le_u8, le_u8).parse_next(input)?;
@@ -174,12 +190,11 @@ impl StringPool {
             // skip last byte
             let _ = le_u8(input)?;
 
-            String::from_utf8_lossy(content).to_string()
-        };
-
-        Ok(string)
+            Ok(String::from_utf8_lossy(content).into_owned())
+        }
     }
 
+    #[inline]
     fn read_utf16(slice: &[u8], size: usize) -> String {
         std::char::decode_utf16(
             slice

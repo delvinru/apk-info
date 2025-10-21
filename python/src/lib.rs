@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use ::apk_info::apk::Apk as ApkRust;
@@ -71,6 +72,14 @@ impl Apk {
     /// Retrieves the maximum SDK version supported by the app.
     pub fn get_max_sdk_version(&self) -> Option<&str> {
         self.apkrs.get_max_sdk_version()
+    }
+
+    pub fn get_main_activities(&self) -> HashSet<&str> {
+        self.apkrs.get_main_activities().collect()
+    }
+
+    pub fn get_permissions(&self) -> HashSet<&str> {
+        self.apkrs.get_permissions().collect()
     }
 }
 
