@@ -1,37 +1,39 @@
-use flate2::Decompress;
-use flate2::FlushDecompress;
-use flate2::Status;
-use log::info;
-use log::warn;
-use openssl::hash::MessageDigest;
-use openssl::pkcs7::Pkcs7;
-use openssl::pkcs7::Pkcs7Flags;
-use openssl::stack::Stack;
-use openssl::x509::X509;
-use openssl::x509::X509Ref;
 use std::collections::HashMap;
-use winnow::binary::le_u32;
-use winnow::binary::le_u64;
-use winnow::combinator::repeat;
-use winnow::error::ContextError;
-use winnow::prelude::*;
-use winnow::token::take;
 
-use crate::errors::CertificateError;
-use crate::signature::{CertificateInfo, Signature};
+use flate2::{Decompress, FlushDecompress, Status};
+use log::{info, warn};
+use openssl::{
+    hash::MessageDigest,
+    pkcs7::{Pkcs7, Pkcs7Flags},
+    stack::Stack,
+    x509::{X509, X509Ref},
+};
+use winnow::{
+    binary::{le_u32, le_u64},
+    combinator::repeat,
+    error::ContextError,
+    prelude::*,
+    token::take,
+};
+
 use crate::{
-    errors::{FileCompressionType, ZipError},
-    structs::{
-        central_directory::CentralDirectory, eocd::EndOfCentralDirectory,
-        local_file_header::LocalFileHeader,
-    },
+    errors::{CertificateError, FileCompressionType, ZipError},
+    signature::{CertificateInfo, Signature},
+    structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader},
 };
 
 /// Represents a parsed ZIP archive
 pub struct ZipEntry {
+    /// Owned zip data
     input: Vec<u8>,
+
+    /// EOCD structure
     eocd: EndOfCentralDirectory,
+
+    /// Central directory structure
     central_directory: CentralDirectory,
+
+    /// Information about local headers
     local_headers: HashMap<String, LocalFileHeader>,
 }
 

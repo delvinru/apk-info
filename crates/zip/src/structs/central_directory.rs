@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::collections::HashMap;
 
 use winnow::binary::{le_u16, le_u32};
@@ -12,25 +10,57 @@ use crate::structs::eocd::EndOfCentralDirectory;
 
 #[derive(Debug)]
 pub(crate) struct CentralDirectoryEntry {
+    #[allow(unused)]
     pub(crate) version_made_by: u16,
+
+    #[allow(unused)]
     pub(crate) version_needed: u16,
+
+    #[allow(unused)]
     pub(crate) general_purpose: u16,
+
+    #[allow(unused)]
     pub(crate) compression_method: u16,
+
+    #[allow(unused)]
     pub(crate) last_mod_time: u16,
+
+    #[allow(unused)]
     pub(crate) last_mod_date: u16,
+
+    #[allow(unused)]
     pub(crate) crc32: u32,
+
     pub(crate) compressed_size: u32,
+
     pub(crate) uncompressed_size: u32,
+
+    #[allow(unused)]
     pub(crate) file_name_length: u16,
+
+    #[allow(unused)]
     pub(crate) extra_field_length: u16,
+
+    #[allow(unused)]
     pub(crate) file_comment_length: u16,
+
+    #[allow(unused)]
     pub(crate) disk_number_start: u16,
+
+    #[allow(unused)]
     pub(crate) internal_attrs: u16,
+
+    #[allow(unused)]
     pub(crate) external_attrs: u32,
+
     pub(crate) local_header_offset: u32,
 
     pub(crate) file_name: String,
+
+    #[allow(unused)]
     pub(crate) extra_field: Vec<u8>,
+
+    #[allow(unused)]
     pub(crate) file_comment: Vec<u8>,
 }
 
@@ -110,12 +140,15 @@ impl CentralDirectoryEntry {
 }
 
 #[derive(Debug)]
-pub struct CentralDirectory {
-    pub entries: HashMap<String, CentralDirectoryEntry>,
+pub(crate) struct CentralDirectory {
+    pub(crate) entries: HashMap<String, CentralDirectoryEntry>,
 }
 
 impl CentralDirectory {
-    pub fn parse(input: &[u8], eocd: &EndOfCentralDirectory) -> ModalResult<CentralDirectory> {
+    pub(crate) fn parse(
+        input: &[u8],
+        eocd: &EndOfCentralDirectory,
+    ) -> ModalResult<CentralDirectory> {
         let mut input = input
             .get(eocd.central_dir_offset as usize..)
             .ok_or(ErrMode::Incomplete(Needed::Unknown))?;
@@ -129,5 +162,163 @@ impl CentralDirectory {
                 .map(|entry| (entry.file_name.clone(), entry))
                 .collect(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_cde_record(
+        file_name: &str,
+        extra_field: &[u8],
+        comment: &[u8],
+        compressed_size: u32,
+        uncompressed_size: u32,
+        local_header_offset: u32,
+    ) -> Vec<u8> {
+        let mut data = Vec::new();
+
+        data.extend_from_slice(&CentralDirectoryEntry::MAGIC.to_le_bytes()); // magic
+        data.extend_from_slice(&45u16.to_le_bytes()); // version_made_by
+        data.extend_from_slice(&20u16.to_le_bytes()); // version_needed
+        data.extend_from_slice(&0u16.to_le_bytes()); // general_purpose
+        data.extend_from_slice(&8u16.to_le_bytes()); // compression_method
+        data.extend_from_slice(&1234u16.to_le_bytes()); // last_mod_time
+        data.extend_from_slice(&5678u16.to_le_bytes()); // last_mod_date
+        data.extend_from_slice(&0xAABBCCDDu32.to_le_bytes()); // crc32
+        data.extend_from_slice(&compressed_size.to_le_bytes());
+        data.extend_from_slice(&uncompressed_size.to_le_bytes());
+        data.extend_from_slice(&(file_name.len() as u16).to_le_bytes());
+        data.extend_from_slice(&(extra_field.len() as u16).to_le_bytes());
+        data.extend_from_slice(&(comment.len() as u16).to_le_bytes());
+        data.extend_from_slice(&0u16.to_le_bytes()); // disk_number_start
+        data.extend_from_slice(&0u16.to_le_bytes()); // internal_attrs
+        data.extend_from_slice(&0x11223344u32.to_le_bytes()); // external_attrs
+        data.extend_from_slice(&local_header_offset.to_le_bytes());
+
+        data.extend_from_slice(file_name.as_bytes()); // file_name
+        data.extend_from_slice(extra_field); // extra_field
+        data.extend_from_slice(comment); // comment
+        data
+    }
+
+    #[test]
+    fn test_parse_valid_cde_entry() {
+        let file_name = "hello.txt";
+        let extra = b"extra field";
+        let comment = b"comment field";
+        let data = make_cde_record(file_name, extra, comment, 111, 222, 333);
+
+        let mut input = &data[..];
+        let entry = CentralDirectoryEntry::parse(&mut input).unwrap();
+
+        assert_eq!(entry.file_name, file_name);
+        assert_eq!(entry.extra_field, extra);
+        assert_eq!(entry.file_comment, comment);
+        assert_eq!(entry.compressed_size, 111);
+        assert_eq!(entry.uncompressed_size, 222);
+        assert_eq!(entry.local_header_offset, 333);
+        assert!(input.is_empty());
+    }
+
+    #[test]
+    fn test_parse_invalid_magic() {
+        let mut data = make_cde_record("x", &[], &[], 1, 2, 3);
+        data[0] = 0x00; // corrupt magic
+        let mut input = &data[..];
+        let result = CentralDirectoryEntry::parse(&mut input);
+        assert!(result.is_err(), "expected error on invalid magic");
+    }
+
+    #[test]
+    fn test_parse_non_utf8_filename() {
+        // Filename bytes that are invalid UTF-8
+        let bad_bytes = [0xFF, 0xFE, 0xFD];
+        let mut data = make_cde_record("", &[], &[], 0, 0, 0);
+        let name_len = bad_bytes.len() as u16;
+
+        // Patch in new filename length and name
+        data[28..30].copy_from_slice(&name_len.to_le_bytes());
+        data.extend_from_slice(&bad_bytes);
+
+        let mut input = &data[..];
+        let entry = CentralDirectoryEntry::parse(&mut input).unwrap();
+        assert!(
+            entry.file_name.contains("�"),
+            "Should replace invalid UTF-8"
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_entries_in_directory() {
+        // Two entries back-to-back
+        let e1 = make_cde_record("a.txt", b"", b"", 10, 20, 30);
+        let e2 = make_cde_record("b.txt", b"extra information", b"comment field", 40, 50, 60);
+        let mut data = Vec::new();
+        data.extend_from_slice(&e1);
+        data.extend_from_slice(&e2);
+
+        // Fake EOCD pointing to offset 0 (start)
+        let eocd = EndOfCentralDirectory {
+            disk_number: 0,
+            central_dir_start_disk: 0,
+            entries_on_this_disk: 0,
+            total_entries: 0,
+            central_dir_size: data.len() as u32,
+            central_dir_offset: 0,
+            comment_length: 0,
+            comment: vec![],
+        };
+
+        let cd = CentralDirectory::parse(&data, &eocd).unwrap();
+        assert_eq!(cd.entries.len(), 2);
+        assert!(cd.entries.contains_key("a.txt"));
+        assert!(cd.entries.contains_key("b.txt"));
+
+        let b = cd.entries.get("b.txt").unwrap();
+        assert_eq!(b.extra_field, b"extra information");
+        assert_eq!(b.file_comment, b"comment field");
+    }
+
+    #[test]
+    fn test_parse_central_directory_with_offset() {
+        let entry = make_cde_record("offset.txt", b"", b"", 100, 200, 300);
+        let mut file = vec![0xAA; 50]; // padding before
+        let offset = file.len();
+        file.extend_from_slice(&entry);
+
+        let eocd = EndOfCentralDirectory {
+            disk_number: 0,
+            central_dir_start_disk: 0,
+            entries_on_this_disk: 0,
+            total_entries: 0,
+            central_dir_size: entry.len() as u32,
+            central_dir_offset: offset as u32,
+            comment_length: 0,
+            comment: vec![],
+        };
+
+        let cd = CentralDirectory::parse(&file, &eocd).unwrap();
+        assert_eq!(cd.entries.len(), 1);
+        assert!(cd.entries.contains_key("offset.txt"));
+    }
+
+    #[test]
+    fn test_parse_central_directory_invalid_offset() {
+        let data = vec![0x00; 10];
+        let eocd = EndOfCentralDirectory {
+            disk_number: 0,
+            central_dir_start_disk: 0,
+            entries_on_this_disk: 0,
+            total_entries: 0,
+            central_dir_size: 0,
+            central_dir_offset: 9999, // invalid
+            comment_length: 0,
+            comment: vec![],
+        };
+
+        let result = CentralDirectory::parse(&data, &eocd);
+        assert!(result.is_err(), "expected error for out-of-bounds offset");
     }
 }
