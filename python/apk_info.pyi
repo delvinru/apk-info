@@ -329,34 +329,96 @@ class APK:
 @dataclass(frozen=True)
 class CertificateInfo:
     serial_number: str
+    """
+    The serial number of the certificate in hexadecimal representation
+    """
+
     subject: str
+    """
+    The subject of the certificate
+    """
+
     valid_from: str
+    """
+    The date and time when the certificate becomes valid
+    """
+
     valid_until: str
+    """
+    The date and time when the certificate expires
+    """
+
     signature_type: str
+    """
+    The type of signature algorithm used
+    """
+
     md5_fingerprint: str
+    """
+    MD5 fingerprint of the certificate
+    """
+
     sha1_fingerprint: str
+    """
+    SHA1 fingerprint of the certificate
+    """
+
     sha256_fingerprint: str
+    """
+    SHA256 fingerprint of the certificate
+    """
 
 @dataclass(frozen=True)
 class Signature:
     @dataclass(frozen=True)
     class V1:
+        """
+        Default signature scheme based on JAR signing
+
+        See: <https://source.android.com/docs/security/features/apksigning/v2#v1-verification>
+        """
+
         certificates: list[CertificateInfo]
 
     @dataclass(frozen=True)
     class V2:
+        """
+        APK signature scheme v2
+
+        See: <https://source.android.com/docs/security/features/apksigning/v2>
+        """
+
         certificates: list[CertificateInfo]
 
     @dataclass(frozen=True)
     class V3:
+        """
+        APK signature scheme v3
+
+        See: <https://source.android.com/docs/security/features/apksigning/v3>
+        """
+
         certificates: list[CertificateInfo]
 
     @dataclass(frozen=True)
     class V31:
+        """
+        APK signature scheme v3.1
+
+        See: <https://source.android.com/docs/security/features/apksigning/v3-1>
+        """
+
         certificates: list[CertificateInfo]
 
     @dataclass(frozen=True)
     class ApkChannelBlock:
+        """
+        Some usefull informatino from apk channel block
+        """
+
         value: str
 
 SignatureType = Signature.V1 | Signature.V2 | Signature.V3 | Signature.V31 | Signature.ApkChannelBlock
+"""
+Represents all available signatures
+"""
