@@ -375,7 +375,10 @@ impl Apk {
     /// Combines results from multiple signature blocks within the APK file.
     pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
         // TODO: need somehow also detect xapk files
-        let mut signatures = self.zip.get_signatures_other()?;
+        let mut signatures = self
+            .zip
+            .get_signatures_other()
+            .map_err(APKError::CertificateError)?;
 
         if let Ok(v1_sig) = self.zip.get_signature_v1() {
             signatures.push(v1_sig);

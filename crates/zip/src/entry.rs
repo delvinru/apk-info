@@ -282,12 +282,18 @@ impl ZipEntry {
             None => return Ok(Vec::new()),
         };
 
-        let (size_of_block, _) = (
-            le_u64::<&[u8], ContextError>,
-            take(16usize).verify(|magic: &[u8]| magic == Self::APK_SIGNATURE_MAGIC),
-        )
+        let size_of_block = le_u64::<&[u8], ContextError>
             .parse_next(&mut slice)
             .map_err(|_| CertificateError::ParseError)?;
+
+        let magic = take::<usize, &[u8], ContextError>(16usize)
+            .parse_next(&mut slice)
+            .map_err(|_| CertificateError::ParseError)?;
+
+        // if the magic does not match, then assume that there is no v2+ block with signatures
+        if magic != Self::APK_SIGNATURE_MAGIC {
+            return Ok(Vec::new());
+        }
 
         // size of block (full) - 8 bytes (size of block - start) - 24 (end signature)
         slice = match self
