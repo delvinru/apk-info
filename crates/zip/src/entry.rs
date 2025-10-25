@@ -262,11 +262,10 @@ impl ZipEntry {
 
         let info = Pkcs7::from_der(&data).map_err(CertificateError::StackError)?;
         let certs = Stack::new().map_err(CertificateError::StackError)?;
-        let signers = info
-            .signers(&certs, Pkcs7Flags::STREAM)
-            .map_err(|_| CertificateError::SignerError)?;
 
-        let certificates = signers
+        let certificates = info
+            .signers(&certs, Pkcs7Flags::STREAM)
+            .map_err(|_| CertificateError::SignerError)?
             .iter()
             .map(|signer| self.get_certificate_info(signer))
             .collect::<Result<Vec<CertificateInfo>, CertificateError>>()?;
