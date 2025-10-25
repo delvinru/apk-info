@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use winnow::binary::{le_u16, le_u32};
 use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
@@ -32,9 +34,9 @@ pub(crate) struct LocalFileHeader {
     #[allow(unused)]
     pub(crate) extra_field_length: u16,
 
-    pub(crate) file_name: Vec<u8>,
+    pub(crate) file_name: Arc<[u8]>,
 
-    pub(crate) extra_field: Vec<u8>,
+    pub(crate) extra_field: Arc<[u8]>,
 }
 
 impl LocalFileHeader {
@@ -88,8 +90,8 @@ impl LocalFileHeader {
             uncompressed_size,
             file_name_length,
             extra_field_length,
-            file_name: file_name.to_vec(),
-            extra_field: extra_field.to_vec(), // can't use lifetime parameters due python limitations
+            file_name: Arc::from(file_name),
+            extra_field: Arc::from(extra_field),
         })
     }
 
@@ -145,8 +147,8 @@ mod tests {
         assert_eq!(parsed.uncompressed_size, 222);
         assert_eq!(parsed.file_name_length, file_name.len() as u16);
         assert_eq!(parsed.extra_field_length, extra_field.len() as u16);
-        assert_eq!(parsed.file_name, file_name);
-        assert_eq!(parsed.extra_field, extra_field);
+        assert_eq!(parsed.file_name.as_ref(), file_name);
+        assert_eq!(parsed.extra_field.as_ref(), extra_field);
 
         // Verify size() method
         assert_eq!(parsed.size(), 30 + file_name.len() + extra_field.len());
@@ -159,8 +161,8 @@ mod tests {
         data.extend_from_slice(&header);
 
         let parsed = LocalFileHeader::parse(&data, 10).unwrap();
-        assert_eq!(parsed.file_name, b"qwerty.txt");
-        assert_eq!(parsed.extra_field, b"1234");
+        assert_eq!(parsed.file_name.as_ref(), b"qwerty.txt");
+        assert_eq!(parsed.extra_field.as_ref(), b"1234");
     }
 
     #[test]

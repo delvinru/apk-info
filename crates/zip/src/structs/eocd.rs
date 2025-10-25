@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use memchr::memmem;
 use winnow::binary::{le_u16, le_u32};
 use winnow::prelude::*;
@@ -26,7 +28,7 @@ pub(crate) struct EndOfCentralDirectory {
     pub(crate) comment_length: u16,
 
     #[allow(unused)]
-    pub(crate) comment: Vec<u8>,
+    pub(crate) comment: Arc<[u8]>,
 }
 
 impl EndOfCentralDirectory {
@@ -60,7 +62,7 @@ impl EndOfCentralDirectory {
         )
             .parse_next(input)?;
 
-        let comment = take(comment_length).parse_next(input)?;
+        let comment: &[u8] = take(comment_length).parse_next(input)?;
 
         Ok(EndOfCentralDirectory {
             disk_number,
@@ -70,7 +72,7 @@ impl EndOfCentralDirectory {
             central_dir_size,
             central_dir_offset,
             comment_length,
-            comment: comment.to_vec(),
+            comment: Arc::from(comment),
         })
     }
 
@@ -155,7 +157,7 @@ mod tests {
 
         println!("{:#?}", eocd);
         assert_eq!(eocd.comment_length, comment.len() as u16);
-        assert_eq!(eocd.comment, comment);
+        assert_eq!(eocd.comment.as_ref(), comment);
     }
 
     #[test]

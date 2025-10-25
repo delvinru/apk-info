@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use flate2::{Decompress, FlushDecompress, Status};
 use log::{info, warn};
@@ -28,7 +29,7 @@ pub struct ZipEntry {
     central_directory: CentralDirectory,
 
     /// Information about local headers
-    local_headers: HashMap<String, LocalFileHeader>,
+    local_headers: HashMap<Arc<str>, LocalFileHeader>,
 }
 
 /// Implementation of common methods
@@ -54,7 +55,7 @@ impl ZipEntry {
             .filter_map(|(filename, entry)| {
                 LocalFileHeader::parse(&input, entry.local_header_offset as usize)
                     .ok()
-                    .map(|header| (filename.clone(), header))
+                    .map(|header| (Arc::clone(filename), header))
             })
             .collect();
 
@@ -67,8 +68,8 @@ impl ZipEntry {
     }
 
     /// Get list of the filenames from zip archive
-    pub fn namelist(&self) -> impl Iterator<Item = &String> {
-        self.central_directory.entries.keys()
+    pub fn namelist(&self) -> impl Iterator<Item = &str> + '_ {
+        self.central_directory.entries.keys().map(|x| x.as_ref())
     }
 
     /// Read tampered files from zip archive

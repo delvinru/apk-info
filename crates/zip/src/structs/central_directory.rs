@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
-use winnow::error::{ErrMode, Needed};
+use winnow::error::{ErrMode, Needed, ParserError};
 use winnow::prelude::*;
 use winnow::token::take;
 
@@ -55,13 +56,13 @@ pub(crate) struct CentralDirectoryEntry {
 
     pub(crate) local_header_offset: u32,
 
-    pub(crate) file_name: String,
+    pub(crate) file_name: Arc<str>,
 
     #[allow(unused)]
-    pub(crate) extra_field: Vec<u8>,
+    pub(crate) extra_field: Arc<[u8]>,
 
     #[allow(unused)]
-    pub(crate) file_comment: Vec<u8>,
+    pub(crate) file_comment: Arc<[u8]>,
 }
 
 impl CentralDirectoryEntry {
@@ -115,6 +116,8 @@ impl CentralDirectoryEntry {
         )
             .parse_next(input)?;
 
+        let file_name = std::str::from_utf8(file_name).map_err(|_| ErrMode::from_input(input))?;
+
         Ok(CentralDirectoryEntry {
             version_made_by,
             version_needed,
@@ -132,16 +135,16 @@ impl CentralDirectoryEntry {
             internal_attrs,
             external_attrs,
             local_header_offset,
-            file_name: String::from_utf8_lossy(file_name).to_string(),
-            extra_field: extra_field.to_vec(),
-            file_comment: file_comment.to_vec(), // can't use lifetime parameters due python limitations
+            file_name: Arc::from(file_name),
+            extra_field: Arc::from(extra_field),
+            file_comment: Arc::from(file_comment),
         })
     }
 }
 
 #[derive(Debug)]
 pub(crate) struct CentralDirectory {
-    pub(crate) entries: HashMap<String, CentralDirectoryEntry>,
+    pub(crate) entries: HashMap<Arc<str>, CentralDirectoryEntry>,
 }
 
 impl CentralDirectory {
@@ -159,7 +162,7 @@ impl CentralDirectory {
         Ok(CentralDirectory {
             entries: entries
                 .into_iter()
-                .map(|entry| (entry.file_name.clone(), entry))
+                .map(|entry| (Arc::clone(&entry.file_name), entry))
                 .collect(),
         })
     }
@@ -167,6 +170,8 @@ impl CentralDirectory {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::*;
 
     fn make_cde_record(
@@ -213,9 +218,9 @@ mod tests {
         let mut input = &data[..];
         let entry = CentralDirectoryEntry::parse(&mut input).unwrap();
 
-        assert_eq!(entry.file_name, file_name);
-        assert_eq!(entry.extra_field, extra);
-        assert_eq!(entry.file_comment, comment);
+        assert_eq!(entry.file_name.as_ref(), file_name);
+        assert_eq!(entry.extra_field.as_ref(), extra);
+        assert_eq!(entry.file_comment.as_ref(), comment);
         assert_eq!(entry.compressed_size, 111);
         assert_eq!(entry.uncompressed_size, 222);
         assert_eq!(entry.local_header_offset, 333);
@@ -243,11 +248,9 @@ mod tests {
         data.extend_from_slice(&bad_bytes);
 
         let mut input = &data[..];
-        let entry = CentralDirectoryEntry::parse(&mut input).unwrap();
-        assert!(
-            entry.file_name.contains("�"),
-            "Should replace invalid UTF-8"
-        );
+        let entry = CentralDirectoryEntry::parse(&mut input);
+
+        assert!(entry.is_err());
     }
 
     #[test]
@@ -268,7 +271,7 @@ mod tests {
             central_dir_size: data.len() as u32,
             central_dir_offset: 0,
             comment_length: 0,
-            comment: vec![],
+            comment: Arc::from([]),
         };
 
         let cd = CentralDirectory::parse(&data, &eocd).unwrap();
@@ -277,8 +280,8 @@ mod tests {
         assert!(cd.entries.contains_key("b.txt"));
 
         let b = cd.entries.get("b.txt").unwrap();
-        assert_eq!(b.extra_field, b"extra information");
-        assert_eq!(b.file_comment, b"comment field");
+        assert_eq!(b.extra_field.as_ref(), b"extra information");
+        assert_eq!(b.file_comment.as_ref(), b"comment field");
     }
 
     #[test]
@@ -296,7 +299,7 @@ mod tests {
             central_dir_size: entry.len() as u32,
             central_dir_offset: offset as u32,
             comment_length: 0,
-            comment: vec![],
+            comment: Arc::from([]),
         };
 
         let cd = CentralDirectory::parse(&file, &eocd).unwrap();
@@ -315,7 +318,7 @@ mod tests {
             central_dir_size: 0,
             central_dir_offset: 9999, // invalid
             comment_length: 0,
-            comment: vec![],
+            comment: Arc::from([]),
         };
 
         let result = CentralDirectory::parse(&data, &eocd);

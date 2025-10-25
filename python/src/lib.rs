@@ -180,7 +180,7 @@ impl Apk {
     }
 
     /// List of the filenames included in the central directory
-    pub fn get_files(&self) -> Vec<&String> {
+    pub fn get_files(&self) -> Vec<&str> {
         self.apkrs.get_files().collect()
     }
 

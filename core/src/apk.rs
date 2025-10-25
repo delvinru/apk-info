@@ -137,7 +137,7 @@ impl Apk {
     }
 
     /// List of the filenames included in the central directory
-    pub fn get_files(&self) -> impl Iterator<Item = &String> {
+    pub fn get_files(&self) -> impl Iterator<Item = &str> + '_ {
         self.zip.namelist()
     }
 
