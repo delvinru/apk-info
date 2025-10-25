@@ -1,39 +1,71 @@
-#![allow(unused, dead_code)]
-
 use std::collections::HashMap;
 
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 
+/// Store information about system types in nice json representation
+///
+/// For original xml see: <https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/res/res/values/public-final.xml>
 #[derive(Debug, Deserialize)]
 pub(crate) struct SystemTypes {
     pub(crate) attr: HashMap<u32, String>,
+
+    // currently all this types is ununsed, but maybe will be usefull later
+    #[allow(unused)]
     pub(crate) id: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) style: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) string: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) dimen: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) color: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) array: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) drawable: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) layout: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) anim: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) integer: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) animator: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) interpolator: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) mipmap: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) transition: HashMap<u32, String>,
+
+    #[allow(unused)]
     pub(crate) raw: HashMap<u32, String>,
 }
 
 const SYSTEM_TYPES_DATA: &str = include_str!("./assets/public.json");
 
-pub static SYSTEM_TYPES: Lazy<SystemTypes> = Lazy::new(|| {
+pub(crate) static SYSTEM_TYPES: Lazy<SystemTypes> = Lazy::new(|| {
     serde_json::from_str(SYSTEM_TYPES_DATA)
         .expect("cannot parse public.json (please report this bug)")
 });
 
 impl SystemTypes {
-    pub fn get_attribute_name(&self, value: &u32) -> Option<&String> {
+    pub(crate) fn get_attribute_name(&self, value: &u32) -> Option<&String> {
         self.attr.get(value)
     }
 }
