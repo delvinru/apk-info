@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Debug)]
 pub struct Application {
@@ -76,4 +76,11 @@ where
     let mut vec: Vec<_> = set.iter().collect();
     vec.sort();
     vec.serialize(serializer)
+}
+
+/// Represents xapk manifest.json
+#[derive(Deserialize)]
+pub struct XAPKManifest {
+    /// Defined package name
+    pub package_name: String,
 }

@@ -4,6 +4,7 @@ use apk_info_axml::errors::AXMLError;
 use apk_info_zip::errors::{CertificateError, ZipError};
 use thiserror::Error;
 
+/// Just some different APK errors
 #[derive(Error, Debug)]
 pub enum APKError {
     /// Generic I/O error while trying to read or write data
@@ -18,10 +19,13 @@ pub enum APKError {
     #[error("got error while parsing AndroidManifest.xml: {0}")]
     ManifestError(#[from] AXMLError),
 
+    #[error("got error while parsing manifest.json inside xapk: {0}")]
+    XAPKManifestError(#[from] serde_json::error::Error),
+
     /// Error occurred while parsing apk as zip archive
     #[error("got error while parsing apk archive: {0}")]
     ZipError(#[from] ZipError),
 
-    #[error("got error while parsing certificates")]
+    #[error("got error while parsing certificates: {0}")]
     CertificateError(#[from] CertificateError),
 }

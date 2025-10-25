@@ -6,16 +6,11 @@ use apk_info_axml::axml::AXML;
 use apk_info_zip::entry::ZipEntry;
 use apk_info_zip::errors::{FileCompressionType, ZipError};
 use apk_info_zip::signature::Signature;
-use serde::Deserialize;
 
 use crate::errors::APKError;
-use crate::models::{ApkJson, Application};
+use crate::models::{ApkJson, Application, XAPKManifest};
 
-#[derive(Deserialize)]
-struct XAPKManifest {
-    package_name: String,
-}
-
+/// Main structure that represents APK file
 pub struct Apk {
     zip: ZipEntry,
     axml: AXML,
@@ -23,6 +18,7 @@ pub struct Apk {
 
 /// Implementation of internal methods
 impl Apk {
+    /// Helper function for reading apk files
     fn init_zip_and_axml(p: &Path) -> Result<(ZipEntry, AXML), APKError> {
         let input = fs::read(p).map_err(APKError::IoError)?;
 
@@ -51,9 +47,8 @@ impl Apk {
                     )
                 })?;
 
-                // TODO: change error type
                 let manifest_json: XAPKManifest = serde_json::from_slice(&manifest_json_data)
-                    .map_err(|_| APKError::InvalidInput("can't parse manifest.json"))?;
+                    .map_err(APKError::XAPKManifestError)?;
 
                 let package_name = format!("{}.apk", manifest_json.package_name);
                 let (inner_apk_data, _) = zip.read(&package_name).map_err(APKError::ZipError)?;
@@ -379,6 +374,7 @@ impl Apk {
     ///
     /// Combines results from multiple signature blocks within the APK file.
     pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
+        // TODO: need somehow also detect xapk files
         let mut signatures = self.zip.get_signatures_other()?;
 
         if let Ok(v1_sig) = self.zip.get_signature_v1() {
