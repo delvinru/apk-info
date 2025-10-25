@@ -276,7 +276,8 @@ impl Apk {
         self.apkrs.get_declared_permissions().collect()
     }
 
-    pub fn get_main_activities(&self) -> HashSet<&str> {
+    // Use a vector instead of a hashset to preserve the order of the found activities
+    pub fn get_main_activities(&self) -> Vec<&str> {
         self.apkrs.get_main_activities().collect()
     }
 
