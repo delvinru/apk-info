@@ -297,7 +297,6 @@ impl Apk {
         self.apkrs.get_providers().collect()
     }
 
-    // TODO: need somehow converts rust enum into python, idk yet
     pub fn get_signatures<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, Signature>>> {
         Ok(self
             .apkrs
