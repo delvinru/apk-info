@@ -1,6 +1,7 @@
+use std::io;
+
 use apk_info_axml::errors::AXMLError;
 use apk_info_zip::errors::{CertificateError, ZipError};
-use std::io;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

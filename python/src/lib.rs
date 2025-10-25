@@ -2,12 +2,11 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use ::apk_info::apk::Apk as ApkRust;
-use ::apk_info_zip::signature::CertificateInfo as ZipCertificateInfo;
-use ::apk_info_zip::signature::Signature as ZipSignature;
+use ::apk_info_zip::signature::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
+use pyo3::prelude::*;
 use pyo3::types::PyString;
-use pyo3::{Bound, PyAny, PyResult, pyclass, pymethods};
-use pyo3::{create_exception, prelude::*};
+use pyo3::{Bound, PyAny, PyResult, create_exception, pyclass, pymethods};
 
 create_exception!(m, APKError, PyException, "Got error while parsing apk");
 

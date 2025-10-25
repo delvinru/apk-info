@@ -1,14 +1,13 @@
 #![allow(unused)]
 
 use log::warn;
-use winnow::{
-    binary::{le_u8, le_u16, le_u32},
-    combinator::repeat,
-    prelude::*,
-    token::take,
-};
+use winnow::binary::{le_u8, le_u16, le_u32};
+use winnow::combinator::repeat;
+use winnow::prelude::*;
+use winnow::token::take;
 
-use crate::structs::{res_chunk_header::ResChunkHeader, res_string_pool::StringPool};
+use crate::structs::res_chunk_header::ResChunkHeader;
+use crate::structs::res_string_pool::StringPool;
 
 /// Type of the data value
 #[derive(Debug)]

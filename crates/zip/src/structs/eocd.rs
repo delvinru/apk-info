@@ -1,10 +1,7 @@
 use memchr::memmem;
-
-use winnow::{
-    binary::{le_u16, le_u32},
-    prelude::*,
-    token::take,
-};
+use winnow::binary::{le_u16, le_u32};
+use winnow::prelude::*;
+use winnow::token::take;
 
 #[derive(Debug)]
 pub(crate) struct EndOfCentralDirectory {

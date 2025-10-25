@@ -1,21 +1,15 @@
-use std::{
-    fs,
-    io::{self},
-    path::Path,
-};
+use std::fs;
+use std::io::{self};
+use std::path::Path;
 
 use apk_info_axml::axml::AXML;
-use apk_info_zip::{
-    entry::ZipEntry,
-    errors::{FileCompressionType, ZipError},
-    signature::Signature,
-};
+use apk_info_zip::entry::ZipEntry;
+use apk_info_zip::errors::{FileCompressionType, ZipError};
+use apk_info_zip::signature::Signature;
 use serde::Deserialize;
 
-use crate::{
-    errors::APKError,
-    models::{ApkJson, Application},
-};
+use crate::errors::APKError;
+use crate::models::{ApkJson, Application};
 
 #[derive(Deserialize)]
 struct XAPKManifest {

@@ -2,24 +2,18 @@
 
 use log::warn;
 use minidom::Element;
-use winnow::{
-    error::{ContextError, ErrMode},
-    prelude::*,
-    token::take,
-};
+use winnow::error::{ContextError, ErrMode};
+use winnow::prelude::*;
+use winnow::token::take;
 
-use crate::{
-    errors::AXMLError,
-    structs::{
-        res_chunk_header::{ResChunkHeader, ResourceType},
-        res_string_pool::StringPool,
-        xml_elements::{
-            XMLHeader, XMLResourceMap, XmlCData, XmlElement, XmlEndElement, XmlNamespace,
-            XmlNodeElements, XmlStartElement,
-        },
-    },
-    system_types::SYSTEM_TYPES,
+use crate::errors::AXMLError;
+use crate::structs::res_chunk_header::{ResChunkHeader, ResourceType};
+use crate::structs::res_string_pool::StringPool;
+use crate::structs::xml_elements::{
+    XMLHeader, XMLResourceMap, XmlCData, XmlElement, XmlEndElement, XmlNamespace, XmlNodeElements,
+    XmlStartElement,
 };
+use crate::system_types::SYSTEM_TYPES;
 
 const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
 

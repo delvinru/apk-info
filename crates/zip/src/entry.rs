@@ -2,25 +2,19 @@ use std::collections::HashMap;
 
 use flate2::{Decompress, FlushDecompress, Status};
 use log::{info, warn};
-use openssl::{
-    hash::MessageDigest,
-    pkcs7::{Pkcs7, Pkcs7Flags},
-    stack::Stack,
-    x509::{X509, X509Ref},
-};
-use winnow::{
-    binary::{le_u32, le_u64},
-    combinator::repeat,
-    error::ContextError,
-    prelude::*,
-    token::take,
-};
+use openssl::hash::MessageDigest;
+use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
+use openssl::stack::Stack;
+use openssl::x509::{X509, X509Ref};
+use winnow::binary::{le_u32, le_u64};
+use winnow::combinator::repeat;
+use winnow::error::ContextError;
+use winnow::prelude::*;
+use winnow::token::take;
 
-use crate::{
-    errors::{CertificateError, FileCompressionType, ZipError},
-    signature::{CertificateInfo, Signature},
-    structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader},
-};
+use crate::errors::{CertificateError, FileCompressionType, ZipError};
+use crate::signature::{CertificateInfo, Signature};
+use crate::structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader};
 
 /// Represents a parsed ZIP archive
 pub struct ZipEntry {

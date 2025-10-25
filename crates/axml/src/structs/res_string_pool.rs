@@ -1,3 +1,4 @@
+use bitflags::bitflags;
 use log::warn;
 use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::combinator::repeat;
@@ -6,7 +7,6 @@ use winnow::prelude::*;
 use winnow::token::take;
 
 use crate::structs::res_chunk_header::ResChunkHeader;
-use bitflags::bitflags;
 
 bitflags! {
     #[derive(Debug)]

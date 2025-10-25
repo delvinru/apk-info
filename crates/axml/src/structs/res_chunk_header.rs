@@ -1,7 +1,5 @@
-use winnow::{
-    binary::{le_u16, le_u32},
-    prelude::*,
-};
+use winnow::binary::{le_u16, le_u32};
+use winnow::prelude::*;
 
 /// See: https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=237
 #[derive(Debug, PartialEq, Default, Eq, PartialOrd, Ord)]
