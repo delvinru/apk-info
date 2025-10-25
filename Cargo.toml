@@ -18,11 +18,11 @@ apk-info = { path = "core" }
 
 # external
 anyhow = "1.0.100"
-bitflags = "2.9.4"
-clap = { version = "4.5.49", features = ["derive"] }
+bitflags = "2.10.0"
+clap = { version = "4.5.50", features = ["derive"] }
 const-hex = "1.17.0"
 env_logger = { version = "0.11.8", features = ["auto-color"] }
-flate2 = "1.1.4"
+flate2 = "1.1.5"
 log = "0.4.28"
 memchr = "2.7.6"
 minidom = "0.17.0"
