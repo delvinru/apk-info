@@ -96,7 +96,11 @@ impl StringPool {
         let string_offsets =
             repeat(string_header.string_count as usize, le_u32).parse_next(input)?;
 
-        let style_offsets = repeat(string_header.style_count as usize, le_u32).parse_next(input)?;
+        let style_offsets = if string_header.style_count != 0 {
+            repeat(string_header.style_count as usize, le_u32).parse_next(input)?
+        } else {
+            Vec::new()
+        };
 
         let strings = Self::parse_strings(input, &string_header, &string_offsets)?;
 
@@ -206,6 +210,7 @@ impl StringPool {
         .unwrap_or_default()
     }
 
+    #[inline]
     pub fn get(&self, idx: u32) -> Option<&String> {
         self.strings.get(idx as usize)
     }
