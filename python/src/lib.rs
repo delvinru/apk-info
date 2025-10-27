@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use ::apk_info::apk::Apk as ApkRust;
+use ::apk_info::models::Service as ApkService;
 use ::apk_info_zip::signature::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -131,6 +132,74 @@ impl Signature {
                 format!("Signature.ApkChannelBlock(channel='{}')", value)
             }
         }
+    }
+}
+
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct Service {
+    #[pyo3(get)]
+    description: Option<String>,
+    #[pyo3(get)]
+    direct_boot_aware: Option<String>,
+    #[pyo3(get)]
+    enabled: Option<String>,
+    #[pyo3(get)]
+    exported: Option<String>,
+    #[pyo3(get)]
+    foreground_service_type: Option<String>,
+    #[pyo3(get)]
+    isolated_process: Option<String>,
+    #[pyo3(get)]
+    name: Option<String>,
+    #[pyo3(get)]
+    permission: Option<String>,
+    #[pyo3(get)]
+    process: Option<String>,
+    #[pyo3(get)]
+    stop_with_task: Option<String>,
+}
+
+impl<'a> From<ApkService<'a>> for Service {
+    fn from(service: ApkService<'a>) -> Self {
+        Service {
+            description: service.description.map(String::from),
+            direct_boot_aware: service.direct_boot_aware.map(String::from),
+            enabled: service.enabled.map(String::from),
+            exported: service.exported.map(String::from),
+            foreground_service_type: service.foreground_service_type.map(String::from),
+            isolated_process: service.isolated_process.map(String::from),
+            name: service.name.map(String::from),
+            permission: service.permission.map(String::from),
+            process: service.process.map(String::from),
+            stop_with_task: service.stop_with_task.map(String::from),
+        }
+    }
+}
+
+#[pymethods]
+impl Service {
+    fn __repr__(&self) -> String {
+        let mut parts = Vec::with_capacity(16);
+        macro_rules! push_field {
+            ($field:ident) => {
+                if let Some(ref v) = self.$field {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), v));
+                }
+            };
+        }
+        push_field!(description);
+        push_field!(direct_boot_aware);
+        push_field!(enabled);
+        push_field!(exported);
+        push_field!(foreground_service_type);
+        push_field!(isolated_process);
+        push_field!(name);
+        push_field!(permission);
+        push_field!(process);
+        push_field!(stop_with_task);
+
+        format!("Service({})", parts.join(", "))
     }
 }
 
@@ -285,8 +354,8 @@ impl Apk {
         self.apkrs.get_activities().collect()
     }
 
-    pub fn get_services(&self) -> HashSet<&str> {
-        self.apkrs.get_services().collect()
+    pub fn get_services(&self) -> HashSet<Service> {
+        self.apkrs.get_services().map(Service::from).collect()
     }
 
     pub fn get_receivers(&self) -> HashSet<&str> {
@@ -314,6 +383,7 @@ fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<CertificateInfo>()?;
     m.add_class::<Signature>()?;
+    m.add_class::<Service>()?;
 
     m.add_class::<Apk>()?;
     Ok(())

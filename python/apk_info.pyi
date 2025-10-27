@@ -288,7 +288,7 @@ class APK:
         """
         ...
 
-    def get_services(self) -> list[str]:
+    def get_services(self) -> list[Service]:
         """
         Retrieves all `<service>` components declared in the manifest.
 
@@ -422,3 +422,74 @@ SignatureType = Signature.V1 | Signature.V2 | Signature.V3 | Signature.V31 | Sig
 """
 Represents all available signatures
 """
+
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Service:
+    """
+    Represents an Android service defined in an app's manifest.
+
+    Each attribute corresponds to an attribute in the <service> element
+    of the AndroidManifest.xml.
+    """
+
+    description: str | None
+    """
+    A user-readable description of the service.
+    Corresponds to the `android:description` attribute.
+    """
+
+    direct_boot_aware: str | None
+    """
+    Indicates whether the service is aware of Direct Boot mode.
+    Corresponds to the `android:directBootAware` attribute.
+    """
+
+    enabled: str | None
+    """
+    Specifies whether the service can be instantiated by the system.
+    Corresponds to the `android:enabled` attribute.
+    """
+
+    exported: str | None
+    """
+    Defines whether the service can be used by other applications.
+    Corresponds to the `android:exported` attribute.
+    """
+
+    foreground_service_type: str | None
+    """
+    Lists the types of foreground services this service can run as.
+    Corresponds to the `android:foregroundServiceType` attribute.
+    """
+
+    isolated_process: str | None
+    """
+    Indicates whether the service runs in an isolated process.
+    Corresponds to the `android:isolatedProcess` attribute.
+    """
+
+    name: str | None
+    """
+    The fully qualified name of the service class that implements the service.
+    Corresponds to the `android:name` attribute.
+    """
+
+    permission: str | None
+    """
+    The name of a permission that clients must hold to use this service.
+    Corresponds to the `android:permission` attribute.
+    """
+
+    process: str | None
+    """
+    The name of the process where the service should run.
+    Corresponds to the `android:process` attribute.
+    """
+
+    stop_with_task: str | None
+    """
+    Indicates whether the service should be stopped when its task is removed.
+    Corresponds to the `android:stopWithTask` attribute.
+    """

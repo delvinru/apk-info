@@ -264,6 +264,25 @@ impl AXML {
         })
     }
 
+    pub fn get_all_tags<'a>(&'a self, tag: &'a str) -> impl Iterator<Item = &'a Element> + 'a {
+        let mut stack = vec![&self.root];
+
+        std::iter::from_fn(move || {
+            while let Some(elem) = stack.pop() {
+                // Push children in original order (no `.rev()`)
+                for child in elem.children() {
+                    stack.push(child);
+                }
+
+                // If tag matches, yield the element
+                if elem.name() == tag {
+                    return Some(elem);
+                }
+            }
+            None
+        })
+    }
+
     /// Get main activities from APK
     ///
     /// Algorithm:

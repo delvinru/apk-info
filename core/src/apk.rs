@@ -8,7 +8,7 @@ use apk_info_zip::errors::{FileCompressionType, ZipError};
 use apk_info_zip::signature::Signature;
 
 use crate::errors::APKError;
-use crate::models::{ApkJson, Application, XAPKManifest};
+use crate::models::{ApkJson, Application, Service, XAPKManifest};
 
 /// Main structure that represents APK file
 pub struct Apk {
@@ -118,7 +118,7 @@ impl Apk {
             main_activities: self.get_main_activities().map(String::from).collect(),
             libraries: self.get_libraries().map(String::from).collect(),
             activities: self.get_activities().map(String::from).collect(),
-            services: self.get_services().map(String::from).collect(),
+            services: self.get_services().collect(),
             receivers: self.get_receivers().map(String::from).collect(),
             providers: self.get_providers().map(String::from).collect(),
         };
@@ -352,8 +352,19 @@ impl Apk {
     /// Retrieves all services declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/service-element>
-    pub fn get_services(&self) -> impl Iterator<Item = &str> {
-        self.axml.get_all_attribute_values("service", "name")
+    pub fn get_services<'a>(&'a self) -> impl Iterator<Item = Service<'a>> {
+        self.axml.get_all_tags("service").map(|element| Service {
+            description: element.attr("description"),
+            direct_boot_aware: element.attr("direct_boot_aware"),
+            enabled: element.attr("enabled"),
+            exported: element.attr("exported"),
+            foreground_service_type: element.attr("foreground_service_type"),
+            isolated_process: element.attr("isolated_process"),
+            name: element.attr("name"),
+            permission: element.attr("permission"),
+            process: element.attr("process"),
+            stop_with_task: element.attr("stop_with_task"),
+        })
     }
 
     /// Retrieves all receivers declared in the manifest.
