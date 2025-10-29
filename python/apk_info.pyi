@@ -297,7 +297,7 @@ class APK:
         """
         ...
 
-    def get_receivers(self) -> list[str]:
+    def get_receivers(self) -> list[Receiver]:
         """
         Retrieves all `<receiver>` components declared in the manifest.
 
@@ -492,4 +492,61 @@ class Service:
     """
     Indicates whether the service should be stopped when its task is removed.
     Corresponds to the `android:stopWithTask` attribute.
+    """
+
+@dataclass(frozen=True)
+class Receiver:
+    """
+    Represents an Android broadcast receiver defined in an app's manifest.
+
+    Each attribute corresponds to an attribute in the <receiver> element
+    of the AndroidManifest.xml.
+    """
+
+    direct_boot_aware: str | None
+    """
+    Indicates whether the broadcast receiver is direct boot aware.
+    Corresponds to the `android:directBootAware` attribute.
+    """
+
+    enabled: str | None
+    """
+    Whether the broadcast receiver can be instantiated by the system.
+    Corresponds to the `android:enabled` attribute.
+    """
+
+    exported: str | None
+    """
+    Specifies whether the broadcast receiver is accessible to other applications.
+    Corresponds to the `android:exported` attribute.
+    """
+
+    icon: str | None
+    """
+    An icon representing the broadcast receiver in the user interface.
+    Corresponds to the `android:icon` attribute.
+    """
+
+    label: str | None
+    """
+    A user-readable label for the broadcast receiver.
+    Corresponds to the `android:label` attribute.
+    """
+
+    name: str | None
+    """
+    The fully qualified name of the broadcast receiver class that implements the receiver.
+    Corresponds to the `android:name` attribute.
+    """
+
+    permission: str | None
+    """
+    The name of a permission that broadcasters must hold to send messages to this receiver.
+    Corresponds to the `android:permission` attribute.
+    """
+
+    process: str | None
+    """
+    The name of the process in which the broadcast receiver should run.
+    Corresponds to the `android:process` attribute.
     """

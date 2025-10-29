@@ -8,7 +8,7 @@ use apk_info_zip::errors::{FileCompressionType, ZipError};
 use apk_info_zip::signature::Signature;
 
 use crate::errors::APKError;
-use crate::models::{ApkJson, Application, Service, XAPKManifest};
+use crate::models::{ApkJson, Application, Receiver, Service, XAPKManifest};
 
 /// Main structure that represents APK file
 pub struct Apk {
@@ -119,7 +119,7 @@ impl Apk {
             libraries: self.get_libraries().map(String::from).collect(),
             activities: self.get_activities().map(String::from).collect(),
             services: self.get_services().collect(),
-            receivers: self.get_receivers().map(String::from).collect(),
+            receivers: self.get_receivers().collect(),
             providers: self.get_providers().map(String::from).collect(),
         };
 
@@ -370,8 +370,17 @@ impl Apk {
     /// Retrieves all receivers declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/receiver-element>
-    pub fn get_receivers(&self) -> impl Iterator<Item = &str> {
-        self.axml.get_all_attribute_values("receiver", "name")
+    pub fn get_receivers<'a>(&'a self) -> impl Iterator<Item = Receiver<'a>> {
+        self.axml.get_all_tags("receiver").map(|element| Receiver {
+            direct_boot_aware: element.attr("direct_boot_aware"),
+            enabled: element.attr("enabled"),
+            exported: element.attr("exported"),
+            icon: element.attr("icon"),
+            label: element.attr("label"),
+            name: element.attr("name"),
+            permission: element.attr("permission"),
+            process: element.attr("process"),
+        })
     }
 
     /// Retrieves all providers declared in the manifest.

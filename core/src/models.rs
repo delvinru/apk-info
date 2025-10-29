@@ -61,8 +61,7 @@ pub struct ApkJson<'a> {
 
     pub services: HashSet<Service<'a>>,
 
-    #[serde(serialize_with = "sorted_set")]
-    pub receivers: HashSet<String>,
+    pub receivers: HashSet<Receiver<'a>>,
 
     #[serde(serialize_with = "sorted_set")]
     pub providers: HashSet<String>,
@@ -132,4 +131,39 @@ pub struct Service<'a> {
     /// Indicates whether the service should be stopped when its task is removed.
     /// Corresponds to the `android:stopWithTask` attribute.
     pub stop_with_task: Option<&'a str>,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+pub struct Receiver<'a> {
+    /// Indicates whether the broadcast receiver is direct boot aware.
+    /// Corresponds to the `android:directBootAware` attribute.
+    pub direct_boot_aware: Option<&'a str>,
+
+    /// Whether the broadcast receiver can be instantiated by the system.
+    /// Corresponds to the `android:enabled` attribute.
+    pub enabled: Option<&'a str>,
+
+    /// Specifies whether the broadcast receiver is accessible to other applications.
+    /// Corresponds to the `android:exported` attribute.
+    pub exported: Option<&'a str>,
+
+    /// An icon that represents the broadcast receiver in the user interface.
+    /// Corresponds to the `android:icon` attribute.
+    pub icon: Option<&'a str>,
+
+    /// A user-readable label for the broadcast receiver.
+    /// Corresponds to the `android:label` attribute.
+    pub label: Option<&'a str>,
+
+    /// The fully qualified name of the broadcast receiver class that implements the receiver.
+    /// Corresponds to the `android:name` attribute.
+    pub name: Option<&'a str>,
+
+    /// The name of a permission that broadcasters must hold to send messages to this receiver.
+    /// Corresponds to the `android:permission` attribute.
+    pub permission: Option<&'a str>,
+
+    /// The name of the process in which the broadcast receiver should run.
+    /// Corresponds to the `android:process` attribute.
+    pub process: Option<&'a str>,
 }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use ::apk_info::apk::Apk as ApkRust;
-use ::apk_info::models::Service as ApkService;
+use ::apk_info::models::{Receiver as ApkReceiver, Service as ApkService};
 use ::apk_info_zip::signature::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
@@ -39,7 +39,7 @@ pub struct CertificateInfo {
     pub sha256_fingerprint: String,
 }
 
-impl CertificateInfo {
+impl From<ZipCertificateInfo> for CertificateInfo {
     fn from(certificate: ZipCertificateInfo) -> Self {
         Self {
             serial_number: certificate.serial_number,
@@ -140,22 +140,31 @@ impl Signature {
 struct Service {
     #[pyo3(get)]
     description: Option<String>,
+
     #[pyo3(get)]
     direct_boot_aware: Option<String>,
+
     #[pyo3(get)]
     enabled: Option<String>,
+
     #[pyo3(get)]
     exported: Option<String>,
+
     #[pyo3(get)]
     foreground_service_type: Option<String>,
+
     #[pyo3(get)]
     isolated_process: Option<String>,
+
     #[pyo3(get)]
     name: Option<String>,
+
     #[pyo3(get)]
     permission: Option<String>,
+
     #[pyo3(get)]
     process: Option<String>,
+
     #[pyo3(get)]
     stop_with_task: Option<String>,
 }
@@ -200,6 +209,73 @@ impl Service {
         push_field!(stop_with_task);
 
         format!("Service({})", parts.join(", "))
+    }
+}
+
+#[pyclass(frozen)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct Receiver {
+    #[pyo3(get)]
+    pub direct_boot_aware: Option<String>,
+
+    #[pyo3(get)]
+    pub enabled: Option<String>,
+
+    #[pyo3(get)]
+    pub exported: Option<String>,
+
+    #[pyo3(get)]
+    pub icon: Option<String>,
+
+    #[pyo3(get)]
+    pub label: Option<String>,
+
+    #[pyo3(get)]
+    pub name: Option<String>,
+
+    #[pyo3(get)]
+    pub permission: Option<String>,
+
+    #[pyo3(get)]
+    pub process: Option<String>,
+}
+
+impl<'a> From<ApkReceiver<'a>> for Receiver {
+    fn from(receiver: ApkReceiver<'a>) -> Self {
+        Receiver {
+            direct_boot_aware: receiver.direct_boot_aware.map(String::from),
+            enabled: receiver.enabled.map(String::from),
+            exported: receiver.exported.map(String::from),
+            icon: receiver.icon.map(String::from),
+            label: receiver.label.map(String::from),
+            name: receiver.name.map(String::from),
+            permission: receiver.permission.map(String::from),
+            process: receiver.process.map(String::from),
+        }
+    }
+}
+
+#[pymethods]
+impl Receiver {
+    fn __repr__(&self) -> String {
+        let mut parts = Vec::with_capacity(16);
+        macro_rules! push_field {
+            ($field:ident) => {
+                if let Some(ref v) = self.$field {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), v));
+                }
+            };
+        }
+        push_field!(direct_boot_aware);
+        push_field!(enabled);
+        push_field!(exported);
+        push_field!(icon);
+        push_field!(label);
+        push_field!(name);
+        push_field!(permission);
+        push_field!(process);
+
+        format!("Receiver({})", parts.join(", "))
     }
 }
 
@@ -358,8 +434,8 @@ impl Apk {
         self.apkrs.get_services().map(Service::from).collect()
     }
 
-    pub fn get_receivers(&self) -> HashSet<&str> {
-        self.apkrs.get_receivers().collect()
+    pub fn get_receivers(&self) -> HashSet<Receiver> {
+        self.apkrs.get_receivers().map(Receiver::from).collect()
     }
 
     pub fn get_providers(&self) -> HashSet<&str> {
@@ -384,6 +460,7 @@ fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<CertificateInfo>()?;
     m.add_class::<Signature>()?;
     m.add_class::<Service>()?;
+    m.add_class::<Receiver>()?;
 
     m.add_class::<Apk>()?;
     Ok(())
