@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::commands::show::command_show;
+use crate::commands::{command_extract, command_show};
 
 mod commands;
 
@@ -15,6 +15,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Show basic information about apk file
     Show {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
@@ -27,6 +28,14 @@ enum Commands {
         )]
         sigs: bool,
     },
+    /// Unpack apk files as zip archive
+    Extract {
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+
+        #[arg(short, long, help = "Output folder")]
+        output: Option<PathBuf>,
+    },
 }
 
 fn main() {
@@ -36,6 +45,7 @@ fn main() {
 
     let result = match &cli.commands {
         Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
+        Some(Commands::Extract { paths, output }) => command_extract(paths, output),
         None => Ok(()),
     };
 
