@@ -4,7 +4,7 @@ use winnow::error::{ContextError, ErrMode};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::errors::AXMLError;
+use crate::AXMLError;
 use crate::structs::{
     ResChunkHeader, ResourceType, StringPool, XMLHeader, XMLResourceMap, XmlCData, XmlElement,
     XmlEndElement, XmlNamespace, XmlNodeElements, XmlStartElement,
@@ -134,7 +134,7 @@ impl AXML {
                     XmlNodeElements::XmlCData(e)
                 }
                 _ => {
-                    eprintln!("unknown header type: {:#?}", xml_header.header.type_);
+                    warn!("unknown header type: {:#?}", xml_header.header.type_);
                     XmlNodeElements::Unknown
                 }
             };
@@ -286,8 +286,8 @@ impl AXML {
     /// Get main activities from APK
     ///
     /// Algorithm:
-    ///     - Search for all <activity> and <activity-alias> tags
-    ///     - Search for Intent.ACTION_MAIN with
+    /// - Search for all `<activity>` and `<activity-alias>` tags
+    /// - Search for `android.intent.action.MAIN` with `android.intent.category.LAUNCHER` or `android.intent.category.INFO`
     ///
     /// See: <https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/core/java/android/app/ApplicationPackageManager.java;l=310?q=getLaunchIntentForPackage>
     pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {

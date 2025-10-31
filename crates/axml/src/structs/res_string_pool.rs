@@ -6,7 +6,7 @@ use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::structs::res_chunk_header::ResChunkHeader;
+use crate::structs::ResChunkHeader;
 
 bitflags! {
     #[derive(Debug)]

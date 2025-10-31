@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{self};
 use std::path::Path;
 
+use apk_info_axml::ARSC;
 use apk_info_axml::axml::AXML;
 use apk_info_zip::entry::ZipEntry;
 use apk_info_zip::errors::{FileCompressionType, ZipError};
@@ -36,7 +37,18 @@ impl Apk {
                     ));
                 }
 
+                // TODO: don't forget refactor
+
                 let axml = AXML::new(&mut &manifest[..]).map_err(APKError::ManifestError)?;
+
+                let (inner_resources_data, _) = zip.read("resources.arsc").map_err(|_| {
+                    APKError::InvalidInput("can't find resources.arsc, is it apk/xapk?")
+                })?;
+
+                #[allow(unused)]
+                let arsc =
+                    ARSC::new(&mut &inner_resources_data[..]).map_err(APKError::ResourceError)?;
+
                 Ok((zip, axml))
             }
             Err(_) => {

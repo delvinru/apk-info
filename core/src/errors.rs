@@ -1,6 +1,6 @@
 use std::io;
 
-use apk_info_axml::errors::AXMLError;
+use apk_info_axml::{ARCSError, AXMLError};
 use apk_info_zip::errors::{CertificateError, ZipError};
 use thiserror::Error;
 
@@ -15,9 +15,13 @@ pub enum APKError {
     #[error("got invalid input: {0}")]
     InvalidInput(&'static str),
 
-    /// Error occurred while parsing AndroidManifest.xml
+    /// Error occurred while parsing `AndroidManifest.xml`
     #[error("got error while parsing AndroidManifest.xml: {0}")]
     ManifestError(#[from] AXMLError),
+
+    /// Error occured while parsing `resources.arsc`
+    #[error("got error while parsing resources.arsc: {0}")]
+    ResourceError(#[from] ARCSError),
 
     #[error("got error while parsing manifest.json inside xapk: {0}")]
     XAPKManifestError(#[from] serde_json::error::Error),

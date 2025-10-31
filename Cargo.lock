@@ -130,6 +130,7 @@ version = "0.1.0"
 dependencies = [
  "apk-info",
  "apk-info-zip",
+ "env_logger",
  "pyo3",
 ]
 

@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
-apk-info.workspace = true
 apk-info-zip.workspace = true
+apk-info.workspace = true
+env_logger.workspace = true
 pyo3.workspace = true

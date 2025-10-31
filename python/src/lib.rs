@@ -455,6 +455,8 @@ impl Apk {
 
 #[pymodule]
 fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    env_logger::init();
+
     m.add("APKError", m.py().get_type::<APKError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<CertificateInfo>()?;

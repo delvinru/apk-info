@@ -33,3 +33,22 @@ pub enum AXMLError {
     #[error("got error while parsing manifest")]
     ParseError,
 }
+
+#[derive(Error, Debug)]
+pub enum ARCSError {
+    /// Provided file too smal to be resources.arsc
+    #[error("file size too small for resources file")]
+    TooSmallError,
+
+    /// Invalid header
+    #[error("got error while parsing header")]
+    HeaderError,
+
+    /// Got error while parsing string pool
+    #[error("got error while parsing string pool")]
+    StringPoolError,
+
+    /// Got error while parsing resource table package
+    #[error("got error while parsing resource table package")]
+    ResourceTableError,
+}
