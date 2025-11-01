@@ -19,7 +19,7 @@ apk-info = { path = "core" }
 # external
 anyhow = "1.0.100"
 bitflags = "2.10.0"
-clap = { version = "4.5.50", features = ["derive"] }
+clap = { version = "4.5.51", features = ["derive"] }
 const-hex = "1.17.0"
 env_logger = { version = "0.11.8", features = ["auto-color"] }
 flate2 = "1.1.5"
