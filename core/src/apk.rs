@@ -11,6 +11,13 @@ use apk_info_zip::signature::Signature;
 use crate::errors::APKError;
 use crate::models::{ApkJson, Application, Receiver, Service, XAPKManifest};
 
+const ANDROID_MANIFEST_PATH: &str = "AndroidManifest.xml";
+const RESOURCE_TABLE_PATH: &str = "resources.arsc";
+
+// maybe in the future
+#[allow(unused)]
+const PROTO_RESOURCE_TABLE_PATH: &str = "resources.pb";
+
 /// Main structure that represents APK file
 pub struct Apk {
     zip: ZipEntry,
@@ -29,7 +36,7 @@ impl Apk {
 
         let zip = ZipEntry::new(input).map_err(APKError::ZipError)?;
 
-        match zip.read("AndroidManifest.xml") {
+        match zip.read(ANDROID_MANIFEST_PATH) {
             Ok((manifest, _)) => {
                 if manifest.is_empty() {
                     return Err(APKError::InvalidInput(
@@ -37,11 +44,10 @@ impl Apk {
                     ));
                 }
 
-                // TODO: don't forget refactor
-
                 let axml = AXML::new(&mut &manifest[..]).map_err(APKError::ManifestError)?;
 
-                let (inner_resources_data, _) = zip.read("resources.arsc").map_err(|_| {
+                // TODO: don't forget refactor
+                let (inner_resources_data, _) = zip.read(RESOURCE_TABLE_PATH).map_err(|_| {
                     APKError::InvalidInput("can't find resources.arsc, is it apk/xapk?")
                 })?;
 
@@ -69,7 +75,7 @@ impl Apk {
 
                 // try again read AndroidManifest.xml from inner apk
                 let (inner_manifest, _) = inner_apk
-                    .read("AndroidManifest.xml")
+                    .read(ANDROID_MANIFEST_PATH)
                     .map_err(APKError::ZipError)?;
 
                 if inner_manifest.is_empty() {

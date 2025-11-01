@@ -38,9 +38,9 @@ impl ARSC {
         // TODO: parse based on package_count
         let string_pool = StringPool::parse(input).map_err(|_| ARCSError::StringPoolError)?;
 
-        dbg!(string_pool);
-
         let package = ResTablePackage::parse(input).map_err(|_| ARCSError::ResourceTableError)?;
+
+        dbg!(package);
 
         Ok(ARSC {
             is_tampered,

@@ -436,7 +436,6 @@ impl ZipEntry {
     fn parse_apk_signatures<'a>(&self) -> impl Parser<&'a [u8], Signature, ContextError> {
         move |input: &mut &'a [u8]| {
             let (size, id) = (le_u64, le_u32).parse_next(input)?;
-            // println!("size = 0x{:08x} id = 0x{:08x}", size, id);
 
             match id {
                 Self::SIGNATURE_V2_MAGIC => {

@@ -7,40 +7,9 @@ use winnow::error::{ErrMode, StrContext, StrContextValue};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::structs::{ResChunkHeader, ResourceType, ResourceValue, StringPool};
-
-bitflags::bitflags! {
-    /// Flags indicating a set of config values.
-    /// Must match corresponding values in Android.
-    pub(crate) struct ResTableTypeSpecFlag: u32 {
-        const CONFIG_MCC                  = 0x0001;
-        const CONFIG_MNC                  = 0x0002;
-        const CONFIG_LOCALE               = 0x0004;
-        const CONFIG_TOUCHSCREEN          = 0x0008;
-        const CONFIG_KEYBOARD             = 0x0010;
-        const CONFIG_KEYBOARD_HIDDEN      = 0x0020;
-        const CONFIG_NAVIGATION           = 0x0040;
-        const CONFIG_ORIENTATION          = 0x0080;
-        const CONFIG_DENSITY              = 0x0100;
-        const CONFIG_SCREEN_SIZE          = 0x0200;
-        const CONFIG_VERSION              = 0x0400;
-        const CONFIG_SCREEN_LAYOUT        = 0x0800;
-        const CONFIG_UI_MODE              = 0x1000;
-        const CONFIG_SMALLEST_SCREEN_SIZE = 0x2000;
-        const CONFIG_LAYOUTDIR            = 0x4000;
-        const CONFIG_SCREEN_ROUND         = 0x8000;
-        const CONFIG_COLOR_MODE           = 0x10000;
-
-        /// Additional flag indicating an entry is public.
-        const SPEC_PUBLIC = 0x40000000;
-
-        /// Additional flag indicating the resource id for this resource may change in a future build.
-        ///
-        /// If this flag is set, the SPEC_PUBLIC flag is also set
-        /// since the resource must be public to be exposed as an API to other applications.
-        const SPEC_STAGED_API = 0x20000000;
-    }
-}
+use crate::structs::{
+    ResChunkHeader, ResTableConfig, ResTableConfigFlags, ResourceType, ResourceValue, StringPool,
+};
 
 // TODO: maybe add as type definition, idk
 // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/tools/aapt/ResourceTable.cpp;l=1769;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1
@@ -203,7 +172,7 @@ pub(crate) struct ResTableTypeSpec {
     pub(crate) entry_count: u32,
 
     /// Configuration mask
-    pub(crate) type_spec_flags: Vec<u32>,
+    pub(crate) type_spec_flags: Vec<ResTableConfigFlags>,
 }
 
 impl ResTableTypeSpec {
@@ -226,8 +195,11 @@ impl ResTableTypeSpec {
         // TODO: add validation that id is not 0
         // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=6987;
 
-        // TODO: idk how to correctly parse array of type spec flags
-        let type_spec_flags = repeat(entry_count as usize, le_u32).parse_next(input)?;
+        let type_spec_flags = repeat(
+            entry_count as usize,
+            le_u32.map(|x| ResTableConfigFlags::from_bits_truncate(x)),
+        )
+        .parse_next(input)?;
 
         Ok(ResTableTypeSpec {
             header,
@@ -237,281 +209,6 @@ impl ResTableTypeSpec {
             entry_count,
             type_spec_flags,
         })
-    }
-}
-
-/// Descibes a particular resource configuration
-///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=967?q=ResTable_config&sq=&ss=android)
-///
-/// [App resource overview](https://developer.android.com/guide/topics/resources/providing-resources)
-#[derive(Debug, Default)]
-pub(crate) struct ResTableConfig {
-    /// Number of elements in this structure
-    pub(crate) size: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// mcc: u16
-    /// mnc: u16
-    pub(crate) imsi: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// language: [u8; 2]
-    /// country: [u8; 2]
-    pub(crate) locale: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// orientation: u8
-    /// touchscreen: u8
-    /// density: u32
-    pub(crate) screen_type: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// keyboard: u8
-    /// navigation: u8
-    /// input_flags: u8
-    /// input_field_pad0: u8
-    ///
-    /// or
-    ///
-    /// input: [u8; 3]
-    /// input_full_pad0: u8
-    ///
-    /// or
-    ///
-    /// grammatical_infelction_pad0: [u8; 3]
-    /// grammatical_inflection: u8
-    pub(crate) input: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// screen_widtht: u16
-    /// screen_height: u16
-    pub(crate) screen_size: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// sdk_version: u16
-    /// minor_version: u16
-    pub(crate) version: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// screen_layout: u8
-    /// ui_mode: u8
-    /// smalled_screen_width_dp: u16
-    pub(crate) screen_config: u32,
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// screen_width_dp: u16
-    /// screen_height_dp: u16
-    pub(crate) screen_size_dp: u32,
-
-    /// The ISO-15924 short name for the script corresponding to this configuration
-    ///
-    /// Eg. Hant, Latn, etc.
-    ///
-    /// Interpreted in conjunction with the locale field
-    pub(crate) locale_script: [u8; 4],
-
-    /// A single BCP-47 variant subrtag.
-    /// Will vary in length between 4 and 8 cahrs
-    /// Interpreted in conjunction with the locale field
-    pub(crate) locale_variant: [u8; 8],
-
-    /// TODO: maybe made actuall union, idk for now
-    ///
-    /// screen_layout2: u8
-    /// color_mode: u8
-    /// screen_config_pad2: 16
-    pub(crate) screen_config2: u32,
-
-    /// If false and `locale_script` is set, it means that the script of the locale was explicitly provided
-    ///
-    /// If true, it means that `locale_script` was automatically computed
-    pub(crate) locale_script_was_computed: bool,
-
-    /// The value of BCP 47 Unicode extension for key `nu` (numbering system)
-    /// Varies in length from 3 to 8 chars
-    /// Zero filled value
-    pub(crate) locale_numbering_system: [u8; 8],
-
-    /// Mark all padding explicitly so it's clear how much we can expand it
-    pub(crate) padding: [u8; 3],
-}
-
-impl ResTableConfig {
-    #[inline(always)]
-    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTableConfig> {
-        // TODO: take naive approach for now and assume that structure always 64 bytes in size
-        let (
-            size,
-            imsi,
-            locale,
-            screen_type,
-            input_,
-            screen_size,
-            version,
-            screen_config,
-            screen_size_dp,
-            locale_script,
-            locale_variant,
-            screen_config2,
-            locale_script_was_computed,
-            locale_numbering_system,
-            padding,
-        ) = (
-            le_u32,       // size
-            le_u32,       // imsi
-            le_u32,       // locale
-            le_u32,       // screen_type
-            le_u32,       // input
-            le_u32,       // screen_size
-            le_u32,       // version
-            le_u32,       // screen_config
-            le_u32,       // screen_size_dp
-            take(4usize), // locale_script
-            take(8usize), // locale_variant
-            le_u32,       // screen_config2
-            u8,           // locale_script_was_computed
-            take(8usize), // locale_numbering_system
-            take(3usize), // padding
-        )
-            .parse_next(input)?;
-
-        Ok(ResTableConfig {
-            size,
-            imsi,
-            locale,
-            screen_type,
-            input: input_,
-            screen_size,
-            version,
-            screen_config,
-            screen_size_dp,
-            locale_script: locale_script
-                .try_into()
-                .expect("expected 4 bytes in locale_script"),
-            locale_variant: locale_variant
-                .try_into()
-                .expect("expected 8 bytes in locale_variant"),
-            screen_config2,
-            locale_script_was_computed: locale_script_was_computed != 0,
-            locale_numbering_system: locale_numbering_system
-                .try_into()
-                .expect("expected 8 bytes in locale_numbering_system"),
-            padding: padding.try_into().expect("expected 3 bytes in padding"),
-        })
-    }
-
-    /// Decode a 32-bit IMSI value into Mobile Country Code (MCC)
-    /// and Mobile Network Code (MNC).
-    ///
-    /// The layout is always big-endian, regardless of platform architecture:
-    ///
-    /// ```text
-    ///  31........16 15........0
-    /// +------------+-----------+
-    /// |    MCC     |    MNC    |
-    /// +------------+-----------+
-    /// ```
-    ///
-    /// A value of 0 in either field means "any".
-    pub(crate) fn get_mcc_and_mnc(&self) -> (Option<u16>, Option<u16>) {
-        // Convert to big-endian bytes for consistent interpretation.
-        let bytes = self.imsi.to_be_bytes();
-
-        // Split into two 16-bit unsigned integers.
-        let mcc = u16::from_be_bytes([bytes[0], bytes[1]]);
-        let mnc = u16::from_be_bytes([bytes[2], bytes[3]]);
-
-        // 0 means "any", so represent that as None for convenience.
-        let mcc = if mcc == 0 { None } else { Some(mcc) };
-        let mnc = if mnc == 0 { None } else { Some(mnc) };
-
-        (mcc, mnc)
-    }
-
-    /// Decode a 16-bit packed language or country code according to the C structure rules.
-    fn decode_lang_or_country(&self, raw: u16) -> String {
-        // Case 1: `\0\0` means "any"
-        if raw == 0 {
-            return "any".into();
-        }
-
-        let bytes = raw.to_be_bytes();
-
-        // Case 2: Two 7-bit ASCII letters (ISO-639-1 or region code)
-        // Both bytes must have the high bit (bit 7) set to 0.
-        if bytes[0] & 0x80 == 0 && bytes[1] & 0x80 == 0 {
-            return String::from_utf8_lossy(&bytes).to_string();
-        }
-
-        // Case 3: Packed 3-letter ISO-639-2 code.
-        // The bit layout is:
-        //
-        //   {1, t, t, t, t, t, s, s, s, s, s, f, f, f, f, f}
-        //
-        //   bits[0..4]   = first letter ('a'..'z')
-        //   bits[5..9]   = second letter
-        //   bits[10..14] = third letter
-        //   bit[15]      = always 1
-        //
-        if (raw & 0x8000) != 0 {
-            let f = ((raw >> 0) & 0x1F) as u8; // first 5 bits
-            let s = ((raw >> 5) & 0x1F) as u8; // next 5 bits
-            let t = ((raw >> 10) & 0x1F) as u8; // next 5 bits
-
-            let letters = [f + b'a', s + b'a', t + b'a'];
-            return String::from_utf8_lossy(&letters).to_string();
-        }
-
-        // Fallback: unknown or malformed encoding
-        format!("0x{:04x}", raw)
-    }
-
-    pub(crate) fn get_language_and_country(&self) -> (String, String) {
-        // The structure is always big-endian regardless of platform architecture.
-        let bytes = self.locale.to_be_bytes();
-
-        let lang_raw = u16::from_be_bytes([bytes[0], bytes[1]]);
-        let country_raw = u16::from_be_bytes([bytes[2], bytes[3]]);
-
-        (
-            self.decode_lang_or_country(lang_raw),
-            self.decode_lang_or_country(country_raw),
-        )
-    }
-
-    /// Decode a 32-bit `screenType` value into its components:
-    /// orientation, touchscreen, and density.
-    ///
-    /// The layout is always big-endian:
-    ///
-    /// ```text
-    ///  31....24 23....16 15................0
-    /// +--------+--------+------------------+
-    /// | orient | touch  |     density      |
-    /// +--------+--------+------------------+
-    /// ```
-    ///
-    /// - `orientation`: display orientation (uint8)
-    /// - `touchscreen`: touchscreen type (uint8)
-    /// - `density`: screen pixel density (uint16, big-endian)
-    pub(crate) fn get_screen_type(&self) -> (u8, u8, u16) {
-        // Convert to big-endian bytes for consistent interpretation.
-        let bytes = self.screen_type.to_be_bytes();
-
-        let orientation = bytes[0];
-        let touchscreen = bytes[1];
-        let density = u16::from_be_bytes([bytes[2], bytes[3]]);
-
-        (orientation, touchscreen, density)
     }
 }
 
@@ -624,6 +321,8 @@ pub(crate) struct ResTableEntryDefault {
 
     /// Reference to [`ResTablePackage::key_strings`]
     pub(crate) index: u32,
+
+    pub(crate) value: ResourceValue,
 }
 
 /// This is the beginning of information about an entry in the resource table
@@ -633,7 +332,7 @@ pub(crate) struct ResTableEntryDefault {
 pub(crate) enum ResTableEntry {
     Complex(ResTableMapEntry),
     Compact(ResTableEntryCompact),
-    Default(ResourceValue),
+    Default(ResTableEntryDefault),
 }
 
 impl ResTableEntry {
@@ -651,8 +350,13 @@ impl ResTableEntry {
                 data: index,
             }))
         } else {
-            let entry = ResourceValue::parse(input)?;
-            Ok(ResTableEntry::Default(entry))
+            let value = ResourceValue::parse(input)?;
+            Ok(ResTableEntry::Default(ResTableEntryDefault {
+                size,
+                flags,
+                index,
+                value,
+            }))
         }
     }
 
@@ -764,9 +468,13 @@ impl ResTableType {
 
         let config = ResTableConfig::parse(input)?;
 
+        info!("config: {:?}", config.to_string());
+
         // TODO: handle flags (sparse, offset16 )
         let entry_offsets: Vec<u32> = repeat(entry_count as usize, le_u32).parse_next(input)?;
 
+        // TODO: this shit don't work, idk how but exists 0, 1, u32::max, 3, 4, u32::max, etc
+        // TODO: wtf is wrong with android?!
         let actual_entry_count: usize = entry_offsets.iter().filter(|x| *x != &u32::MAX).count();
 
         // TODO: i guess need use actual offsets to avoid packers and other shit
@@ -794,6 +502,14 @@ impl ResTableType {
     pub(crate) fn is_offset16(&self) -> bool {
         ResTableTypeFlags::from_bits_truncate(self.flags).contains(ResTableTypeFlags::OFFSET16)
     }
+
+    /// Get "real" id to resolve name from [`ResTablePackage::type_strings`]
+    ///
+    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=7073;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=1;bpt=1)
+    #[inline(always)]
+    pub(crate) fn id(&self) -> u8 {
+        self.id.saturating_sub(1)
+    }
 }
 
 #[derive(Debug)]
@@ -807,8 +523,15 @@ impl ResTablePackage {
     pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTablePackage> {
         let package_header = ResTablePackageHeader::parse(input)?;
 
+        info!("package_header {:?}", package_header);
+
         let type_strings = StringPool::parse(input)?;
         let key_strings = StringPool::parse(input)?;
+
+        // TODO: need somehow comeup with HashMap<u32, Entry?>
+        // requires fastloop by resource id => string
+        // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
+        // don't know for now
 
         loop {
             let header = match ResChunkHeader::parse(input) {
@@ -823,9 +546,62 @@ impl ResTablePackage {
                 Err(e) => return Err(e),
             };
 
+            info!("header {:?}", header);
+
             match header.type_ {
                 ResourceType::TableType => {
                     let type_type = ResTableType::parse(header, input)?;
+
+                    info!(
+                        "type {:?} id={:02x} entryCount={} config={}",
+                        type_strings.get(type_type.id() as u32),
+                        type_type.id,
+                        type_type.entry_count,
+                        type_type.config.to_string(),
+                    );
+
+                    for (idx, entry) in type_type.entries.iter().enumerate() {
+                        match entry {
+                            ResTableEntry::Compact(e) => {
+                                info!(
+                                    "\tresource (compact) 0x{:08x} {:?}",
+                                    Self::generate_res_id(
+                                        package_header.id,
+                                        type_type.id as u32,
+                                        idx as u32
+                                    ),
+                                    key_strings.get(e.data),
+                                )
+                            }
+                            ResTableEntry::Complex(e) => {
+                                info!(
+                                    "\tresource (complex) 0x{:08x} {:?}",
+                                    Self::generate_res_id(
+                                        package_header.id,
+                                        type_type.id as u32,
+                                        idx as u32
+                                    ),
+                                    key_strings.get(e.index)
+                                )
+                            }
+                            ResTableEntry::Default(e) => {
+                                info!(
+                                    "\tresource (default) 0x{:08x} {:?}",
+                                    Self::generate_res_id(
+                                        package_header.id,
+                                        type_type.id as u32,
+                                        idx as u32
+                                    ),
+                                    key_strings.get(e.index)
+                                );
+                                info!(
+                                    "\t\t {:?} {:?}",
+                                    e.value.data_type,
+                                    e.value.to_string(&key_strings)
+                                );
+                            }
+                        }
+                    }
                 }
                 ResourceType::TableTypeSpec => {
                     let type_spec = ResTableTypeSpec::parse(header, input)?;
@@ -835,5 +611,13 @@ impl ResTablePackage {
                 }
             }
         }
+    }
+
+    /// Generate Resource Id based on algorithm from AOSP
+    ///
+    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/tools/aapt/ResourceTable.h;l=224;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=1;bpt=1)
+    #[inline(always)]
+    fn generate_res_id(package_id: u32, type_id: u32, name_id: u32) -> u32 {
+        name_id | (type_id << 16) | (package_id << 24)
     }
 }
