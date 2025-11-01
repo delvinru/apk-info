@@ -78,7 +78,7 @@ fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
             continue;
         }
 
-        let file_path = out_dir.join(&file_name);
+        let file_path = out_dir.join(file_name);
 
         if let Some(parent) = file_path.parent() {
             std::fs::create_dir_all(parent)
@@ -86,7 +86,7 @@ fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
         }
 
         let (data, _) = zip
-            .read(&file_name)
+            .read(file_name)
             .with_context(|| format!("can't read file {:?} from archive", file_name))?;
 
         let mut f = std::fs::File::create(&file_path)

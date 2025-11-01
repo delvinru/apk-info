@@ -197,7 +197,7 @@ impl ResTableTypeSpec {
 
         let type_spec_flags = repeat(
             entry_count as usize,
-            le_u32.map(|x| ResTableConfigFlags::from_bits_truncate(x)),
+            le_u32.map(ResTableConfigFlags::from_bits_truncate),
         )
         .parse_next(input)?;
 
@@ -468,7 +468,7 @@ impl ResTableType {
 
         let config = ResTableConfig::parse(input)?;
 
-        info!("config: {:?}", config.to_string());
+        info!("config: {:?}", config.as_string());
 
         // TODO: handle flags (sparse, offset16 )
         let entry_offsets: Vec<u32> = repeat(entry_count as usize, le_u32).parse_next(input)?;
@@ -557,7 +557,7 @@ impl ResTablePackage {
                         type_strings.get(type_type.id() as u32),
                         type_type.id,
                         type_type.entry_count,
-                        type_type.config.to_string(),
+                        type_type.config.as_string(),
                     );
 
                     for (idx, entry) in type_type.entries.iter().enumerate() {

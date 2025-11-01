@@ -290,13 +290,13 @@ impl Display for WideColorGamut {
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum HDR {
+pub(crate) enum Hdr {
     No = 0x1 << 2,
     Yes = 0x2 << 2,
     Any(u8),
 }
 
-impl From<u8> for HDR {
+impl From<u8> for Hdr {
     fn from(value: u8) -> Self {
         match value & 0x0c {
             v if v == 0x1 << 2 => Self::No,
@@ -306,7 +306,7 @@ impl From<u8> for HDR {
     }
 }
 
-impl Display for HDR {
+impl Display for Hdr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::No => write!(f, "lowdr"),
@@ -958,7 +958,7 @@ impl ResTableConfig {
         //   bit[15]      = always 1
         //
         if (raw & 0x8000) != 0 {
-            let f = ((raw >> 0) & 0x1F) as u8; // first 5 bits
+            let f = (raw & 0x1F) as u8; // first 5 bits
             let s = ((raw >> 5) & 0x1F) as u8; // next 5 bits
             let t = ((raw >> 10) & 0x1F) as u8; // next 5 bits
 
@@ -1050,7 +1050,7 @@ impl ResTableConfig {
     ///
     /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=3368;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1?q=ResTable_config::toString)
     /// [App resource overview. Table 2](https://developer.android.com/guide/topics/resources/providing-resources#AlternativeResources)
-    pub(crate) fn to_string(&self) -> String {
+    pub(crate) fn as_string(&self) -> String {
         // preallocate some buffer just in case, maybe bad idea
         let mut result = String::with_capacity(self.size as usize);
 
@@ -1143,8 +1143,8 @@ impl ResTableConfig {
             result.push_str(&wide_color_gamut.to_string());
         }
 
-        let hdr = HDR::from(color_mode);
-        if !matches!(hdr, HDR::Any(_)) {
+        let hdr = Hdr::from(color_mode);
+        if !matches!(hdr, Hdr::Any(_)) {
             if !result.is_empty() {
                 result.push('-');
             }
