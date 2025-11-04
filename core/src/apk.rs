@@ -22,12 +22,13 @@ const PROTO_RESOURCE_TABLE_PATH: &str = "resources.pb";
 pub struct Apk {
     zip: ZipEntry,
     axml: AXML,
+    arsc: ARSC,
 }
 
 /// Implementation of internal methods
 impl Apk {
     /// Helper function for reading apk files
-    fn init_zip_and_axml(p: &Path) -> Result<(ZipEntry, AXML), APKError> {
+    fn init_zip_and_axml(p: &Path) -> Result<(ZipEntry, AXML, ARSC), APKError> {
         let input = fs::read(p).map_err(APKError::IoError)?;
 
         if input.is_empty() {
@@ -51,11 +52,10 @@ impl Apk {
                     APKError::InvalidInput("can't find resources.arsc, is it apk/xapk?")
                 })?;
 
-                #[allow(unused)]
                 let arsc =
                     ARSC::new(&mut &inner_resources_data[..]).map_err(APKError::ResourceError)?;
 
-                Ok((zip, axml))
+                Ok((zip, axml, arsc))
             }
             Err(_) => {
                 // maybe this is xapk?
@@ -86,7 +86,15 @@ impl Apk {
 
                 let axml = AXML::new(&mut &inner_manifest[..]).map_err(APKError::ManifestError)?;
 
-                Ok((zip, axml))
+                // TODO: don't forget refactor
+                let (inner_resources_data, _) =
+                    inner_apk.read(RESOURCE_TABLE_PATH).map_err(|_| {
+                        APKError::InvalidInput("can't find resources.arsc, is it apk/xapk?")
+                    })?;
+                let arsc =
+                    ARSC::new(&mut &inner_resources_data[..]).map_err(APKError::ResourceError)?;
+
+                Ok((zip, axml, arsc))
             }
         }
     }
@@ -102,9 +110,9 @@ impl Apk {
             )));
         }
 
-        let (zip, axml) = Self::init_zip_and_axml(path)?;
+        let (zip, axml, arsc) = Self::init_zip_and_axml(path)?;
 
-        Ok(Apk { zip, axml })
+        Ok(Apk { zip, axml, arsc })
     }
 
     pub fn get_all_information(&self, pretty: bool) -> String {
@@ -283,7 +291,20 @@ impl Apk {
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#label>
     pub fn get_application_label(&self) -> Option<&str> {
         // TODO: probably not so easy
-        self.axml.get_attribute_value("application", "label")
+        if let Some(label) = self.axml.get_attribute_value("application", "label") {
+            if label.starts_with("@") {
+                let label = label.trim_start_matches("@");
+                let id = u32::from_str_radix(label, 16).unwrap();
+
+                self.arsc.get_resource(id);
+
+                return Some(label);
+            } else {
+                return Some(label);
+            }
+        }
+
+        None
     }
 
     /// Extracts the `android:name` attribute from `<application>`.

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::commands::{command_extract, command_show};
+use crate::commands::{command_arsc, command_extract, command_show};
 
 mod commands;
 
@@ -36,6 +36,11 @@ enum Commands {
         #[arg(short, long, help = "Output folder")]
         output: Option<PathBuf>,
     },
+    /// Extract and parse arsc information from given file
+    Arsc {
+        #[arg(required = true)]
+        path: PathBuf,
+    },
 }
 
 fn main() {
@@ -46,6 +51,7 @@ fn main() {
     let result = match &cli.commands {
         Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
         Some(Commands::Extract { paths, output }) => command_extract(paths, output),
+        Some(Commands::Arsc { path }) => command_arsc(path),
         None => Ok(()),
     };
 

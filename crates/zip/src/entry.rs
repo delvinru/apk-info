@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use flate2::{Decompress, FlushDecompress, Status};
-use log::{info, warn};
+use log::{debug, info, warn};
 use openssl::hash::MessageDigest;
 use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
 use openssl::stack::Stack;
@@ -509,8 +509,8 @@ impl ZipEntry {
                 | Self::VERITY_PADDING_BLOCK_ID => {
                     let _ = take(size.saturating_sub(4)).parse_next(input)?;
                     // maybe even remove this message, idk for now
-                    info!(
-                        "got known id block - 0x{:08x} (0x{:08x}), don't know yet how to parse it",
+                    debug!(
+                        "got known id block - 0x{:08x} (size - 0x{:08x}), don't know yet how to parse it",
                         id, size
                     );
                     Ok(Signature::Unknown)

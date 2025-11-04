@@ -170,7 +170,7 @@ impl From<u8> for ResourceValueType {
             0x1d => ResourceValueType::ColorRgb8,
             0x1e => ResourceValueType::ColorArgb4,
             0x1f => ResourceValueType::ColorRgb4,
-            other => ResourceValueType::Unknown(other),
+            v => ResourceValueType::Unknown(v),
         }
     }
 }

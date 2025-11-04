@@ -1,9 +1,8 @@
 use std::fmt::{Display, Write};
-use std::mem;
+use std::hash::Hash;
 
 use bitflags::bitflags;
 use log::{error, info, warn};
-use winnow::binary::bits::bool;
 use winnow::binary::{le_u32, u8};
 use winnow::prelude::*;
 use winnow::token::take;
@@ -96,20 +95,22 @@ bitflags! {
     }
 }
 
-/// Grammatical gender configuration flags, as used in Android's AConfiguration.
+/// Grammatical gender configuration flags
+///
+/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/native/include/android/configuration.h;l=489)
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum GrammaticalGender {
-    /// Neuter grammatical gender.
+    /// Neuter grammatical gender
     Neuter = 0b01,
 
-    /// Feminine grammatical gender.
+    /// Feminine grammatical gender
     Feminine = 0b10,
 
-    /// Masculine grammatical gender.
+    /// Masculine grammatical gender
     Masculine = 0b11,
 
-    /// Grammatical gender not specified.
+    /// Grammatical gender not specified
     Any,
 }
 
@@ -135,15 +136,16 @@ impl Display for GrammaticalGender {
     }
 }
 
+/// Screen layout configuration
+///
+/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1161;drc=61197364367c9e404c7da6900658f1b16c42d0da)
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub(crate) enum LayoutDir {
-    /// Layout direction: value that corresponds to `ldltr`` resource qualifier specified
-    /// See: <https://developer.android.com/guide/topics/resources/providing-resources.html#LayoutDirectionQualifier">
+    /// Layout direction: value that corresponds to `ldltr` resource qualifier specified
     Ltr = 0x01 << 6,
 
-    /// Layout direction: value that corresponds to `ldrtl`` resource qualifier specified
-    /// See: <https://developer.android.com/guide/topics/resources/providing-resources.html#LayoutDirectionQualifier">
+    /// Layout direction: value that corresponds to `ldrtl` resource qualifier specified
     Rtl = 0x02 << 6,
 
     /// Layout direction not specified
@@ -170,13 +172,25 @@ impl Display for LayoutDir {
     }
 }
 
+/// Scren size configuration
+///
+/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1142;drc=61197364367c9e404c7da6900658f1b16c42d0da)
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub(crate) enum ScreenSize {
+    /// Screen size: value indicating the screen is at least approximately 320x426 dp units
     Small = 0x01,
+
+    /// Screen size: value indicating the screen is at least approximately 320x470 dp units
     Normal = 0x02,
+
+    /// Screen size: value indicating the screen is at least approximately 480x640 dp units
     Large = 0x03,
+
+    /// Screen size: value indicating the screen is at least approximately 720x960 dp units
     XLarge = 0x04,
+
+    /// Screen size not specified
     Any(u8),
 }
 
@@ -204,11 +218,19 @@ impl Display for ScreenSize {
     }
 }
 
+/// Screen variation wide/long
+///
+/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1151;drc=61197364367c9e404c7da6900658f1b16c42d0da)
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub(crate) enum ScreenLong {
+    /// Screen layout: value that corresponds to the `notlong` resource qualifier
     No = 0x1 << 4,
+
+    /// Screen layout: value that corresponds to the `long` resource qualifier
     Yes = 0x2 << 4,
+
+    /// Not specified
     Any(u8),
 }
 
@@ -523,7 +545,7 @@ pub(crate) enum KeysHidden {
     No = 0x01,
     Yes = 0x02,
     Soft = 0x03,
-    Unknown(u8),
+    Unknown,
 }
 
 impl From<u8> for KeysHidden {
@@ -533,7 +555,7 @@ impl From<u8> for KeysHidden {
             0x01 => Self::No,
             0x02 => Self::Yes,
             0x03 => Self::Soft,
-            v => Self::Unknown(v),
+            _ => Self::Unknown,
         }
     }
 }
@@ -544,7 +566,7 @@ impl Display for KeysHidden {
             Self::No => write!(f, "keysexposed"),
             Self::Yes => write!(f, "keyshidden"),
             Self::Soft => write!(f, "keyssoft"),
-            Self::Any | Self::Unknown(_) => Ok(()),
+            Self::Any | Self::Unknown => Ok(()),
         }
     }
 }
@@ -653,9 +675,9 @@ impl Display for Navigation {
 
 /// Describes a particular resource configuration
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=967?q=ResTable_config&sq=&ss=android)
+/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=967)
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Eq)]
 pub(crate) struct ResTableConfig {
     /// Number of elements in this structure
     pub(crate) size: u32,
@@ -918,70 +940,19 @@ impl ResTableConfig {
             warn!("got unexpected ResTable_config structure, please open issue with this file");
         }
 
-        // consume leftovers
-        let _ =
-            take(size.saturating_sub((start - input.len()) as u32) as usize).parse_next(input)?;
+        // consume leftover bytes, if any
+        let consumed = (start - input.len()) as u32;
+        let _ = take(size.saturating_sub(consumed) as usize).parse_next(input)?;
 
         Ok(config)
     }
 
     /// Convert [`ResTableConfig::imsi`] to union like field
+    #[inline]
     pub(crate) fn get_mcc_mnc(&self) -> (u16, u16) {
         let mcc = (self.imsi & 0x0000_FFFF) as u16;
         let mnc = ((self.imsi >> 16) & 0x0000_FFFF) as u16;
         (mcc, mnc)
-    }
-
-    /// Decode a 16-bit packed language or country code according to the C structure rules.
-    fn decode_lang_or_country(&self, raw: u16) -> String {
-        // Case 1: `\0\0` means "any"
-        if raw == 0 {
-            return "any".into();
-        }
-
-        let bytes = raw.to_be_bytes();
-
-        // Case 2: Two 7-bit ASCII letters (ISO-639-1 or region code)
-        // Both bytes must have the high bit (bit 7) set to 0.
-        if bytes[0] & 0x80 == 0 && bytes[1] & 0x80 == 0 {
-            return String::from_utf8_lossy(&bytes).to_string();
-        }
-
-        // Case 3: Packed 3-letter ISO-639-2 code.
-        // The bit layout is:
-        //
-        //   {1, t, t, t, t, t, s, s, s, s, s, f, f, f, f, f}
-        //
-        //   bits[0..4]   = first letter ('a'..'z')
-        //   bits[5..9]   = second letter
-        //   bits[10..14] = third letter
-        //   bit[15]      = always 1
-        //
-        if (raw & 0x8000) != 0 {
-            let f = (raw & 0x1F) as u8; // first 5 bits
-            let s = ((raw >> 5) & 0x1F) as u8; // next 5 bits
-            let t = ((raw >> 10) & 0x1F) as u8; // next 5 bits
-
-            let letters = [f + b'a', s + b'a', t + b'a'];
-            return String::from_utf8_lossy(&letters).to_string();
-        }
-
-        // Fallback: unknown or malformed encoding
-        format!("0x{:04x}", raw)
-    }
-
-    /// Convert [`ResTableConfig::locale`] to union like
-    pub(crate) fn get_language_and_country(&self) -> (String, String) {
-        // The structure is always big-endian regardless of platform architecture.
-        let bytes = self.locale.to_be_bytes();
-
-        let lang_raw = u16::from_be_bytes([bytes[0], bytes[1]]);
-        let country_raw = u16::from_be_bytes([bytes[2], bytes[3]]);
-
-        (
-            self.decode_lang_or_country(lang_raw),
-            self.decode_lang_or_country(country_raw),
-        )
     }
 
     /// Convert [`ResTableConfig::screen_type`] to union like
@@ -1001,11 +972,14 @@ impl ResTableConfig {
     }
 
     /// Extracts the 24-bit `input` value
+    #[allow(unused)]
+    #[inline]
     pub(crate) fn get_input(&self) -> u32 {
         self.generic_purpose_field & 0x00FF_FFFF
     }
 
     /// Extracts the 8-bit `grammaticalInflection`
+    #[inline]
     pub(crate) fn get_grammatical_inflection(&self) -> u8 {
         ((self.generic_purpose_field >> 24) & 0xFF) as u8
     }
@@ -1035,8 +1009,6 @@ impl ResTableConfig {
         (screen_width_dp, screen_height_dp)
     }
 
-    // TODO: add methods for locale_script and locale_variant
-
     pub(crate) fn get_screen_layout_2_color_mode(&self) -> (u8, u8) {
         let screen_layout2 = (self.screen_config_2 & 0x0000_00FF) as u8;
         let color_mode = ((self.screen_config_2 >> 8) & 0x0000_00FF) as u8;
@@ -1046,9 +1018,134 @@ impl ResTableConfig {
         (screen_layout2, color_mode)
     }
 
-    /// Convert config to string
+    fn unpack_language(&self, input: [u8; 2]) -> String {
+        let (_, buf) = self.unpack_language_or_region(input, b'a');
+
+        std::str::from_utf8(&buf)
+            .expect("can't decode language from given configuration")
+            .trim_end_matches('\0')
+            .to_owned()
+    }
+
+    fn unpack_region(&self, input: [u8; 2]) -> String {
+        let (_, buf) = self.unpack_language_or_region(input, b'0');
+
+        std::str::from_utf8(&buf)
+            .expect("can't decode region from given configuration")
+            .trim_end_matches('\0')
+            .to_owned()
+    }
+
+    /// Decode language or region
     ///
-    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=3368;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1?q=ResTable_config::toString)
+    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;drc=61197364367c9e404c7da6900658f1b16c42d0da;l=2044)
+    fn unpack_language_or_region(&self, input: [u8; 2], base: u8) -> (usize, [u8; 4]) {
+        let mut out = [0u8; 4];
+
+        if (input[0] & 0x80) != 0 {
+            // The high bit is "1", which means this is a packed three letter language code.
+
+            // The smallest 5 bits of the second char are the first alphabet.
+            let first = input[1] & 0x1f;
+
+            // The last three bits of the second char and the first two bits of the first char are the second alphabet.
+            let second = ((input[1] & 0xe0) >> 5) + ((input[0] & 0x03) << 3);
+
+            // Bits 3 to 7 (inclusive) of the first char are the third alphabet.
+            let third = (input[0] & 0x7c) >> 2;
+
+            out[0] = first + base;
+            out[1] = second + base;
+            out[2] = third + base;
+            out[3] = 0;
+            (3, out)
+        } else if input[0] != 0 {
+            out[0] = input[0];
+            out[1] = input[1];
+            (2, out)
+        } else {
+            (0, out)
+        }
+    }
+
+    /// Decode locale field to readable string
+    ///
+    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=3101;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1)
+    pub(crate) fn append_dir_locale(&self, result: &mut String) {
+        let bytes = self.locale.to_le_bytes();
+        let language = [bytes[0], bytes[1]];
+        let country = [bytes[2], bytes[3]];
+
+        if language[0] == 0 {
+            return;
+        }
+
+        let script_was_provided = self.locale_script[0] != 0 && !self.locale_script_was_computed;
+        let has_variant = self.locale_variant[0] != 0;
+        let has_numbering_system = self.locale_numbering_system[0] != 0;
+
+        // legacy format
+        if !script_was_provided && !has_variant && !has_numbering_system {
+            if !result.is_empty() {
+                result.push('-');
+            }
+
+            let unpacked_language = self.unpack_language(language);
+            result.push_str(&unpacked_language);
+
+            if country[0] != 0 {
+                result.push_str("-r");
+
+                let unpacked_region = self.unpack_region(country);
+                result.push_str(&unpacked_region);
+            }
+
+            return;
+        }
+
+        // new format (modified BCP 47 tag)
+        if !result.is_empty() {
+            result.push('-');
+        }
+        result.push_str("b+");
+
+        let unpacked_language = self.unpack_language(language);
+        result.push_str(&unpacked_language);
+
+        if script_was_provided {
+            result.push('+');
+            let script = std::str::from_utf8(&self.locale_script)
+                .expect("can't decode locale_script from given configuration")
+                .trim_end_matches('\0');
+            result.push_str(script);
+        }
+
+        if country[0] != 0 {
+            result.push('+');
+            let unpacked_region = self.unpack_region(country);
+            result.push_str(&unpacked_region);
+        }
+
+        if has_variant {
+            result.push('+');
+            let variant = std::str::from_utf8(&self.locale_variant)
+                .expect("can't decode locale_variant from given configuration")
+                .trim_end_matches('\0');
+            result.push_str(variant);
+        }
+
+        if has_numbering_system {
+            result.push_str("+u+nu+");
+            let numsys = std::str::from_utf8(&self.locale_numbering_system)
+                .expect("can't decode locale_numbering_system from given configuration")
+                .trim_end_matches('\0');
+            result.push_str(numsys);
+        }
+    }
+
+    /// Represent resource config as readable string
+    ///
+    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=3368)
     /// [App resource overview. Table 2](https://developer.android.com/guide/topics/resources/providing-resources#AlternativeResources)
     pub(crate) fn as_string(&self) -> String {
         // preallocate some buffer just in case, maybe bad idea
@@ -1065,7 +1162,7 @@ impl ResTableConfig {
             let _ = write!(result, "mnc{}", mnc);
         }
 
-        // TODO: appendDirLocale
+        self.append_dir_locale(&mut result);
 
         let gender = GrammaticalGender::from(self.get_grammatical_inflection());
         if !matches!(gender, GrammaticalGender::Any) {
@@ -1248,5 +1345,80 @@ impl ResTableConfig {
         }
 
         result
+    }
+}
+
+impl Hash for ResTableConfig {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.imsi.hash(state);
+        self.locale.hash(state);
+        self.screen_type.hash(state);
+        self.generic_purpose_field.hash(state);
+        self.screen_size.hash(state);
+        self.version.hash(state);
+        self.screen_config.hash(state);
+        self.screen_size_dp.hash(state);
+        self.locale_script.hash(state);
+        self.locale_variant.hash(state);
+        self.screen_config_2.hash(state);
+        self.locale_script_was_computed.hash(state);
+        self.locale_numbering_system.hash(state);
+        self.end_padding.hash(state);
+    }
+}
+
+impl PartialEq for ResTableConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.imsi == other.imsi
+            && self.locale == other.locale
+            && self.screen_type == other.screen_type
+            && self.generic_purpose_field == other.generic_purpose_field
+            && self.screen_size == other.screen_size
+            && self.version == other.version
+            && self.screen_config == other.screen_config
+            && self.screen_size_dp == other.screen_size_dp
+            && self.locale_script == other.locale_script
+            && self.locale_variant == other.locale_variant
+            && self.screen_config_2 == other.screen_config_2
+            && self.locale_script_was_computed == other.locale_script_was_computed
+            && self.locale_numbering_system == other.locale_numbering_system
+            && self.end_padding == other.end_padding
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn p32(s: &str) -> u32 {
+        assert!(s.len() <= 4, "Строка должна быть длиной от 0 до 4 символов");
+
+        s.bytes().fold(0u32, |acc, b| (acc << 8) | b as u32)
+    }
+
+    #[test]
+    fn test_mcc_mnc_1() {
+        let mut config = ResTableConfig::default();
+
+        config.imsi = p32("\x00\x14\x01\x4e");
+        let (mcc, mnc) = config.get_mcc_mnc();
+
+        assert_eq!(mcc, 334);
+        assert_eq!(mnc, 20);
+
+        assert_eq!("mcc334-mnc20", config.as_string())
+    }
+
+    #[test]
+    fn test_mcc_mnc_2() {
+        let mut config = ResTableConfig::default();
+
+        config.imsi = p32("\x00\x01\x00\x01");
+        let (mcc, mnc) = config.get_mcc_mnc();
+
+        assert_eq!(mcc, 1);
+        assert_eq!(mnc, 1);
+
+        assert_eq!("mcc1-mnc1", config.as_string())
     }
 }

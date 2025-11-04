@@ -1,5 +1,7 @@
 use log::warn;
 use minidom::Element;
+use minidom::element::CustomItemWriter;
+use quick_xml::Writer;
 use winnow::error::{ContextError, ErrMode};
 use winnow::prelude::*;
 use winnow::token::take;

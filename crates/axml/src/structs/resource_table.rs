@@ -1,4 +1,6 @@
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 
 use log::{info, warn};
 use winnow::binary::{le_u16, le_u32, u8};
@@ -162,7 +164,7 @@ pub(crate) struct ResTableTypeSpec {
     ///
     /// Ideally, need to check this value, but this is not done on purpose
     ///
-    /// Malware can specifically change the value to break parsers
+    /// Malware can intentionally change the value to break parsers
     pub(crate) res0: u8,
 
     /// Used to be reserved, if >0 specifies the number of [ResTableType] entries for this spec
@@ -330,6 +332,7 @@ pub(crate) struct ResTableEntryDefault {
 /// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1583?q=ResTable_config&ss=android)
 #[derive(Debug)]
 pub(crate) enum ResTableEntry {
+    NoEntry,
     Complex(ResTableMapEntry),
     Compact(ResTableEntryCompact),
     Default(ResTableEntryDefault),
@@ -390,6 +393,7 @@ impl ResTableEntry {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug)]
     pub(crate) struct ResTableTypeFlags: u8 {
         /// If set, the entry is sparse, and encodes both the entry ID and offset into each entry,
         /// and a binary search is used to find the key. Only available on platforms >= O.
@@ -468,17 +472,31 @@ impl ResTableType {
 
         let config = ResTableConfig::parse(input)?;
 
-        info!("config: {:?}", config.as_string());
+        let is_offset16 = Self::is_offset16(flags);
 
-        // TODO: handle flags (sparse, offset16 )
-        let entry_offsets: Vec<u32> = repeat(entry_count as usize, le_u32).parse_next(input)?;
+        // TODO: handle "sparse" flag
+        let entry_offsets: Vec<u32> = if is_offset16 {
+            repeat(entry_count as usize, le_u16.map(|x| x as u32)).parse_next(input)?
+        } else {
+            repeat(entry_count as usize, le_u32).parse_next(input)?
+        };
 
-        // TODO: this shit don't work, idk how but exists 0, 1, u32::max, 3, 4, u32::max, etc
-        // TODO: wtf is wrong with android?!
-        let actual_entry_count: usize = entry_offsets.iter().filter(|x| *x != &u32::MAX).count();
+        let entries = entry_offsets
+            .iter()
+            .map(|&offset| {
+                let is_no_entry = if is_offset16 {
+                    offset as u16 == u16::MAX
+                } else {
+                    offset == u32::MAX
+                };
 
-        // TODO: i guess need use actual offsets to avoid packers and other shit
-        let entries = repeat(actual_entry_count, ResTableEntry::parse).parse_next(input)?;
+                if is_no_entry {
+                    Ok(ResTableEntry::NoEntry)
+                } else {
+                    ResTableEntry::parse(input)
+                }
+            })
+            .collect::<ModalResult<_>>()?;
 
         Ok(ResTableType {
             header,
@@ -494,13 +512,13 @@ impl ResTableType {
     }
 
     #[inline(always)]
-    pub(crate) fn is_sparse(&self) -> bool {
-        ResTableTypeFlags::from_bits_truncate(self.flags).contains(ResTableTypeFlags::SPARCE)
+    pub(crate) fn is_sparse(flags: u8) -> bool {
+        ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::SPARCE)
     }
 
     #[inline(always)]
-    pub(crate) fn is_offset16(&self) -> bool {
-        ResTableTypeFlags::from_bits_truncate(self.flags).contains(ResTableTypeFlags::OFFSET16)
+    pub(crate) fn is_offset16(flags: u8) -> bool {
+        ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::OFFSET16)
     }
 
     /// Get "real" id to resolve name from [`ResTablePackage::type_strings`]
@@ -512,26 +530,35 @@ impl ResTableType {
     }
 }
 
+impl Hash for ResTableType {
+    /// Generate hash based on config hash
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.config.hash(state);
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ResTablePackage {
     pub(crate) header: ResTablePackageHeader,
     pub(crate) type_strings: StringPool,
     pub(crate) key_strings: StringPool,
+
+    pub(crate) resources: HashMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
 }
 
 impl ResTablePackage {
     pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTablePackage> {
         let package_header = ResTablePackageHeader::parse(input)?;
 
-        info!("package_header {:?}", package_header);
-
         let type_strings = StringPool::parse(input)?;
         let key_strings = StringPool::parse(input)?;
 
-        // TODO: need somehow comeup with HashMap<u32, Entry?>
-        // requires fastloop by resource id => string
+        // requires fastloop by resource id => resource
         // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
-        // don't know for now
+
+        // HashMap<package_id, HashMap<Config, HashMap<type_id, HashMap<entry_id, Entries>>>>
+        let mut resources: HashMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>> =
+            HashMap::with_capacity(32);
 
         loop {
             let header = match ResChunkHeader::parse(input) {
@@ -541,67 +568,22 @@ impl ResTablePackage {
                         header: package_header,
                         type_strings,
                         key_strings,
+                        resources,
                     });
                 }
                 Err(e) => return Err(e),
             };
 
-            info!("header {:?}", header);
+            // info!("header {:?}", header);
 
             match header.type_ {
                 ResourceType::TableType => {
                     let type_type = ResTableType::parse(header, input)?;
 
-                    info!(
-                        "type {:?} id={:02x} entryCount={} config={}",
-                        type_strings.get(type_type.id() as u32),
-                        type_type.id,
-                        type_type.entry_count,
-                        type_type.config.as_string(),
-                    );
+                    let config_entry = resources.entry(type_type.config).or_default();
+                    let type_entry = config_entry.entry(type_type.id).or_default();
 
-                    for (idx, entry) in type_type.entries.iter().enumerate() {
-                        match entry {
-                            ResTableEntry::Compact(e) => {
-                                info!(
-                                    "\tresource (compact) 0x{:08x} {:?}",
-                                    Self::generate_res_id(
-                                        package_header.id,
-                                        type_type.id as u32,
-                                        idx as u32
-                                    ),
-                                    key_strings.get(e.data),
-                                )
-                            }
-                            ResTableEntry::Complex(e) => {
-                                info!(
-                                    "\tresource (complex) 0x{:08x} {:?}",
-                                    Self::generate_res_id(
-                                        package_header.id,
-                                        type_type.id as u32,
-                                        idx as u32
-                                    ),
-                                    key_strings.get(e.index)
-                                )
-                            }
-                            ResTableEntry::Default(e) => {
-                                info!(
-                                    "\tresource (default) 0x{:08x} {:?}",
-                                    Self::generate_res_id(
-                                        package_header.id,
-                                        type_type.id as u32,
-                                        idx as u32
-                                    ),
-                                    key_strings.get(e.index)
-                                );
-                                info!(
-                                    "\t\t {:?} {:?}",
-                                    e.value.data_type,
-                                    e.value.to_string(&key_strings)
-                                );
-                            }
-                        }
-                    }
+                    type_entry.extend(type_type.entries);
                 }
                 ResourceType::TableTypeSpec => {
                     let type_spec = ResTableTypeSpec::parse(header, input)?;
@@ -619,5 +601,51 @@ impl ResTablePackage {
     #[inline(always)]
     fn generate_res_id(package_id: u32, type_id: u32, name_id: u32) -> u32 {
         name_id | (type_id << 16) | (package_id << 24)
+    }
+
+    pub(crate) fn get_entry(
+        &self,
+        config: &ResTableConfig,
+        type_id: u8,
+        entry_id: u16,
+    ) -> Option<&ResTableEntry> {
+        let found_config = self.resources.get(&config).unwrap();
+        let found_type = found_config.get(&type_id).unwrap();
+
+        for (idx, entry) in found_type.iter().enumerate() {
+            if (idx as u16) == entry_id {
+                match &entry {
+                    ResTableEntry::Compact(e) => {
+                        info!(
+                            "resource (compact) 0x{:08x} \"{}\"",
+                            Self::generate_res_id(self.header.id, type_id as u32, idx as u32,),
+                            self.key_strings.get(e.data).unwrap_or(&String::new()),
+                        )
+                    }
+                    ResTableEntry::Complex(e) => {
+                        info!(
+                            "resource (complex) 0x{:08x} \"{}\"",
+                            Self::generate_res_id(self.header.id, type_id as u32, idx as u32,),
+                            self.key_strings.get(e.index).unwrap_or(&String::new()),
+                        )
+                    }
+                    ResTableEntry::Default(e) => {
+                        info!(
+                            "type ({}) resource (default) 0x{:08x} \"{}\"",
+                            self.type_strings
+                                .get(type_id.saturating_sub(1) as u32)
+                                .unwrap_or(&String::new()),
+                            Self::generate_res_id(self.header.id, type_id as u32, idx as u32,),
+                            self.key_strings.get(e.index).unwrap_or(&String::new()),
+                        );
+                    }
+                    ResTableEntry::NoEntry => continue,
+                }
+
+                return Some(entry);
+            }
+        }
+
+        None
     }
 }
