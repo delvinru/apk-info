@@ -21,6 +21,8 @@ impl ARSC {
 
         let header = ResTableHeader::parse(input).map_err(|_| ARCSError::HeaderError)?;
 
+        info!("{:#?}", header);
+
         let mut is_tampered = false;
 
         // don't drop error, maybe another shit malware technique
@@ -37,6 +39,7 @@ impl ARSC {
 
         // TODO: parse based on package_count
         let string_pool = StringPool::parse(input).map_err(|_| ARCSError::StringPoolError)?;
+
         let package = ResTablePackage::parse(input).map_err(|_| ARCSError::ResourceTableError)?;
 
         Ok(ARSC {

@@ -101,6 +101,15 @@ impl ResChunkHeader {
         // u16 (type_) + u16 (header_size) + u32 (size)
         self.size.saturating_sub(2 + 2 + 4)
     }
+
+    /// Get the size of this structure in bytes
+    #[inline(always)]
+    pub const fn size_of() -> usize {
+        // 2 bytes - ResourceTypes
+        // 2 bytes - header_size
+        // 4 bytes - size
+        2 + 2 + 4
+    }
 }
 
 /// Type of the data value

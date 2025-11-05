@@ -1,12 +1,12 @@
 use bitflags::bitflags;
-use log::warn;
+use log::{info, warn};
 use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::structs::ResChunkHeader;
+use crate::structs::{ResChunkHeader, ResourceType};
 
 bitflags! {
     #[derive(Debug)]
@@ -31,7 +31,22 @@ pub(crate) struct ResStringPoolHeader {
 
 impl ResStringPoolHeader {
     pub fn parse(input: &mut &[u8]) -> ModalResult<ResStringPoolHeader> {
-        let header = ResChunkHeader::parse(input)?;
+        let mut header = ResChunkHeader::parse(input)?;
+
+        info!("header {:#?}", header);
+
+        // what kind of shit is ARSCLib doing and why? 791c3ed2d1cd986da043bb1b655098d2b7a0b99450440d756bc898f84a88fe3b
+        if header.type_ != ResourceType::StringPool {
+            let garbage_bytes = header.size.saturating_sub(ResChunkHeader::size_of() as u32);
+            let _ = take(garbage_bytes as usize).parse_next(input)?;
+            warn!(
+                "expected string pool header, but got garbage, skipped {} bytes",
+                garbage_bytes
+            );
+
+            header = ResChunkHeader::parse(input)?;
+        }
+
         let (string_count, style_count, flags, strings_start, styles_start) =
             (le_u32, le_u32, le_u32, le_u32, le_u32).parse_next(input)?;
 
@@ -63,12 +78,9 @@ pub(crate) struct StringPool {
     #[allow(unused)]
     pub(crate) header: ResStringPoolHeader,
 
-    #[allow(unused)]
-    pub(crate) string_offsets: Vec<u32>,
-
-    #[allow(unused)]
-    pub(crate) style_offsets: Vec<u32>,
-
+    // The raw values of the offests are useless, so we don't save them
+    // pub(crate) string_offsets: Vec<u32>,
+    // pub(crate) style_offsets: Vec<u32>,
     pub(crate) strings: Vec<String>,
 
     // emit additional properties
@@ -80,6 +92,8 @@ impl StringPool {
     pub fn parse(input: &mut &[u8]) -> ModalResult<StringPool> {
         let mut string_header = ResStringPoolHeader::parse(input)?;
 
+        info!("{:#?}", string_header);
+
         let mut invalid_string_count = false;
         let calculated_string_count = string_header.strings_start.saturating_sub(
             string_header
@@ -89,6 +103,11 @@ impl StringPool {
         ) / 4;
 
         if calculated_string_count != string_header.string_count {
+            warn!(
+                "malformed string pool, expected {} strings, actually {} strings",
+                string_header.string_count, calculated_string_count
+            );
+
             string_header.string_count = calculated_string_count;
             invalid_string_count = true;
         }
@@ -96,18 +115,15 @@ impl StringPool {
         let string_offsets =
             repeat(string_header.string_count as usize, le_u32).parse_next(input)?;
 
-        let style_offsets = if string_header.style_count != 0 {
+        // style_offsets are not used, but there may be cases when this value is not equal to 0, so we need to consume input
+        if string_header.style_count != 0 {
             repeat(string_header.style_count as usize, le_u32).parse_next(input)?
-        } else {
-            Vec::new()
-        };
+        }
 
         let strings = Self::parse_strings(input, &string_header, &string_offsets)?;
 
         Ok(StringPool {
             header: string_header,
-            string_offsets,
-            style_offsets,
             strings,
             invalid_string_count,
         })

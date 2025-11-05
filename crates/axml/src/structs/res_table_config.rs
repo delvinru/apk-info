@@ -1391,7 +1391,7 @@ mod test {
     use super::*;
 
     fn p32(s: &str) -> u32 {
-        assert!(s.len() <= 4, "Строка должна быть длиной от 0 до 4 символов");
+        assert!(s.len() <= 4, "expected str length between 0 and 4 symbols");
 
         s.bytes().fold(0u32, |acc, b| (acc << 8) | b as u32)
     }

@@ -76,7 +76,7 @@ impl EndOfCentralDirectory {
         })
     }
 
-    /// Search magic from the end of the file
+    /// Search EOCD magic from the end of the file
     pub(crate) fn find_eocd(input: &[u8], chunk_size: usize) -> Option<usize> {
         let mut end = input.len();
 

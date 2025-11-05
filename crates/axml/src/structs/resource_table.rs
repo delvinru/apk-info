@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
-use log::{info, warn};
+use log::{debug, info, warn};
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, StrContext, StrContextValue};
@@ -23,7 +23,7 @@ use crate::structs::{
 //     Unknown(u32),
 // }
 
-/// Header for a resrouce table
+/// Header for a resource table
 ///
 /// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=906?q=ResourceTypes.h&ss=android)
 #[derive(Debug)]
@@ -77,14 +77,18 @@ pub(crate) struct ResTablePackageHeader {
     /// Last index into `key_strings` that is for public use by other
     pub(crate) last_public_key: u32,
 
-    /// TODO: The source code does not describe the purpose of this field.
+    /// The source code does not describe the purpose of this field
+    ///
+    /// In old versions this field doesn't exists - https://xrefandroid.com/android-4.4.4_r1/xref/frameworks/base/include/androidfw/ResourceTypes.h#782
+    ///
+    /// Example sample: `d6c670c7a27105f082108d89c6d6b983bdeba6cef36d357b2c4c2bfbc4189aab`
     pub(crate) type_id_offset: u32,
 }
 
 impl ResTablePackageHeader {
     #[inline(always)]
     pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTablePackageHeader> {
-        (
+        let (header, id, name, type_strings, last_public_type, key_strings, last_public_key) = (
             ResChunkHeader::parse,
             le_u32,
             take(256usize),
@@ -92,30 +96,46 @@ impl ResTablePackageHeader {
             le_u32,
             le_u32,
             le_u32,
-            le_u32,
         )
-            .map(
-                |(
-                    header,
-                    id,
-                    name,
-                    type_strings,
-                    last_public_type,
-                    key_strings,
-                    last_public_key,
-                    type_id_offset,
-                )| ResTablePackageHeader {
-                    header,
-                    id,
-                    name: name.try_into().expect("expected 256 name length"),
-                    type_strings,
-                    last_public_type,
-                    key_strings,
-                    last_public_key,
-                    type_id_offset,
-                },
-            )
-            .parse_next(input)
+            .parse_next(input)?;
+
+        let name = name.try_into().expect("expected 256 bytes for name field");
+        let header_size = header.header_size;
+        let expected_size = Self::size_of() as u16;
+
+        let mut type_id_offset = 0;
+
+        match header_size {
+            s if s == expected_size => {
+                // new structure, with type_id_offset
+                type_id_offset = le_u32.parse_next(input)?;
+            }
+            s if s == expected_size - 4 => {
+                // old structure, without type_id_offset
+            }
+            _ => {
+                // malformed structure
+                type_id_offset = le_u32.parse_next(input)?;
+
+                let skipped = header_size.saturating_sub(expected_size);
+                let _ = take(skipped as usize).parse_next(input)?;
+                warn!(
+                    "malformed resource table package, skipped {} bytes",
+                    skipped
+                );
+            }
+        }
+
+        Ok(ResTablePackageHeader {
+            header,
+            id,
+            name,
+            type_strings,
+            last_public_type,
+            key_strings,
+            last_public_key,
+            type_id_offset,
+        })
     }
 
     /// Get a real package name from `name` slice
@@ -128,6 +148,20 @@ impl ResTablePackageHeader {
             .collect();
 
         String::from_utf16(&utf16_str).unwrap_or_default()
+    }
+
+    /// Get size in bytes of this structure
+    #[inline(always)]
+    pub(crate) const fn size_of() -> usize {
+        // header - ResChunkHeader
+        // 4 bytes - string_count
+        // 256 bytes - name
+        // 4 bytes - type_strings
+        // 4 bytes - last_public_type
+        // 4 bytes - key_strings
+        // 4 bytes - last_public_key
+        // 4 bytes - type_id_offset
+        ResChunkHeader::size_of() + 4 + 256 + 4 + 4 + 4 + 4 + 4
     }
 }
 
@@ -573,8 +607,6 @@ impl ResTablePackage {
                 }
                 Err(e) => return Err(e),
             };
-
-            // info!("header {:?}", header);
 
             match header.type_ {
                 ResourceType::TableType => {

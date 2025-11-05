@@ -76,3 +76,6 @@ docs/_build/
 
 # custom check scripts
 checks/
+
+# rustc-ice files
+rustc-ice-*.txt
