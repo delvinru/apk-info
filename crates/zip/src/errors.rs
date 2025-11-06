@@ -1,9 +1,10 @@
 use openssl::error::ErrorStack;
 use thiserror::Error;
 
+/// Describes all available errors from zip parser
 #[derive(Error, Debug)]
 pub enum ZipError {
-    /// Basic sanity check
+    /// Expected zip header but got something else
     #[error("provided file is not a zip archive")]
     InvalidHeader,
 

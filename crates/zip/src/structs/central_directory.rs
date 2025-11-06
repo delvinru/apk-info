@@ -148,6 +148,7 @@ pub(crate) struct CentralDirectory {
 }
 
 impl CentralDirectory {
+    #[inline(always)]
     pub(crate) fn parse(
         input: &[u8],
         eocd: &EndOfCentralDirectory,
@@ -156,15 +157,16 @@ impl CentralDirectory {
             .get(eocd.central_dir_offset as usize..)
             .ok_or(ErrMode::Incomplete(Needed::Unknown))?;
 
-        let entries: Vec<CentralDirectoryEntry> =
-            repeat(0.., CentralDirectoryEntry::parse).parse_next(&mut input)?;
+        let entries = repeat::<_, CentralDirectoryEntry, Vec<CentralDirectoryEntry>, _, _>(
+            0..,
+            CentralDirectoryEntry::parse,
+        )
+        .parse_next(&mut input)?
+        .into_iter()
+        .map(|entry| (Arc::clone(&entry.file_name), entry))
+        .collect();
 
-        Ok(CentralDirectory {
-            entries: entries
-                .into_iter()
-                .map(|entry| (Arc::clone(&entry.file_name), entry))
-                .collect(),
-        })
+        Ok(CentralDirectory { entries })
     }
 }
 

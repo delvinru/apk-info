@@ -164,36 +164,62 @@ impl ZipEntry {
 ///
 /// Very cool research about this: <https://goa2023.nullcon.net/doc/goa-2023/Android-SigMorph-Covert-Communication-Exploiting-Android-Signing-Schemes.pdf>
 impl ZipEntry {
-    const APK_SIGNATURE_MAGIC: &[u8] = b"APK Sig Block 42";
-    const SIGNATURE_V2_MAGIC: u32 = 0x7109871a;
-    const SIGNATURE_V3_MAGIC: u32 = 0xf05368c0;
-    const SIGNATURE_V31_MAGIC: u32 = 0x1b93ad61;
+    /// Magic of APK signing block
+    ///
+    /// See: <https://source.android.com/docs/security/features/apksigning/v2#apk-signing-block>
+    pub const APK_SIGNATURE_MAGIC: &[u8] = b"APK Sig Block 42";
 
-    /// Includes metadata such as timestamp of the build,
-    /// the version of the build tools, source code's git commit hash, etc
-    const V1_SOURCE_STAMP_BLOCK_ID: u32 = 0x2b09189e;
-    const V2_SOURCE_STAMP_BLOCK_ID: u32 = 0x6dff800d;
+    /// Magic of V2 Signature Scheme
+    ///
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/v2/V2SchemeConstants.java#23>
+    pub const SIGNATURE_SCHEME_V2_BLOCK_ID: u32 = 0x7109871a;
+
+    /// Magic of V3 Signature Scheme
+    ///
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/v3/V3SchemeConstants.java#25>
+    pub const SIGNATURE_SCHEME_V3_BLOCK_ID: u32 = 0xf05368c0;
+
+    /// Magic of V3.1 Signature Scheme
+    ///
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/v3/V3SchemeConstants.java#26>
+    pub const SIGNATURE_SCHEME_V31_BLOCK_ID: u32 = 0x1b93ad61;
+
+    /// Magic of V1 source stamp signing
+    ///
+    /// Includes metadata such as timestamp of the build, the version of the build tools, source code's git commit hash, etc
+    ///
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#23>
+    pub const V1_SOURCE_STAMP_BLOCK_ID: u32 = 0x2b09189e;
+
+    /// Magic of V2 source stamp signing
+    ///
+    /// Includes metadata such as timestamp of the build, the version of the build tools, source code's git commit hash, etc
+    ///
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#24>
+    pub const V2_SOURCE_STAMP_BLOCK_ID: u32 = 0x6dff800d;
 
     /// Used to increase the size of the signing block (including the length and magic) to a mulitple 4096
     ///
-    /// More info: <https://android.googlesource.com/platform/tools/apksig/+/refs/heads/master/src/main/java/com/android/apksig/internal/apk/ApkSigningBlockUtils.java#100>
-    const VERITY_PADDING_BLOCK_ID: u32 = 0x42726577;
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/ApkSigningBlockUtils.java#100>
+    pub const VERITY_PADDING_BLOCK_ID: u32 = 0x42726577;
 
-    /// Block that contains dependency metadata, which is saved by the Android Gradle plugin
-    /// to identify any issues related to dependencies
-    const DEPENDENCY_INFO_BLOCK_ID: u32 = 0x504b4453;
+    /// Block that contains dependency metadata, which is saved by the Android Gradle plugin to identify any issues related to dependencies
+    ///
+    /// See: <https://cs.android.com/android-studio/platform/tools/base/+/mirror-goog-studio-main:signflinger/src/com/android/signflinger/SignedApk.java;l=58?q=0x504b4453>
+    pub const DEPENDENCY_INFO_BLOCK_ID: u32 = 0x504b4453;
 
     /// Used to track channels of distribution for an APK, mostly Chinese APKs have this
     ///
     /// Alsow known as `MEITAN_APK_CHANNEL_BLOCK`
-    const APK_CHANNEL_BLOCK: u32 = 0x71777777;
+    pub const APK_CHANNEL_BLOCK_ID: u32 = 0x71777777;
 
     /// Google Play Frosting ID
-    const GOOGLE_PLAY_FROSTING_ID: u32 = 0x2146444e;
+    pub const GOOGLE_PLAY_FROSTING_ID: u32 = 0x2146444e;
 
-    /// Always zero block
-    const ZERO_BLOCK_ID: u32 = 0xff3b5998;
+    /// Zero block ID
+    pub const ZERO_BLOCK_ID: u32 = 0xff3b5998;
 
+    /// Helper function to convert openssl [X509Ref] to [CertificateInfo]
     fn get_certificate_info(
         &self,
         certificate: &X509Ref,
@@ -443,7 +469,7 @@ impl ZipEntry {
             let (size, id) = (le_u64, le_u32).parse_next(input)?;
 
             match id {
-                Self::SIGNATURE_V2_MAGIC => {
+                Self::SIGNATURE_SCHEME_V2_BLOCK_ID => {
                     let _signers_length = le_u32.parse_next(input)?;
                     // TODO: need parse several signers
 
@@ -489,17 +515,17 @@ impl ZipEntry {
 
                     Ok(Signature::V2(certificates))
                 }
-                Self::SIGNATURE_V3_MAGIC => {
+                Self::SIGNATURE_SCHEME_V3_BLOCK_ID => {
                     let certificates = self.parse_signature_v3_like(input)?;
 
                     Ok(Signature::V3(certificates))
                 }
-                Self::SIGNATURE_V31_MAGIC => {
+                Self::SIGNATURE_SCHEME_V31_BLOCK_ID => {
                     let certificates = self.parse_signature_v3_like(input)?;
 
                     Ok(Signature::V31(certificates))
                 }
-                Self::APK_CHANNEL_BLOCK => {
+                Self::APK_CHANNEL_BLOCK_ID => {
                     let data = take(size.saturating_sub(4)).parse_next(input)?;
 
                     Ok(Signature::ApkChannelBlock(
