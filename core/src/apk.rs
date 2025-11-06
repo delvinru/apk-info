@@ -140,7 +140,7 @@ impl Apk {
                 backup_agent: self.get_application_backup_agent().map(String::from),
                 debuggable: self.get_application_debuggable().map(String::from),
                 description: self.get_application_description().map(String::from),
-                label: self.get_application_label().map(String::from),
+                label: self.get_application_label(),
                 name: self.get_application_name().map(String::from),
             },
             main_activities: self.get_main_activities().map(String::from).collect(),

@@ -102,12 +102,8 @@ impl ARSC {
 
                 // TODO: check this and create resolver, infinite loop possible
                 match e.value.data_type {
-                    ResourceValueType::Reference => {
-                        return self.get_resource(e.value.data);
-                    }
-                    _ => {
-                        return Some(e.value.to_string(&self.global_string_pool));
-                    }
+                    ResourceValueType::Reference => self.get_resource(e.value.data),
+                    _ => Some(e.value.to_string(&self.global_string_pool)),
                 }
             }
             ResTableEntry::NoEntry => {
@@ -115,7 +111,7 @@ impl ARSC {
             }
             e => {
                 warn!("for now don't how to handle this: {:#?}", e);
-                return None;
+                None
             }
         }
     }

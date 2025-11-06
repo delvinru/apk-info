@@ -904,23 +904,20 @@ impl ResTablePackage {
             }
         }
 
-        if let Some(type_map) = self.resources.get(config) {
-            if let Some(entries) = type_map.get(&type_id) {
-                if let Some(entry) = entries.get(entry_id as usize) {
-                    if !matches!(entry, ResTableEntry::NoEntry) {
-                        let res_id =
-                            Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
-                        log_entry(
-                            res_id,
-                            type_id,
-                            entry,
-                            &self.key_strings,
-                            &self.type_strings,
-                        );
-                        return Some(entry);
-                    }
-                }
-            }
+        if let Some(type_map) = self.resources.get(config)
+            && let Some(entries) = type_map.get(&type_id)
+            && let Some(entry) = entries.get(entry_id as usize)
+            && !matches!(entry, ResTableEntry::NoEntry)
+        {
+            let res_id = Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
+            log_entry(
+                res_id,
+                type_id,
+                entry,
+                &self.key_strings,
+                &self.type_strings,
+            );
+            return Some(entry);
         }
 
         for (other_config, type_map) in &self.resources {
@@ -929,21 +926,19 @@ impl ResTablePackage {
                 continue;
             }
 
-            if let Some(entries) = type_map.get(&type_id) {
-                if let Some(entry) = entries.get(entry_id as usize) {
-                    if !matches!(entry, ResTableEntry::NoEntry) {
-                        let res_id =
-                            Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
-                        log_entry(
-                            res_id,
-                            type_id,
-                            entry,
-                            &self.key_strings,
-                            &self.type_strings,
-                        );
-                        return Some(entry);
-                    }
-                }
+            if let Some(entries) = type_map.get(&type_id)
+                && let Some(entry) = entries.get(entry_id as usize)
+                && !matches!(entry, ResTableEntry::NoEntry)
+            {
+                let res_id = Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
+                log_entry(
+                    res_id,
+                    type_id,
+                    entry,
+                    &self.key_strings,
+                    &self.type_strings,
+                );
+                return Some(entry);
             }
         }
 
