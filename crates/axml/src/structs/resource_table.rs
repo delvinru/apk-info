@@ -213,6 +213,7 @@ pub(crate) struct ResTableTypeSpec {
 }
 
 impl ResTableTypeSpec {
+    #[inline]
     pub(crate) fn parse(
         header: ResChunkHeader,
         input: &mut &[u8],
@@ -311,6 +312,7 @@ pub(crate) struct ResTableMapEntry {
 }
 
 impl ResTableMapEntry {
+    #[inline(always)]
     pub(crate) fn parse(
         size: u16,
         flags: u16,
@@ -498,6 +500,7 @@ pub(crate) struct ResTableType {
 }
 
 impl ResTableType {
+    #[inline(always)]
     pub(crate) fn parse(header: ResChunkHeader, input: &mut &[u8]) -> ModalResult<ResTableType> {
         let (id, flags, reserved, entry_count, entries_start) =
             (u8, u8, le_u16, le_u32, le_u32).parse_next(input)?;
@@ -521,24 +524,39 @@ impl ResTableType {
             .ok_or_else(|| ErrMode::Incomplete(Needed::Unknown))?;
 
         *input = rest;
-        let entries = entry_offsets
-            .iter()
-            .map(|&offset| {
-                let is_no_entry = if is_offset16 {
-                    offset as u16 == u16::MAX
-                } else {
-                    offset == u32::MAX
-                };
 
-                if is_no_entry {
-                    Ok(ResTableEntry::NoEntry)
-                } else {
-                    let mut slice = &entries_slice[offset as usize..];
+        let mut entries = Vec::with_capacity(entry_count as usize);
+        let entries_len = entries_slice.len();
 
-                    ResTableEntry::parse(&mut slice)
+        if is_offset16 {
+            for &off16 in &entry_offsets {
+                if off16 as u16 == u16::MAX {
+                    entries.push(ResTableEntry::NoEntry);
+                    continue;
                 }
-            })
-            .collect::<ModalResult<_>>()?;
+
+                let off = off16 as usize;
+                if off >= entries_len {
+                    return Err(ErrMode::Incomplete(Needed::Unknown));
+                }
+                let mut slice = &entries_slice[off..];
+                entries.push(ResTableEntry::parse(&mut slice)?);
+            }
+        } else {
+            for &off32 in &entry_offsets {
+                if off32 == u32::MAX {
+                    entries.push(ResTableEntry::NoEntry);
+                    continue;
+                }
+
+                let off = off32 as usize;
+                if off >= entries_len {
+                    return Err(ErrMode::Incomplete(Needed::Unknown));
+                }
+                let mut slice = &entries_slice[off..];
+                entries.push(ResTableEntry::parse(&mut slice)?);
+            }
+        }
 
         Ok(ResTableType {
             header,
@@ -591,6 +609,7 @@ pub(crate) struct ResTableLibraryEntry {
 }
 
 impl ResTableLibraryEntry {
+    #[inline(always)]
     pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTableLibraryEntry> {
         (le_u32, take(256usize))
             .map(
@@ -642,6 +661,7 @@ pub(crate) struct ResTableLibrary {
 }
 
 impl ResTableLibrary {
+    #[inline(always)]
     pub(crate) fn parse(header: ResChunkHeader, input: &mut &[u8]) -> ModalResult<ResTableLibrary> {
         let count = le_u32.parse_next(input)?;
         let entries = repeat(count as usize, ResTableLibraryEntry::parse).parse_next(input)?;
@@ -666,6 +686,7 @@ pub(crate) struct ResTableOverlayble {
 }
 
 impl ResTableOverlayble {
+    #[inline(always)]
     pub(crate) fn parse(
         header: ResChunkHeader,
         input: &mut &[u8],
@@ -760,12 +781,12 @@ pub(crate) struct ResTableOverlayblePolicy {
 }
 
 impl ResTableOverlayblePolicy {
+    #[inline(always)]
     pub(crate) fn parse(
         header: ResChunkHeader,
         input: &mut &[u8],
     ) -> ModalResult<ResTableOverlayblePolicy> {
         let (policy_flags, entry_count) = (le_u32, le_u32).parse_next(input)?;
-
         let entries = repeat(entry_count as usize, le_u32).parse_next(input)?;
 
         Ok(ResTableOverlayblePolicy {
