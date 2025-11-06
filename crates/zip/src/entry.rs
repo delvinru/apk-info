@@ -526,7 +526,7 @@ impl ZipEntry {
                     Ok(Signature::V31(certificates))
                 }
                 Self::APK_CHANNEL_BLOCK_ID => {
-                    let data = take(size.saturating_sub(4)).parse_next(input)?;
+                    let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
 
                     Ok(Signature::ApkChannelBlock(
                         String::from_utf8_lossy(data).to_string(),
@@ -582,12 +582,12 @@ impl ZipEntry {
                 | Self::DEPENDENCY_INFO_BLOCK_ID
                 | Self::ZERO_BLOCK_ID => {
                     // not interesting blocks
-                    let _ = take(size.saturating_sub(4)).parse_next(input)?;
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::Unknown)
                 }
                 // some maybe usefull block that we don't parse yet
                 Self::GOOGLE_PLAY_FROSTING_ID => {
-                    let _ = take(size.saturating_sub(4)).parse_next(input)?;
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     // maybe even remove this message, idk for now
                     debug!(
                         "got known id block - 0x{:08x} (size - 0x{:08x}), but don't know yet how to parse it",
@@ -598,7 +598,7 @@ impl ZipEntry {
                 }
                 _ => {
                     warn!("got unknown id block - 0x{:08x} (0x{:08x})", id, size);
-                    let _ = take(size.saturating_sub(4)).parse_next(input)?;
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
 
                     Ok(Signature::Unknown)
                 }

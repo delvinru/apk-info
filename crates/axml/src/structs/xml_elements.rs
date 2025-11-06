@@ -1,4 +1,4 @@
-use log::{debug, info, warn};
+use log::{debug, info};
 use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::prelude::*;
@@ -212,7 +212,6 @@ impl XmlElement for XmlStartElement {
 
         let readed_bytes = start - input.len();
 
-        // TODO: need somehow show this "garbage" indicator
         // consume garbage data after readed chunk
         let tampered_chunk_size = header.content_size().saturating_sub(readed_bytes as u32);
         if tampered_chunk_size != 0 {
