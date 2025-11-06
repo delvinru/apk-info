@@ -1,10 +1,10 @@
-use log::{debug, info, warn};
-use winnow::binary::{le_u8, le_u16, le_u32};
+use log::{debug, warn};
+use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::structs::{ResChunkHeader, ResourceValue, ResourceValueType, StringPool};
+use crate::structs::{ResChunkHeader, ResourceValue};
 
 #[derive(Debug)]
 pub(crate) struct XMLResourceMap {

@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use apk_info_zip::entry::ZipEntry;
@@ -18,7 +18,7 @@ pub(crate) fn command_extract(paths: &[PathBuf], output: &Option<PathBuf>) -> Re
     })
 }
 
-fn make_output_dir(path: &PathBuf, output: &Option<PathBuf>, multiple: bool) -> PathBuf {
+fn make_output_dir(path: &Path, output: &Option<PathBuf>, multiple: bool) -> PathBuf {
     match output {
         Some(out) if multiple => {
             let mut sub = out.clone();
@@ -35,7 +35,7 @@ fn make_output_dir(path: &PathBuf, output: &Option<PathBuf>, multiple: bool) -> 
         }
         Some(out) => out.clone(),
         None => {
-            let mut d = path.clone();
+            let mut d = path.to_path_buf();
             let new_name = d
                 .file_name()
                 .map(|n| {

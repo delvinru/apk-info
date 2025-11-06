@@ -26,33 +26,27 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
     let apk = Apk::new(path).with_context(|| format!("got error while parsing apk: {:?}", path))?;
 
     println!(
-        "{}: {}",
-        "Package Name",
+        "Package Name: {}",
         apk.get_package_name().unwrap_or("-").green()
     );
     println!(
-        "{}: {}",
-        "Main Activity",
+        "Main Activity: {}",
         apk.get_main_activities().next().unwrap_or("-").green()
     );
     println!(
-        "{}: {}",
-        "Min SDK Version",
+        "Min SDK Version: {}",
         apk.get_min_sdk_version().unwrap_or("-").green()
     );
     println!(
-        "{}: {}",
-        "Max SDK Version",
+        "Max SDK Version: {}",
         apk.get_max_sdk_version().unwrap_or("-").green()
     );
     println!(
-        "{}: {}",
-        "Target SDK Version",
+        "Target SDK Version: {}",
         apk.get_target_sdk_version().unwrap_or("-").green()
     );
     println!(
-        "{}: {}",
-        "Application Label",
+        "Application Label: {}",
         apk.get_application_label()
             .unwrap_or("-".to_owned())
             .green()
@@ -74,16 +68,17 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
                 | Signature::V2(certificates)
                 | Signature::V3(certificates)
                 | Signature::V31(certificates) => {
-                    println!("  {}: {}", "Type", signature.name().green());
+                    println!("  Type: {}", signature.name().green());
+
                     for (j, certificate) in certificates.iter().enumerate() {
-                        print_certificate(&certificate);
+                        print_certificate(certificate);
                         if j != certificates.len() - 1 {
                             println!();
                         }
                     }
                 }
                 Signature::StampBlockV1(certificate) | Signature::StampBlockV2(certificate) => {
-                    println!("  {}: {}", "Type", signature.name().green());
+                    println!("  Type: {}", signature.name().green());
                     print_certificate(certificate);
                 }
                 Signature::ApkChannelBlock(channel) => {
@@ -102,32 +97,18 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
 }
 
 fn print_certificate(certificate: &CertificateInfo) {
+    println!("  Serial Number: {}", certificate.serial_number.green());
+    println!("  Subject: {}", certificate.subject.green());
+    println!("  Valid from: {}", certificate.valid_from.green());
+    println!("  Valid until: {}", certificate.valid_until.green());
+    println!("  Signature type: {}", certificate.signature_type.green());
+    println!("  MD5 fingerprint: {}", certificate.md5_fingerprint.green());
     println!(
-        "  {}: {}",
-        "Serial Number",
-        certificate.serial_number.green()
-    );
-    println!("  {}: {}", "Subject", certificate.subject.green());
-    println!("  {}: {}", "Valid from", certificate.valid_from.green());
-    println!("  {}: {}", "Valid until", certificate.valid_until.green());
-    println!(
-        "  {}: {}",
-        "Signature type",
-        certificate.signature_type.green()
-    );
-    println!(
-        "  {}: {}",
-        "MD5 fingerprint",
-        certificate.md5_fingerprint.green()
-    );
-    println!(
-        "  {}: {}",
-        "SHA1 fingerprint",
+        "  SHA1 fingerprint: {}",
         certificate.sha1_fingerprint.green()
     );
     println!(
-        "  {}: {}",
-        "SHA256 fingerprint",
+        "  SHA256 fingerprint: {}",
         certificate.sha256_fingerprint.green()
     );
 }
