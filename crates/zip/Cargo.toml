@@ -1,7 +1,9 @@
 [package]
 name = "apk-info-zip"
+description = "A library for correctly unpacking APK files that use the BadPack technique"
 authors.workspace = true
 edition.workspace = true
+homepage.workspace = true
 license.workspace = true
 version.workspace = true
 

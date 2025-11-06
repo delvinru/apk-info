@@ -7,7 +7,7 @@ use openssl::hash::MessageDigest;
 use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
 use openssl::stack::Stack;
 use openssl::x509::{X509, X509Ref};
-use winnow::binary::{le_u32, le_u64};
+use winnow::binary::{le_u32, le_u64, length_take};
 use winnow::combinator::repeat;
 use winnow::error::ContextError;
 use winnow::prelude::*;
@@ -17,7 +17,7 @@ use crate::errors::{CertificateError, FileCompressionType, ZipError};
 use crate::signature::{CertificateInfo, Signature};
 use crate::structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader};
 
-/// Represents a parsed ZIP archive
+/// Represents a parsed ZIP archive.
 pub struct ZipEntry {
     /// Owned zip data
     input: Vec<u8>,
@@ -34,6 +34,22 @@ pub struct ZipEntry {
 
 /// Implementation of common methods
 impl ZipEntry {
+    /// Creates a new `ZipEntry` from raw ZIP data.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ZipError`] if:
+    /// - The input does not start with a valid ZIP signature (`InvalidHeader`).
+    /// - The End of Central Directory cannot be found (`NotFoundEOCD`).
+    /// - Parsing of the EOCD or central directory fails (`ParseError`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use apk_info_zip::{ZipEntry, ZipError};
+    /// let data = std::fs::read("archive.zip").unwrap();
+    /// let zip = ZipEntry::new(data).expect("failed to parse ZIP archive");
+    /// ```
     pub fn new(input: Vec<u8>) -> Result<ZipEntry, ZipError> {
         // perform basic sanity check
         if !input.starts_with(b"PK\x03\x04") {
@@ -67,12 +83,66 @@ impl ZipEntry {
         })
     }
 
-    /// Get list of the filenames from zip archive
+    /// Returns an iterator over the names of all files in the ZIP archive.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use apk_info_zip::ZipEntry;
+    /// # let zip_data = std::fs::read("archive.zip").unwrap();
+    /// # let zip = ZipEntry::new(zip_data).unwrap();
+    /// for filename in zip.namelist() {
+    ///     println!("{}", filename);
+    /// }
+    /// ```
     pub fn namelist(&self) -> impl Iterator<Item = &str> + '_ {
         self.central_directory.entries.keys().map(|x| x.as_ref())
     }
 
-    /// Read tampered files from zip archive
+    /// Reads the contents of a file from the ZIP archive.
+    ///
+    /// This method handles both normally compressed files and tampered files
+    /// where the compression metadata may be inconsistent. It returns the
+    /// uncompressed file contents along with the detected compression type.
+    ///
+    /// # Parameters
+    ///
+    /// - `filename`: The name of the file to read from the archive.
+    ///
+    /// # Returns
+    ///
+    /// Returns a tuple `(Vec<u8>, FileCompressionType)` containing:
+    /// - The uncompressed file data.
+    /// - The compression type that was used or inferred.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ZipError`] in the following cases:
+    /// - `FileNotFound`: The specified file does not exist in the archive.
+    /// - `EOF`: The file slice is out of bounds or the archive is truncated.
+    /// - `DecompressionError`: Decompression failed for deflated files.
+    ///
+    /// # Notes
+    ///
+    /// The method attempts to handle files that have tampered headers:
+    /// - If the compression method indicates compression but the compressed
+    ///   size equals the uncompressed size, the file is treated as
+    ///   [FileCompressionType::StoredTampered].
+    /// - If decompression fails but the data is still present, it falls back
+    ///   to [FileCompressionType::StoredTampered].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use apk_info_zip::{ZipEntry, ZipError, FileCompressionType};
+    /// # let zip_data = std::fs::read("archive.zip").unwrap();
+    /// # let zip = ZipEntry::new(zip_data).unwrap();
+    /// let (data, compression) = zip.read("example.txt").expect("failed to read file");
+    /// match compression {
+    ///     FileCompressionType::Stored | FileCompressionType::Deflated => println!("all fine"),
+    ///     FileCompressionType::StoredTampered | FileCompressionType::DeflatedTampered => println!("tampering detected"),
+    /// }
+    /// ```
     pub fn read(&self, filename: &str) -> Result<(Vec<u8>, FileCompressionType), ZipError> {
         let local_header = self
             .local_headers
@@ -219,11 +289,15 @@ impl ZipEntry {
     /// Zero block ID
     pub const ZERO_BLOCK_ID: u32 = 0xff3b5998;
 
-    /// Helper function to convert openssl [X509Ref] to [CertificateInfo]
+    /// Converts an OpenSSL [`X509Ref`] into a [`CertificateInfo`] struct.
+    ///
+    /// Extracts common certificate metadata such as serial number, subject,
+    /// validity period, signature algorithm, and cryptographic fingerprints.
     fn get_certificate_info(
         &self,
         certificate: &X509Ref,
     ) -> Result<CertificateInfo, CertificateError> {
+        #[inline]
         fn digest_hex(cert: &X509Ref, md: MessageDigest) -> Result<String, CertificateError> {
             Ok(const_hex::encode(
                 cert.digest(md).map_err(CertificateError::StackError)?,
@@ -239,16 +313,17 @@ impl ZipEntry {
             const_hex::encode(bn.to_vec())
         };
 
-        let subject = certificate
-            .subject_name()
-            .entries()
-            .filter_map(|entry| {
-                let key = entry.object().nid().short_name().unwrap_or_default();
-                let value = entry.data().as_utf8().ok()?.to_string();
-                Some(format!("{}={}", key, value))
-            })
-            .collect::<Vec<_>>()
-            .join(" ");
+        let mut subject = String::with_capacity(128); // estimate
+        for entry in certificate.subject_name().entries() {
+            if let Ok(value) = entry.data().as_utf8() {
+                if !subject.is_empty() {
+                    subject.push(' ');
+                }
+                subject.push_str(entry.object().nid().short_name().unwrap_or_default());
+                subject.push('=');
+                subject.push_str(value.as_ref());
+            }
+        }
 
         let valid_from = certificate.not_before().to_string();
         let valid_until = certificate.not_after().to_string();
@@ -261,6 +336,7 @@ impl ZipEntry {
             .map_err(CertificateError::StackError)?
             .to_string();
 
+        // TODO: maybe compute fingerprint just based on raw data, without calling openssl
         let md5_fingerprint = digest_hex(certificate, MessageDigest::md5())?;
         let sha1_fingerprint = digest_hex(certificate, MessageDigest::sha1())?;
         let sha256_fingerprint = digest_hex(certificate, MessageDigest::sha256())?;
@@ -277,7 +353,36 @@ impl ZipEntry {
         })
     }
 
-    /// Get information from v1 certificate
+    /// Extracts information from a v1 (APK-style) signature in the ZIP archive.
+    ///
+    /// This method searches for signature files in the `META-INF/` directory
+    /// with extensions `.DSA`, `.EC`, or `.RSA`, reads the PKCS#7 data,
+    /// and returns the associated certificates.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`Signature`] enum:
+    /// - [Signature::V1] with extracted certificate info.
+    /// - [Signature::Unknown] if no signature file is found.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CertificateError`] in the following cases:
+    /// - [CertificateError::ZipError]: Failed to read the signature file from the archive.
+    /// - [CertificateError::StackError]: Failed to parse PKCS#7 DER data or create OpenSSL structures.
+    /// - [CertificateError::SignerError]: Failed to extract signer certificates from PKCS#7.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use apk_info_zip::{ZipEntry, Signature};
+    /// # let archive = ZipEntry::new(zip_data).unwrap();
+    /// match archive.get_signature_v1() {
+    ///     Ok(Signature::V1(certs)) => println!("Found {} certificates", certs.len()),
+    ///     Ok(Signature::Unknown) => println!("No v1 signature found"),
+    ///     Err(err) => eprintln!("Error parsing signature: {:?}", err),
+    /// }
+    /// ```
     pub fn get_signature_v1(&self) -> Result<Signature, CertificateError> {
         let signature_file = match self.namelist().find(|name| {
             name.starts_with("META-INF/")
@@ -305,7 +410,27 @@ impl ZipEntry {
         Ok(Signature::V1(certificates))
     }
 
-    /// Parse APK signature block and extract usefull information
+    /// Parses the APK Signature Block and extracts useful information.
+    ///
+    /// This method checks for the presence of an APK Signature Scheme block
+    /// at the end of the ZIP archive and attempts to parse all contained
+    /// signatures (v2, v3, etc.).
+    ///
+    /// # Returns
+    ///
+    /// Returns a `Vec<Signature>` containing all successfully parsed signatures.
+    /// - Signatures that could not be parsed or are unknown are filtered out.
+    /// - Returns an empty vector if no APK signature block is found.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`CertificateError`] in the following cases:
+    /// - [CertificateError::ParseError]: Failed to parse the APK signature block or its contents.
+    /// - [CertificateError::InvalidFormat]: The size of the signature block does not match the expected format.
+    ///
+    /// # Notes
+    ///
+    /// - This method handles v2+ signature blocks; v1 signatures are handled separately.
     pub fn get_signatures_other(&self) -> Result<Vec<Signature>, CertificateError> {
         let offset = self.eocd.central_dir_offset as usize;
         let mut slice = match self.input.get(offset.saturating_sub(24)..offset) {
@@ -362,9 +487,8 @@ impl ZipEntry {
 
     fn parse_digest<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
-            let (_, signature_algorithm_id, digest_data_length) =
-                (le_u32, le_u32, le_u32).parse_next(input)?;
-            let digest = take(digest_data_length).parse_next(input)?;
+            let (_, signature_algorithm_id, digest) =
+                (le_u32, le_u32, length_take(le_u32)).parse_next(input)?;
 
             Ok((signature_algorithm_id, digest))
         }
@@ -372,8 +496,7 @@ impl ZipEntry {
 
     fn parse_certificates<'a>() -> impl Parser<&'a [u8], X509, ContextError> {
         move |input: &mut &'a [u8]| {
-            let certificate_length = le_u32.parse_next(input)?;
-            let certificate = take(certificate_length).parse_next(input)?;
+            let certificate = length_take(le_u32).parse_next(input)?;
 
             // TODO: remove unwrap block
             Ok(X509::from_der(certificate).unwrap())
@@ -393,11 +516,7 @@ impl ZipEntry {
         move |input: &mut &'a [u8]| {
             let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
             let value = take(attribute_length.saturating_sub(4)).parse_next(input)?;
-
-            // TODO: i really need to check that id is equal 0x3ba06f8c ?
             let _const_id = le_u32.parse_next(input)?;
-
-            // TODO: proof of rotation struct - just skip for now
 
             Ok((id, value))
         }
@@ -405,9 +524,8 @@ impl ZipEntry {
 
     fn parse_signatures<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
-            let (_signature_length, signature_algorithm_id, signature_data_length) =
-                (le_u32, le_u32, le_u32).parse_next(input)?;
-            let signature = take(signature_data_length).parse_next(input)?;
+            let (_signature_length, signature_algorithm_id, signature) =
+                (le_u32, le_u32, length_take(le_u32)).parse_next(input)?;
 
             Ok((signature_algorithm_id, signature))
         }
@@ -424,22 +542,20 @@ impl ZipEntry {
         let _signed_data_length = le_u32.parse_next(input)?;
 
         // parse digest
-        let digests_length = le_u32.parse_next(input)?;
-        let mut digest_bytes = take(digests_length).parse_next(input)?;
+        let mut digest_bytes = length_take(le_u32).parse_next(input)?;
         let _digests: Vec<(u32, &[u8])> =
             repeat(0.., Self::parse_digest()).parse_next(&mut digest_bytes)?;
 
         // parse certificates
-        let certificates_length = le_u32.parse_next(input)?;
-        let mut certificates_bytes = take(certificates_length).parse_next(input)?;
+        let mut certificates_bytes = length_take(le_u32).parse_next(input)?;
         let certificates: Vec<X509> =
             repeat(0.., Self::parse_certificates()).parse_next(&mut certificates_bytes)?;
 
         let (_min_sdk, _max_sdk) = (le_u32, le_u32).parse_next(input)?;
 
         // attributes
-        let attributes_length = le_u32.parse_next(input)?;
-        let mut attributes_bytes = take(attributes_length).parse_next(input)?;
+        let mut attributes_bytes = length_take(le_u32).parse_next(input)?;
+
         let _attributes: Vec<(u32, &[u8])> =
             repeat(0.., Self::parse_attributes_v3()).parse_next(&mut attributes_bytes)?;
 
@@ -447,21 +563,17 @@ impl ZipEntry {
         let (_duplicate_min_sdk, _duplicate_max_sdk) = (le_u32, le_u32).parse_next(input)?;
 
         // signatures
-        let signatures_length = le_u32.parse_next(input)?;
-        let mut signatures_bytes = take(signatures_length).parse_next(input)?;
+        let mut signatures_bytes = length_take(le_u32).parse_next(input)?;
         let _signatures: Vec<(u32, &[u8])> =
             repeat(0.., Self::parse_signatures()).parse_next(&mut signatures_bytes)?;
 
-        let public_key_length = le_u32.parse_next(input)?;
-        let _public_key = take(public_key_length).parse_next(input)?;
+        let _public_key = length_take(le_u32).parse_next(input)?;
 
         // filter certificates
-        let certificates = certificates
+        Ok(certificates
             .iter()
             .filter_map(|cert| self.get_certificate_info(cert).ok())
-            .collect();
-
-        Ok(certificates)
+            .collect())
     }
 
     fn parse_apk_signatures<'a>(&self) -> impl Parser<&'a [u8], Signature, ContextError> {
@@ -470,8 +582,9 @@ impl ZipEntry {
 
             match id {
                 Self::SIGNATURE_SCHEME_V2_BLOCK_ID => {
-                    let _signers_length = le_u32.parse_next(input)?;
                     // TODO: need parse several signers
+
+                    let _signers_length = le_u32.parse_next(input)?;
 
                     // parse signer
                     let _signer_length = le_u32.parse_next(input)?;
@@ -480,18 +593,15 @@ impl ZipEntry {
                     let _signed_data_length = le_u32.parse_next(input)?;
 
                     // parse digests
-                    let digests_length = le_u32.parse_next(input)?;
-                    let mut digest_bytes = take(digests_length).parse_next(input)?;
+                    let mut digest_bytes = length_take(le_u32).parse_next(input)?;
                     let _digests: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_digest()).parse_next(&mut digest_bytes)?;
 
-                    let certificates_length = le_u32.parse_next(input)?;
-                    let mut certificates_bytes = take(certificates_length).parse_next(input)?;
+                    let mut certificates_bytes = length_take(le_u32).parse_next(input)?;
                     let certificates: Vec<X509> = repeat(0.., Self::parse_certificates())
                         .parse_next(&mut certificates_bytes)?;
 
-                    let attributes_length = le_u32.parse_next(input)?;
-                    let mut attributes_bytes = take(attributes_length).parse_next(input)?;
+                    let mut attributes_bytes = length_take(le_u32).parse_next(input)?;
                     // often attributes is zero size
                     let _attributes: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_attributes()).parse_next(&mut attributes_bytes)?;
@@ -500,13 +610,11 @@ impl ZipEntry {
                     // not documented stuff, i can't figure out this from source code
                     let _ = le_u32.parse_next(input)?;
 
-                    let signatures_length = le_u32.parse_next(input)?;
-                    let mut signatures_bytes = take(signatures_length).parse_next(input)?;
+                    let mut signatures_bytes = length_take(le_u32).parse_next(input)?;
                     let _signatures: Vec<(u32, &[u8])> =
                         repeat(0.., Self::parse_signatures()).parse_next(&mut signatures_bytes)?;
 
-                    let public_key_length = le_u32.parse_next(input)?;
-                    let _public_key = take(public_key_length).parse_next(input)?.to_vec();
+                    let _public_key = length_take(le_u32).parse_next(input)?;
 
                     let certificates = certificates
                         .iter()
@@ -539,9 +647,7 @@ impl ZipEntry {
                     let certificate = Self::parse_certificates().parse_next(input)?;
 
                     // i don't think that it is usefull information
-                    let signed_data_sequence_length = le_u32.parse_next(input)?;
-                    let _signed_data =
-                        take(signed_data_sequence_length as usize).parse_next(input)?;
+                    let _signed_data = length_take(le_u32).parse_next(input)?;
 
                     // TODO: proper error message
                     let certificate = self
@@ -557,19 +663,13 @@ impl ZipEntry {
                     let certificate = Self::parse_certificates().parse_next(input)?;
 
                     // i don't think that it is usefull information
-                    let signed_digests_sequence_length = le_u32.parse_next(input)?;
-                    let _signed_digests_data =
-                        take(signed_digests_sequence_length as usize).parse_next(input)?;
+                    let _signed_digests_data = length_take(le_u32).parse_next(input)?;
 
                     // i don't think that it is usefull information
-                    let encoded_stamp_attributes_length = le_u32.parse_next(input)?;
-                    let _encoded_stamp_attributes =
-                        take(encoded_stamp_attributes_length as usize).parse_next(input)?;
+                    let _encoded_stamp_attributes = length_take(le_u32).parse_next(input)?;
 
                     // i don't think that it is usefull information
-                    let signed_attributes_length = le_u32.parse_next(input)?;
-                    let _signed_attributes =
-                        take(signed_attributes_length as usize).parse_next(input)?;
+                    let _signed_attributes = length_take(le_u32).parse_next(input)?;
 
                     // TODO: proper error message
                     let certificate = self
@@ -587,19 +687,23 @@ impl ZipEntry {
                 }
                 // some maybe usefull block that we don't parse yet
                 Self::GOOGLE_PLAY_FROSTING_ID => {
-                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     // maybe even remove this message, idk for now
                     debug!(
                         "got known id block - 0x{:08x} (size - 0x{:08x}), but don't know yet how to parse it",
                         id, size
                     );
 
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::Unknown)
                 }
                 _ => {
-                    warn!("got unknown id block - 0x{:08x} (0x{:08x})", id, size);
-                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
+                    // highlight new interesting blocks
+                    warn!(
+                        "got unknown id block - 0x{:08x} (0x{:08x}), please open issue on github",
+                        id, size
+                    );
 
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::Unknown)
                 }
             }

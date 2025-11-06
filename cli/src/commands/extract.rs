@@ -2,7 +2,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use apk_info_zip::entry::ZipEntry;
+use apk_info_zip::ZipEntry;
 use log::warn;
 
 use crate::commands::path_helpers::get_all_files;

@@ -111,33 +111,3 @@ pub enum SignatureAlgorithm {
     /// DSA with SHA2-256 digest
     DsaSha256 = 0x0301,
 }
-
-impl SignatureAlgorithm {
-    /// Parse from a numeric algorithm ID
-    pub fn from_id(id: u32) -> Option<Self> {
-        use SignatureAlgorithm::*;
-        Some(match id {
-            0x0101 => RsassaPssSha256,
-            0x0102 => RsassaPssSha512,
-            0x0103 => RsassaPkcs1v15Sha256,
-            0x0104 => RsassaPkcs1v15Sha512,
-            0x0201 => EcdsaSha256,
-            0x0202 => EcdsaSha512,
-            0x0301 => DsaSha256,
-            _ => return None,
-        })
-    }
-
-    /// Get a human-readable name for the algorithm
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::RsassaPssSha256 => "RSASSA-PSS (SHA2-256, MGF1-SHA256, salt=32)",
-            Self::RsassaPssSha512 => "RSASSA-PSS (SHA2-512, MGF1-SHA512, salt=64)",
-            Self::RsassaPkcs1v15Sha256 => "RSASSA-PKCS1-v1_5 (SHA2-256)",
-            Self::RsassaPkcs1v15Sha512 => "RSASSA-PKCS1-v1_5 (SHA2-512)",
-            Self::EcdsaSha256 => "ECDSA (SHA2-256)",
-            Self::EcdsaSha512 => "ECDSA (SHA2-512)",
-            Self::DsaSha256 => "DSA (SHA2-256)",
-        }
-    }
-}

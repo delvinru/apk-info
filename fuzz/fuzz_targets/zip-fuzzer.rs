@@ -1,6 +1,6 @@
 #![no_main]
 
-use apk_info_zip::entry::ZipEntry;
+use apk_info_zip::ZipEntry;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

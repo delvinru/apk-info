@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use apk_info::apk::Apk;
-use apk_info_zip::signature::{CertificateInfo, Signature};
+use apk_info_zip::{CertificateInfo, Signature};
 use colored::Colorize;
 
 use crate::commands::path_helpers::get_all_files;

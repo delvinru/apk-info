@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use ::apk_info::apk::Apk as ApkRust;
 use ::apk_info::models::{Receiver as ApkReceiver, Service as ApkService};
-use ::apk_info_zip::signature::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
+use ::apk_info_zip::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyString;

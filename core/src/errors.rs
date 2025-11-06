@@ -1,7 +1,7 @@
 use std::io;
 
 use apk_info_axml::{ARCSError, AXMLError};
-use apk_info_zip::errors::{CertificateError, ZipError};
+use apk_info_zip::{CertificateError, ZipError};
 use thiserror::Error;
 
 /// Just some different APK errors
