@@ -1,16 +1,22 @@
+use std::collections::HashMap;
+
 use log::{info, warn};
+use winnow::combinator::repeat;
+use winnow::prelude::*;
 
 use crate::ARCSError;
 use crate::structs::{
-    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceType, StringPool,
+    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceType,
+    ResourceValueType, StringPool,
 };
 
 pub struct ARSC {
     pub is_tampered: bool,
 
-    header: ResTableHeader,
-    string_pool: StringPool,
-    package: ResTablePackage,
+    global_string_pool: StringPool,
+
+    // HashMap< PackageID(u8), HashMap<TypeID(u8), HashMap<ResourceID(u8), HashMap<ResTableConfig, ResTableType > > > >
+    packages: HashMap<u8, ResTablePackage>,
 }
 
 impl ARSC {
@@ -20,8 +26,6 @@ impl ARSC {
         }
 
         let header = ResTableHeader::parse(input).map_err(|_| ARCSError::HeaderError)?;
-
-        info!("{:#?}", header);
 
         let mut is_tampered = false;
 
@@ -37,24 +41,55 @@ impl ARSC {
             );
         }
 
-        // TODO: parse based on package_count
-        let string_pool = StringPool::parse(input).map_err(|_| ARCSError::StringPoolError)?;
+        let global_string_pool =
+            StringPool::parse(input).map_err(|_| ARCSError::StringPoolError)?;
 
-        let package = ResTablePackage::parse(input).map_err(|_| ARCSError::ResourceTableError)?;
+        let table_packages: Vec<ResTablePackage> =
+            repeat(header.package_count as usize, ResTablePackage::parse)
+                .parse_next(input)
+                .map_err(|_| ARCSError::ResourceTableError)?;
+
+        // There is often a single package, so we do a little optimization (i think)
+        let packages = match table_packages.len() {
+            0 => HashMap::new(),
+            1 => {
+                let pkg = table_packages
+                    .into_iter()
+                    .next()
+                    .expect("is rust broken? one element must be");
+                HashMap::from([((pkg.header.id & 0xff) as u8, pkg)])
+            }
+            _ => {
+                let mut packages = HashMap::with_capacity(table_packages.len());
+                for pkg in table_packages {
+                    let id = (pkg.header.id & 0xff) as u8;
+                    if packages.contains_key(&id) {
+                        warn!(
+                            "malformed resource packages, duplicate package id - 0x{:02x}, skipped",
+                            id
+                        );
+                        continue;
+                    }
+
+                    packages.insert(id, pkg);
+                }
+                packages
+            }
+        };
 
         Ok(ARSC {
             is_tampered,
-            header,
-            string_pool,
-            package,
+            global_string_pool,
+            packages,
         })
     }
 
-    pub fn get_resource(&self, id: u32) {
+    pub fn get_resource(&self, id: u32) -> Option<String> {
         let config = ResTableConfig::default();
         let (package_id, type_id, entry_id) = self.split_resource_id(id);
 
-        let entry = self.package.get_entry(&config, type_id, entry_id).unwrap();
+        let package = self.packages.get(&package_id).unwrap();
+        let entry = package.get_entry(&config, type_id, entry_id).unwrap();
 
         match entry {
             ResTableEntry::Default(e) => {
@@ -62,11 +97,25 @@ impl ARSC {
                     "entry 0x{:08x} {:?} {:?}",
                     e.value.data,
                     e.value.data_type,
-                    e.value.to_string(&self.string_pool)
+                    e.value.to_string(&self.global_string_pool)
                 );
+
+                // TODO: check this and create resolver, infinite loop possible
+                match e.value.data_type {
+                    ResourceValueType::Reference => {
+                        return self.get_resource(e.value.data);
+                    }
+                    _ => {
+                        return Some(e.value.to_string(&self.global_string_pool));
+                    }
+                }
+            }
+            ResTableEntry::NoEntry => {
+                panic!("got no entry");
             }
             e => {
                 warn!("for now don't how to handle this: {:#?}", e);
+                return None;
             }
         }
     }

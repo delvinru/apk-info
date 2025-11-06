@@ -52,6 +52,8 @@ impl Apk {
                     APKError::InvalidInput("can't find resources.arsc, is it apk/xapk?")
                 })?;
 
+                // d5b7d025712f0f22562b3d511d7603f5c8a0c477675c6578083fa7709ca41ba8 - sample without resourcers, but in theory we can show information, need research
+                // 3474625e63d0893fc8f83034e835472d95195254e1e4bdf99153b7c74eb44d86 - same
                 let arsc =
                     ARSC::new(&mut &inner_resources_data[..]).map_err(APKError::ResourceError)?;
 
@@ -289,18 +291,16 @@ impl Apk {
     /// Extracts the `android:label` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#label>
-    pub fn get_application_label(&self) -> Option<&str> {
+    pub fn get_application_label(&self) -> Option<String> {
         // TODO: probably not so easy
         if let Some(label) = self.axml.get_attribute_value("application", "label") {
             if label.starts_with("@") {
                 let label = label.trim_start_matches("@");
                 let id = u32::from_str_radix(label, 16).unwrap();
 
-                self.arsc.get_resource(id);
-
-                return Some(label);
+                return self.arsc.get_resource(id);
             } else {
-                return Some(label);
+                return Some(label.to_owned());
             }
         }
 

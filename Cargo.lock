@@ -108,6 +108,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apk-info",
+ "apk-info-axml",
  "apk-info-zip",
  "clap",
  "env_logger",

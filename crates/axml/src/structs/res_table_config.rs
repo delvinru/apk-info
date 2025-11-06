@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::fmt::{Display, Write};
 use std::hash::Hash;
 
@@ -676,8 +677,10 @@ impl Display for Navigation {
 /// Describes a particular resource configuration
 ///
 /// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=967)
+///
+/// [Default values (maybe)](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/java/android/content/res/Configuration.java;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1;l=1572)
 #[repr(C)]
-#[derive(Debug, Default, Eq)]
+#[derive(Debug, Default, Eq, Clone, Copy)]
 pub(crate) struct ResTableConfig {
     /// Number of elements in this structure
     pub(crate) size: u32,
@@ -1383,6 +1386,38 @@ impl PartialEq for ResTableConfig {
             && self.locale_script_was_computed == other.locale_script_was_computed
             && self.locale_numbering_system == other.locale_numbering_system
             && self.end_padding == other.end_padding
+    }
+}
+
+impl PartialOrd for ResTableConfig {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ResTableConfig {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.imsi
+            .cmp(&other.imsi)
+            .then_with(|| self.locale.cmp(&other.locale))
+            .then_with(|| self.screen_type.cmp(&other.screen_type))
+            .then_with(|| self.generic_purpose_field.cmp(&other.generic_purpose_field))
+            .then_with(|| self.screen_size.cmp(&other.screen_size))
+            .then_with(|| self.version.cmp(&other.version))
+            .then_with(|| self.screen_config.cmp(&other.screen_config))
+            .then_with(|| self.screen_size_dp.cmp(&other.screen_size_dp))
+            .then_with(|| self.locale_script.cmp(&other.locale_script))
+            .then_with(|| self.locale_variant.cmp(&other.locale_variant))
+            .then_with(|| self.screen_config_2.cmp(&other.screen_config_2))
+            .then_with(|| {
+                self.locale_script_was_computed
+                    .cmp(&other.locale_script_was_computed)
+            })
+            .then_with(|| {
+                self.locale_numbering_system
+                    .cmp(&other.locale_numbering_system)
+            })
+            .then_with(|| self.end_padding.cmp(&other.end_padding))
     }
 }
 

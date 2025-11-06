@@ -381,7 +381,7 @@ impl Apk {
         self.apkrs.get_application_description()
     }
 
-    pub fn get_application_label(&self) -> Option<&str> {
+    pub fn get_application_label(&self) -> Option<String> {
         self.apkrs.get_application_label()
     }
 

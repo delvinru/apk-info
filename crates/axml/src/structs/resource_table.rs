@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
-use winnow::error::{ErrMode, StrContext, StrContextValue};
+use winnow::error::{ErrMode, Needed, StrContext, StrContextValue};
 use winnow::prelude::*;
+use winnow::stream::Stream;
 use winnow::token::take;
 
 use crate::structs::{
@@ -228,9 +229,6 @@ impl ResTableTypeSpec {
         )
             .parse_next(input)?;
 
-        // TODO: add validation that id is not 0
-        // https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=6987;
-
         let type_spec_flags = repeat(
             entry_count as usize,
             le_u32.map(ResTableConfigFlags::from_bits_truncate),
@@ -249,6 +247,7 @@ impl ResTableTypeSpec {
 }
 
 bitflags::bitflags! {
+    #[derive(Debug)]
     pub(crate) struct ResTableFlag: u16 {
         /// If set, this is a complex entry, holding a set of name/value mappings.
         const FLAG_COMPLEX = 0x0001;
@@ -387,12 +386,11 @@ impl ResTableEntry {
                 data: index,
             }))
         } else {
-            let value = ResourceValue::parse(input)?;
             Ok(ResTableEntry::Default(ResTableEntryDefault {
                 size,
                 flags,
                 index,
-                value,
+                value: ResourceValue::parse(input)?,
             }))
         }
     }
@@ -515,6 +513,14 @@ impl ResTableType {
             repeat(entry_count as usize, le_u32).parse_next(input)?
         };
 
+        // whatsapp is doing some kind of crap with offsets, so we need to make a slice on this particular piece of data
+        // da8963f347c26ede58c1087690f1af8ef308cd778c5aaf58094eeb57b6962b21
+        let entries_size = header.size.saturating_sub(entries_start) as usize;
+        let (entries_slice, rest) = input
+            .split_at_checked(entries_size)
+            .ok_or_else(|| ErrMode::Incomplete(Needed::Unknown))?;
+
+        *input = rest;
         let entries = entry_offsets
             .iter()
             .map(|&offset| {
@@ -527,7 +533,9 @@ impl ResTableType {
                 if is_no_entry {
                     Ok(ResTableEntry::NoEntry)
                 } else {
-                    ResTableEntry::parse(input)
+                    let mut slice = &entries_slice[offset as usize..];
+
+                    ResTableEntry::parse(&mut slice)
                 }
             })
             .collect::<ModalResult<_>>()?;
@@ -571,60 +579,277 @@ impl Hash for ResTableType {
     }
 }
 
+/// A shared library package-id to package name entry
+pub(crate) struct ResTableLibraryEntry {
+    /// The package-i this shared library was assigned at build time
+    ///
+    /// We use a uint32 to keep the structure aligned on a uint32 boundary
+    pub(crate) package_id: u32,
+
+    /// The package name of the shared library. \0 terminated
+    pub(crate) package_name: [u8; 256],
+}
+
+impl ResTableLibraryEntry {
+    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTableLibraryEntry> {
+        (le_u32, take(256usize))
+            .map(
+                |(package_id, package_name): (u32, &[u8])| ResTableLibraryEntry {
+                    package_id,
+                    package_name: package_name
+                        .try_into()
+                        .expect("expected 256 bytes for package_name"),
+                },
+            )
+            .parse_next(input)
+    }
+
+    /// Get a real package name from `package_name` slice
+    pub(crate) fn package_name(&self) -> String {
+        let utf16_str: Vec<u16> = self
+            .package_name
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .take_while(|&c| c != 0)
+            .collect();
+
+        String::from_utf16(&utf16_str).unwrap_or_default()
+    }
+}
+
+impl fmt::Debug for ResTableLibraryEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResTableLibraryEntry")
+            .field("package_id", &self.package_id)
+            .field("package_name", &self.package_name())
+            .finish()
+    }
+}
+
+/// A package-id to package name mapping for any shared libraries used in this resource table
+/// The package-ids' encoded in this resource table may be different than the id's assigned at runtime
+/// We must be able to translate the package-id's based on the package name
+///
+/// [Source code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1735;drc=61197364367c9e404c7da6900658f1b16c42d0da)
+#[derive(Debug)]
+pub(crate) struct ResTableLibrary {
+    pub(crate) header: ResChunkHeader,
+
+    /// The number of shared libraries linked in this resource table
+    pub(crate) count: u32,
+
+    pub(crate) entries: Vec<ResTableLibraryEntry>,
+}
+
+impl ResTableLibrary {
+    pub(crate) fn parse(header: ResChunkHeader, input: &mut &[u8]) -> ModalResult<ResTableLibrary> {
+        let count = le_u32.parse_next(input)?;
+        let entries = repeat(count as usize, ResTableLibraryEntry::parse).parse_next(input)?;
+
+        Ok(ResTableLibrary {
+            header,
+            count,
+            entries,
+        })
+    }
+}
+
+/// Specifies the set of resourcers that are explicitly allowd to be overlaid by RPOs
+pub(crate) struct ResTableOverlayble {
+    pub(crate) header: ResChunkHeader,
+
+    /// The name of the overlaybalbe set of resources that overlays target
+    pub(crate) name: [u8; 512],
+
+    /// The component responsible for enabling and disabling overlays targeting this chunk
+    pub(crate) actor: [u8; 512],
+}
+
+impl ResTableOverlayble {
+    pub(crate) fn parse(
+        header: ResChunkHeader,
+        input: &mut &[u8],
+    ) -> ModalResult<ResTableOverlayble> {
+        let (name, actor) = (take(512usize), take(512usize)).parse_next(input)?;
+
+        Ok(ResTableOverlayble {
+            header,
+            name: name
+                .try_into()
+                .expect("expected 512 bytes for overlayble name"),
+            actor: actor
+                .try_into()
+                .expect("expected 512 bytes for overlayble actor"),
+        })
+    }
+
+    /// Get a real package name from `name` slice
+    pub(crate) fn name(&self) -> String {
+        let utf16_str: Vec<u16> = self
+            .name
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .take_while(|&c| c != 0)
+            .collect();
+
+        String::from_utf16(&utf16_str).unwrap_or_default()
+    }
+
+    /// Get a real actor from `actor` slice
+    pub(crate) fn actor(&self) -> String {
+        let utf16_str: Vec<u16> = self
+            .actor
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .take_while(|&c| c != 0)
+            .collect();
+
+        String::from_utf16(&utf16_str).unwrap_or_default()
+    }
+}
+
+impl fmt::Debug for ResTableOverlayble {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResTableOverlayble")
+            .field("name", &self.name())
+            .field("actor", &self.actor())
+            .finish()
+    }
+}
+
+bitflags::bitflags! {
+    /// Flags for all possible overlayable policy options.
+    ///
+    /// Any changes to this set should also update
+    /// `aidl/android/os/OverlayablePolicy.aidl`.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct PolicyFlags: u32 {
+        /// No flags set.
+        const NONE              = 0x0000_0000;
+        /// Any overlay can overlay these resources.
+        const PUBLIC            = 0x0000_0001;
+        /// The overlay must reside on or have existed on the system partition before an upgrade.
+        const SYSTEM_PARTITION  = 0x0000_0002;
+        /// The overlay must reside on or have existed on the vendor partition before an upgrade.
+        const VENDOR_PARTITION  = 0x0000_0004;
+        /// The overlay must reside on or have existed on the product partition before an upgrade.
+        const PRODUCT_PARTITION = 0x0000_0008;
+        /// The overlay must be signed with the same signature as the package containing the target resource.
+        const SIGNATURE         = 0x0000_0010;
+        /// The overlay must reside on or have existed on the odm partition before an upgrade.
+        const ODM_PARTITION     = 0x0000_0020;
+        /// The overlay must reside on or have existed on the oem partition before an upgrade.
+        const OEM_PARTITION     = 0x0000_0040;
+        /// The overlay must be signed with the same signature as the actor declared for the target resource.
+        const ACTOR_SIGNATURE   = 0x0000_0080;
+        /// The overlay must be signed with the same signature as the reference package declared in the SystemConfig.
+        const CONFIG_SIGNATURE  = 0x0000_0100;
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ResTableOverlayblePolicy {
+    pub(crate) header: ResChunkHeader,
+
+    pub(crate) policy_flags: PolicyFlags,
+
+    /// The number of ResTable_ref that follow this header
+    pub(crate) entry_count: u32,
+
+    pub(crate) entries: Vec<u32>,
+}
+
+impl ResTableOverlayblePolicy {
+    pub(crate) fn parse(
+        header: ResChunkHeader,
+        input: &mut &[u8],
+    ) -> ModalResult<ResTableOverlayblePolicy> {
+        let (policy_flags, entry_count) = (le_u32, le_u32).parse_next(input)?;
+
+        let entries = repeat(entry_count as usize, le_u32).parse_next(input)?;
+
+        Ok(ResTableOverlayblePolicy {
+            header,
+            policy_flags: PolicyFlags::from_bits_truncate(policy_flags),
+            entry_count,
+            entries,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ResTablePackage {
     pub(crate) header: ResTablePackageHeader,
     pub(crate) type_strings: StringPool,
     pub(crate) key_strings: StringPool,
 
-    pub(crate) resources: HashMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
+    // requires fastloop by resource id => resource
+    // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
+    pub(crate) resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
 }
 
 impl ResTablePackage {
     pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTablePackage> {
-        let package_header = ResTablePackageHeader::parse(input)?;
+        let (package_header, type_strings, key_strings) = (
+            ResTablePackageHeader::parse,
+            StringPool::parse,
+            StringPool::parse,
+        )
+            .parse_next(input)?;
 
-        let type_strings = StringPool::parse(input)?;
-        let key_strings = StringPool::parse(input)?;
-
-        // requires fastloop by resource id => resource
-        // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
-
-        // HashMap<package_id, HashMap<Config, HashMap<type_id, HashMap<entry_id, Entries>>>>
-        let mut resources: HashMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>> =
-            HashMap::with_capacity(32);
+        let mut resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>> =
+            BTreeMap::new();
 
         loop {
+            // save position before parsing header
+            // requires for restoring position
+            let checkpoint = input.checkpoint();
+
             let header = match ResChunkHeader::parse(input) {
-                Ok(v) => v,
-                Err(ErrMode::Backtrack(_)) => {
-                    return Ok(ResTablePackage {
-                        header: package_header,
-                        type_strings,
-                        key_strings,
-                        resources,
-                    });
+                // got other package, need return
+                Ok(v) if v.type_ == ResourceType::TablePackage => {
+                    input.reset(&checkpoint);
+                    break;
                 }
+                Ok(v) => v,
+                Err(ErrMode::Backtrack(_)) => break,
                 Err(e) => return Err(e),
             };
 
             match header.type_ {
+                ResourceType::TableTypeSpec => {
+                    // idk what should i do with this value
+                    let _ = ResTableTypeSpec::parse(header, input)?;
+                }
                 ResourceType::TableType => {
                     let type_type = ResTableType::parse(header, input)?;
 
-                    let config_entry = resources.entry(type_type.config).or_default();
-                    let type_entry = config_entry.entry(type_type.id).or_default();
-
-                    type_entry.extend(type_type.entries);
+                    resources
+                        .entry(type_type.config)
+                        .or_default()
+                        .entry(type_type.id)
+                        .or_insert_with(|| type_type.entries);
                 }
-                ResourceType::TableTypeSpec => {
-                    let type_spec = ResTableTypeSpec::parse(header, input)?;
+                ResourceType::TableLibrary => {
+                    // idk what should i do with this value
+                    let _ = ResTableLibrary::parse(header, input)?;
                 }
-                _ => {
-                    warn!("got unknown header: {:?}", header);
+                ResourceType::TableOverlayable => {
+                    let _ = ResTableOverlayble::parse(header, input)?;
                 }
+                ResourceType::TableOverlayablePolicy => {
+                    let _ = ResTableOverlayblePolicy::parse(header, input)?;
+                }
+                _ => warn!("got unknown header: {:?}", header),
             }
         }
+
+        Ok(ResTablePackage {
+            header: package_header,
+            type_strings,
+            key_strings,
+            resources,
+        })
     }
 
     /// Generate Resource Id based on algorithm from AOSP
@@ -635,49 +860,94 @@ impl ResTablePackage {
         name_id | (type_id << 16) | (package_id << 24)
     }
 
+    // interesting sample - 197f49dec3aacc2855d08ee5ee2ae5635885b0163ecb50d2e21b68de59eb336a - need somehow fallback config or something
     pub(crate) fn get_entry(
         &self,
         config: &ResTableConfig,
         type_id: u8,
         entry_id: u16,
     ) -> Option<&ResTableEntry> {
-        let found_config = self.resources.get(&config).unwrap();
-        let found_type = found_config.get(&type_id).unwrap();
+        fn log_entry(
+            res_id: u32,
+            type_id: u8,
+            entry: &ResTableEntry,
+            key_strings: &StringPool,
+            type_strings: &StringPool,
+        ) {
+            match entry {
+                ResTableEntry::Compact(e) => {
+                    if let Some(key) = key_strings.get(e.data) {
+                        info!("resource (compact) 0x{:08x} \"{}\"", res_id, key);
+                    }
+                }
+                ResTableEntry::Complex(e) => {
+                    if let Some(key) = key_strings.get(e.index) {
+                        info!("resource (complex) 0x{:08x} \"{}\"", res_id, key);
+                    }
+                }
+                ResTableEntry::Default(e) => {
+                    let unknown = "unknown".to_owned();
+                    let type_name = type_strings
+                        .get(type_id.saturating_sub(1) as u32)
+                        .unwrap_or(&unknown);
 
-        for (idx, entry) in found_type.iter().enumerate() {
-            if (idx as u16) == entry_id {
-                match &entry {
-                    ResTableEntry::Compact(e) => {
-                        info!(
-                            "resource (compact) 0x{:08x} \"{}\"",
-                            Self::generate_res_id(self.header.id, type_id as u32, idx as u32,),
-                            self.key_strings.get(e.data).unwrap_or(&String::new()),
-                        )
-                    }
-                    ResTableEntry::Complex(e) => {
-                        info!(
-                            "resource (complex) 0x{:08x} \"{}\"",
-                            Self::generate_res_id(self.header.id, type_id as u32, idx as u32,),
-                            self.key_strings.get(e.index).unwrap_or(&String::new()),
-                        )
-                    }
-                    ResTableEntry::Default(e) => {
+                    if let Some(key) = key_strings.get(e.index) {
                         info!(
                             "type ({}) resource (default) 0x{:08x} \"{}\"",
-                            self.type_strings
-                                .get(type_id.saturating_sub(1) as u32)
-                                .unwrap_or(&String::new()),
-                            Self::generate_res_id(self.header.id, type_id as u32, idx as u32,),
-                            self.key_strings.get(e.index).unwrap_or(&String::new()),
+                            type_name, res_id, key
                         );
                     }
-                    ResTableEntry::NoEntry => continue,
                 }
-
-                return Some(entry);
+                ResTableEntry::NoEntry => {
+                    info!("resource (noentry) 0x{:08x}", res_id);
+                }
             }
         }
 
+        if let Some(type_map) = self.resources.get(config) {
+            if let Some(entries) = type_map.get(&type_id) {
+                if let Some(entry) = entries.get(entry_id as usize) {
+                    if !matches!(entry, ResTableEntry::NoEntry) {
+                        let res_id =
+                            Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
+                        log_entry(
+                            res_id,
+                            type_id,
+                            entry,
+                            &self.key_strings,
+                            &self.type_strings,
+                        );
+                        return Some(entry);
+                    }
+                }
+            }
+        }
+
+        for (other_config, type_map) in &self.resources {
+            // skip original config
+            if other_config == config {
+                continue;
+            }
+
+            if let Some(entries) = type_map.get(&type_id) {
+                if let Some(entry) = entries.get(entry_id as usize) {
+                    if !matches!(entry, ResTableEntry::NoEntry) {
+                        let res_id =
+                            Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
+                        log_entry(
+                            res_id,
+                            type_id,
+                            entry,
+                            &self.key_strings,
+                            &self.type_strings,
+                        );
+                        return Some(entry);
+                    }
+                }
+            }
+        }
+
+        // can't find anything
         None
     }
 }

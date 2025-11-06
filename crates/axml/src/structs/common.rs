@@ -113,7 +113,7 @@ impl ResChunkHeader {
 }
 
 /// Type of the data value
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum ResourceValueType {
     /// The `data` is either 0 or 1, specifying this resource is either undefined or empty, respectively.
@@ -185,7 +185,7 @@ impl From<u8> for ResourceValueType {
 }
 
 /// Representation of a value in a resource, supplying type information
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct ResourceValue {
     /// Number of bytes in this structure
     pub(crate) size: u16,

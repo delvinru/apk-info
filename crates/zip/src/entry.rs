@@ -510,7 +510,7 @@ impl ZipEntry {
                     let _ = take(size.saturating_sub(4)).parse_next(input)?;
                     // maybe even remove this message, idk for now
                     debug!(
-                        "got known id block - 0x{:08x} (size - 0x{:08x}), don't know yet how to parse it",
+                        "got known id block - 0x{:08x} (size - 0x{:08x}), but don't know yet how to parse it",
                         id, size
                     );
                     Ok(Signature::Unknown)

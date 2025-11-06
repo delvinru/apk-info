@@ -8,6 +8,7 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+apk-info-axml.workspace = true
 apk-info-zip.workspace = true
 apk-info.workspace = true
 clap.workspace = true

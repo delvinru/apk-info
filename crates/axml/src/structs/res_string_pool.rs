@@ -33,16 +33,15 @@ impl ResStringPoolHeader {
     pub fn parse(input: &mut &[u8]) -> ModalResult<ResStringPoolHeader> {
         let mut header = ResChunkHeader::parse(input)?;
 
-        info!("header {:#?}", header);
-
-        // what kind of shit is ARSCLib doing and why? 791c3ed2d1cd986da043bb1b655098d2b7a0b99450440d756bc898f84a88fe3b
+        // TODO: research all APKEditor shenanigans with confuser stuff and highlight it
+        // The shitty APKEditor confuser that is used for malware purposes, fuck it
+        // https://github.com/REAndroid/APKEditor/blob/master/src/main/java/com/reandroid/apkeditor/protect/TableConfuser.java#L41
+        // 791c3ed2d1cd986da043bb1b655098d2b7a0b99450440d756bc898f84a88fe3b
+        // 131135a7c911bd45db8801ca336fc051246280c90ae5dafc33e68499d8514761
         if header.type_ != ResourceType::StringPool {
             let garbage_bytes = header.size.saturating_sub(ResChunkHeader::size_of() as u32);
             let _ = take(garbage_bytes as usize).parse_next(input)?;
-            warn!(
-                "expected string pool header, but got garbage, skipped {} bytes",
-                garbage_bytes
-            );
+            warn!("malformed string pool, skipped {} bytes", garbage_bytes);
 
             header = ResChunkHeader::parse(input)?;
         }
@@ -91,8 +90,6 @@ pub(crate) struct StringPool {
 impl StringPool {
     pub fn parse(input: &mut &[u8]) -> ModalResult<StringPool> {
         let mut string_header = ResStringPoolHeader::parse(input)?;
-
-        info!("{:#?}", string_header);
 
         let mut invalid_string_count = false;
         let calculated_string_count = string_header.strings_start.saturating_sub(
@@ -193,7 +190,7 @@ impl StringPool {
 
             Ok(Self::read_utf16(content, real_len))
         } else {
-            // utf-8
+            // utf-8 strings contains two lengths, as they might differ
             let (length1, length2) = (le_u8, le_u8).parse_next(input)?;
 
             let real_length = if length1 & 0x80 != 0 {
@@ -203,7 +200,7 @@ impl StringPool {
 
                 length as u32
             } else {
-                length1 as u32
+                length2 as u32
             };
 
             let content = take(real_length).parse_next(input)?;

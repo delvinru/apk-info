@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::commands::{command_arsc, command_extract, command_show};
+use crate::commands::{command_arsc, command_axml, command_extract, command_show};
 
 mod commands;
 
@@ -41,6 +41,11 @@ enum Commands {
         #[arg(required = true)]
         path: PathBuf,
     },
+    /// Read binary `AndroidManifest.xml` and pretty print
+    Axml {
+        #[arg(required = true)]
+        path: PathBuf,
+    },
 }
 
 fn main() {
@@ -52,6 +57,7 @@ fn main() {
         Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
         Some(Commands::Extract { paths, output }) => command_extract(paths, output),
         Some(Commands::Arsc { path }) => command_arsc(path),
+        Some(Commands::Axml { path }) => command_axml(path),
         None => Ok(()),
     };
 
