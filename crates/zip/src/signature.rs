@@ -37,6 +37,20 @@ pub enum Signature {
     Unknown,
 }
 
+impl Signature {
+    pub fn name(&self) -> String {
+        match &self {
+            Signature::V1(_) => "v1".to_owned(),
+            Signature::V2(_) => "v2".to_owned(),
+            Signature::V3(_) => "v3".to_owned(),
+            Signature::V31(_) => "v3.1".to_owned(),
+            Signature::V4 => "v4".to_owned(),
+            Signature::ApkChannelBlock(_) => "APK Channel block".to_owned(),
+            Signature::Unknown => "unknown".to_owned(),
+        }
+    }
+}
+
 /// Represents detailed information about an APK signing certificate.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct CertificateInfo {

@@ -225,6 +225,11 @@ impl AXML {
             .and_then(|v| SYSTEM_TYPES.get_attribute_name(v))
     }
 
+    // TODO: made pretty output
+    pub fn get_xml_string(&self) -> String {
+        String::from(&self.root)
+    }
+
     #[inline]
     pub fn get_attribute_value(&self, tag: &str, name: &str) -> Option<&str> {
         if self.root.name() == tag {

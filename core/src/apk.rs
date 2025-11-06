@@ -20,9 +20,9 @@ const PROTO_RESOURCE_TABLE_PATH: &str = "resources.pb";
 
 /// Main structure that represents APK file
 pub struct Apk {
-    zip: ZipEntry,
-    axml: AXML,
-    arsc: ARSC,
+    pub zip: ZipEntry,
+    pub axml: AXML,
+    pub arsc: ARSC,
 }
 
 /// Implementation of internal methods
@@ -433,15 +433,17 @@ impl Apk {
     ///
     /// Combines results from multiple signature blocks within the APK file.
     pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
-        // TODO: need somehow also detect xapk files
-        let mut signatures = self
-            .zip
-            .get_signatures_other()
-            .map_err(APKError::CertificateError)?;
-
+        let mut signatures = Vec::new();
         if let Ok(v1_sig) = self.zip.get_signature_v1() {
             signatures.push(v1_sig);
         }
+
+        // TODO: need somehow also detect xapk files
+        signatures.extend(
+            self.zip
+                .get_signatures_other()
+                .map_err(APKError::CertificateError)?,
+        );
 
         Ok(signatures)
     }

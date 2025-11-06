@@ -3,45 +3,38 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use apk_info_zip::entry::ZipEntry;
-use walkdir::WalkDir;
+use log::warn;
+
+use crate::commands::path_helpers::get_all_files;
 
 pub(crate) fn command_extract(paths: &[PathBuf], output: &Option<PathBuf>) -> Result<()> {
-    let mut all_files = Vec::new();
-    for path in paths {
-        if path.is_dir() {
-            for entry in WalkDir::new(path)
-                .into_iter()
-                .filter_map(Result::ok)
-                .filter(|e| e.path().is_file())
-                .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("apk"))
-            {
-                all_files.push(entry.path().to_path_buf());
-            }
-        } else if path.is_file() {
-            all_files.push(path.clone());
-        }
-    }
+    let all_files: Vec<PathBuf> = get_all_files(paths, &["apk", "zip", "jar"]).collect();
 
     let multiple_files = all_files.len() > 1;
 
-    for path in all_files {
-        let out_dir = if let Some(out) = output {
-            if multiple_files {
-                let mut sub = out.clone();
-                let name = path
-                    .file_name()
-                    .map(|n| {
-                        let mut s = n.to_os_string();
-                        s.push(".unp");
-                        s
-                    })
-                    .unwrap_or_else(|| "unknown.unp".into());
-                sub.push(name);
-                sub
-            } else {
-                out.clone()
-            }
-        } else {
+    all_files.into_iter().try_for_each(|path| {
+        let out_dir = make_output_dir(&path, output, multiple_files);
+        extract(&path, &out_dir)
+    })
+}
+
+fn make_output_dir(path: &PathBuf, output: &Option<PathBuf>, multiple: bool) -> PathBuf {
+    match output {
+        Some(out) if multiple => {
+            let mut sub = out.clone();
+            let name = path
+                .file_name()
+                .map(|n| {
+                    let mut s = n.to_os_string();
+                    s.push(".unp");
+                    s
+                })
+                .unwrap_or_else(|| "unknown.unp".into());
+            sub.push(name);
+            sub
+        }
+        Some(out) => out.clone(),
+        None => {
             let mut d = path.clone();
             let new_name = d
                 .file_name()
@@ -53,12 +46,8 @@ pub(crate) fn command_extract(paths: &[PathBuf], output: &Option<PathBuf>) -> Re
                 .unwrap_or_else(|| "output.unp".into());
             d.set_file_name(new_name);
             d
-        };
-
-        extract(&path, &out_dir)?;
+        }
     }
-
-    Ok(())
 }
 
 fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
@@ -74,7 +63,7 @@ fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
         }
 
         if file_name.starts_with("..") {
-            // TODO: show warning about path traversal
+            warn!("attempt to path traversal: {:?}", file_name);
             continue;
         }
 

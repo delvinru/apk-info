@@ -1,6 +1,6 @@
 [package]
 name = "apk-info-cli"
-description = "A command-line tool to get information from apk"
+description = "A command-line tool to get information from the apk files"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,6 +12,7 @@ apk-info-axml.workspace = true
 apk-info-zip.workspace = true
 apk-info.workspace = true
 clap.workspace = true
+colored.workspace = true
 env_logger.workspace = true
 log.workspace = true
 walkdir.workspace = true

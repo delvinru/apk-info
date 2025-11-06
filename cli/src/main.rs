@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::commands::{command_arsc, command_axml, command_extract, command_show};
+use crate::commands::{command_axml, command_extract, command_show};
 
 mod commands;
 
@@ -17,32 +17,33 @@ struct Cli {
 enum Commands {
     /// Show basic information about apk file
     Show {
+        /// One or more paths to APK files to inspect
         #[arg(required = true)]
         paths: Vec<PathBuf>,
 
+        /// Show information about signatures
         #[arg(
             short,
             long,
             default_value_t = false,
-            help = "show information about signatures"
+            help = "Show information about signatures"
         )]
         sigs: bool,
     },
     /// Unpack apk files as zip archive
+    #[command(visible_alias = "x")]
     Extract {
+        /// One or more paths to APK files to extract
         #[arg(required = true)]
         paths: Vec<PathBuf>,
 
-        #[arg(short, long, help = "Output folder")]
+        /// Output folder (default: <filename>.unp)
+        #[arg(short, long)]
         output: Option<PathBuf>,
     },
-    /// Extract and parse arsc information from given file
-    Arsc {
-        #[arg(required = true)]
-        path: PathBuf,
-    },
-    /// Read binary `AndroidManifest.xml` and pretty print
+    /// Read and pretty-print binary AndroidManifest.xml
     Axml {
+        /// Path to the AndroidManifest.xml file or APK containing it
         #[arg(required = true)]
         path: PathBuf,
     },
@@ -56,7 +57,6 @@ fn main() {
     let result = match &cli.commands {
         Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
         Some(Commands::Extract { paths, output }) => command_extract(paths, output),
-        Some(Commands::Arsc { path }) => command_arsc(path),
         Some(Commands::Axml { path }) => command_axml(path),
         None => Ok(()),
     };
