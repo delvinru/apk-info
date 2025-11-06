@@ -3,7 +3,7 @@ use std::fmt::{Display, Write};
 use std::hash::Hash;
 
 use bitflags::bitflags;
-use log::{error, info, warn};
+use log::warn;
 use winnow::binary::{le_u32, u8};
 use winnow::prelude::*;
 use winnow::token::take;

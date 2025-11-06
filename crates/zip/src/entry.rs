@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use flate2::{Decompress, FlushDecompress, Status};
-use log::{debug, info, warn};
+use log::{debug, warn};
 use openssl::hash::MessageDigest;
 use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
 use openssl::stack::Stack;
@@ -184,10 +184,15 @@ impl ZipEntry {
     const DEPENDENCY_INFO_BLOCK_ID: u32 = 0x504b4453;
 
     /// Used to track channels of distribution for an APK, mostly Chinese APKs have this
+    ///
+    /// Alsow known as `MEITAN_APK_CHANNEL_BLOCK`
     const APK_CHANNEL_BLOCK: u32 = 0x71777777;
 
     /// Google Play Frosting ID
     const GOOGLE_PLAY_FROSTING_ID: u32 = 0x2146444e;
+
+    /// Always zero block
+    const ZERO_BLOCK_ID: u32 = 0xff3b5998;
 
     fn get_certificate_info(
         &self,
@@ -501,18 +506,68 @@ impl ZipEntry {
                         String::from_utf8_lossy(data).to_string(),
                     ))
                 }
+                Self::V1_SOURCE_STAMP_BLOCK_ID => {
+                    // https://cs.android.com/android/platform/superproject/main/+/main:tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/V1SourceStampSigner.java;l=86;bpv=0;bpt=1
+                    let _stamp_block_prefix = le_u32.parse_next(input)?;
+
+                    let certificate = Self::parse_certificates().parse_next(input)?;
+
+                    // i don't think that it is usefull information
+                    let signed_data_sequence_length = le_u32.parse_next(input)?;
+                    let _signed_data =
+                        take(signed_data_sequence_length as usize).parse_next(input)?;
+
+                    // TODO: proper error message
+                    let certificate = self
+                        .get_certificate_info(&certificate)
+                        .map_err(|_| ContextError::new())?;
+
+                    Ok(Signature::StampBlockV1(certificate))
+                }
+                Self::V2_SOURCE_STAMP_BLOCK_ID => {
+                    // https://cs.android.com/android/platform/superproject/main/+/main:tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/V2SourceStampSigner.java;l=124;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1
+
+                    let _stamp_block_prefix = le_u32.parse_next(input)?;
+                    let certificate = Self::parse_certificates().parse_next(input)?;
+
+                    // i don't think that it is usefull information
+                    let signed_digests_sequence_length = le_u32.parse_next(input)?;
+                    let _signed_digests_data =
+                        take(signed_digests_sequence_length as usize).parse_next(input)?;
+
+                    // i don't think that it is usefull information
+                    let encoded_stamp_attributes_length = le_u32.parse_next(input)?;
+                    let _encoded_stamp_attributes =
+                        take(encoded_stamp_attributes_length as usize).parse_next(input)?;
+
+                    // i don't think that it is usefull information
+                    let signed_attributes_length = le_u32.parse_next(input)?;
+                    let _signed_attributes =
+                        take(signed_attributes_length as usize).parse_next(input)?;
+
+                    // TODO: proper error message
+                    let certificate = self
+                        .get_certificate_info(&certificate)
+                        .map_err(|_| ContextError::new())?;
+
+                    Ok(Signature::StampBlockV2(certificate))
+                }
+                Self::VERITY_PADDING_BLOCK_ID
+                | Self::DEPENDENCY_INFO_BLOCK_ID
+                | Self::ZERO_BLOCK_ID => {
+                    // not interesting blocks
+                    let _ = take(size.saturating_sub(4)).parse_next(input)?;
+                    Ok(Signature::Unknown)
+                }
                 // some maybe usefull block that we don't parse yet
-                Self::DEPENDENCY_INFO_BLOCK_ID
-                | Self::GOOGLE_PLAY_FROSTING_ID
-                | Self::V1_SOURCE_STAMP_BLOCK_ID
-                | Self::V2_SOURCE_STAMP_BLOCK_ID
-                | Self::VERITY_PADDING_BLOCK_ID => {
+                Self::GOOGLE_PLAY_FROSTING_ID => {
                     let _ = take(size.saturating_sub(4)).parse_next(input)?;
                     // maybe even remove this message, idk for now
                     debug!(
                         "got known id block - 0x{:08x} (size - 0x{:08x}), but don't know yet how to parse it",
                         id, size
                     );
+
                     Ok(Signature::Unknown)
                 }
                 _ => {

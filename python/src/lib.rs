@@ -78,6 +78,8 @@ enum Signature {
     V2 { certificates: Vec<CertificateInfo> },
     V3 { certificates: Vec<CertificateInfo> },
     V31 { certificates: Vec<CertificateInfo> },
+    StampBlockV1 { certificate: CertificateInfo },
+    StampBlockV2 { certificate: CertificateInfo },
     ApkChannelBlock { value: String },
 }
 
@@ -104,6 +106,16 @@ impl Signature {
             }
             .into_pyobject(py)
             .ok(),
+            ZipSignature::StampBlockV1(v) => Signature::StampBlockV1 {
+                certificate: v.into(),
+            }
+            .into_pyobject(py)
+            .ok(),
+            ZipSignature::StampBlockV2(v) => Signature::StampBlockV2 {
+                certificate: v.into(),
+            }
+            .into_pyobject(py)
+            .ok(),
             ZipSignature::ApkChannelBlock(v) => Signature::ApkChannelBlock { value: v }
                 .into_pyobject(py)
                 .ok(),
@@ -127,6 +139,12 @@ impl Signature {
             }
             Signature::V31 { certificates } => {
                 format!("Signature.V31(certificates={:?})", certificates)
+            }
+            Signature::StampBlockV1 { certificate } => {
+                format!("Signature.StampBlockV1(certificate={:?})", certificate)
+            }
+            Signature::StampBlockV2 { certificate } => {
+                format!("Signature.StampBlockV2(certificate={:?})", certificate)
             }
             Signature::ApkChannelBlock { value } => {
                 format!("Signature.ApkChannelBlock(channel='{}')", value)

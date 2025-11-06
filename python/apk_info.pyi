@@ -413,12 +413,44 @@ class Signature:
     @dataclass(frozen=True)
     class ApkChannelBlock:
         """
-        Some usefull informatino from apk channel block
+        Some usefull information from apk channel block
         """
 
         value: str
 
-SignatureType = Signature.V1 | Signature.V2 | Signature.V3 | Signature.V31 | Signature.ApkChannelBlock
+    @dataclass(frozen=True)
+    class StampBlockV1:
+        """
+        SourceStamp improves traceability of apps with respect to unauthorized distribution
+
+        The stamp is part of the APK that is protected by the signing block
+
+        See: <https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75>
+        """
+
+        certificate: CertificateInfo
+
+    @dataclass(frozen=True)
+    class StampBlockV2:
+        """
+        SourceStamp improves traceability of apps with respect to unauthorized distribution
+
+        The stamp is part of the APK that is protected by the signing block
+
+        See: <https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75>
+        """
+
+        certificate: CertificateInfo
+
+SignatureType = (
+    Signature.V1
+    | Signature.V2
+    | Signature.V3
+    | Signature.V31
+    | Signature.ApkChannelBlock
+    | Signature.StampBlockV1
+    | Signature.StampBlockV2
+)
 """
 Represents all available signatures
 """

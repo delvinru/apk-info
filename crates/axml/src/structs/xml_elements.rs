@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use log::{debug, info, warn};
 use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::combinator::repeat;

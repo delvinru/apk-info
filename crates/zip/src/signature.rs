@@ -33,6 +33,9 @@ pub enum Signature {
     /// Some usefull information from apk channel block
     ApkChannelBlock(String),
 
+    StampBlockV1(CertificateInfo),
+    StampBlockV2(CertificateInfo),
+
     /// Got something that we don't know
     Unknown,
 }
@@ -46,6 +49,8 @@ impl Signature {
             Signature::V31(_) => "v3.1".to_owned(),
             Signature::V4 => "v4".to_owned(),
             Signature::ApkChannelBlock(_) => "APK Channel block".to_owned(),
+            Signature::StampBlockV1(_) => "Stamp Block v1".to_owned(),
+            Signature::StampBlockV2(_) => "Stamp Block v2".to_owned(),
             Signature::Unknown => "unknown".to_owned(),
         }
     }

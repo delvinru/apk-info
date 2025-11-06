@@ -82,6 +82,10 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
                         }
                     }
                 }
+                Signature::StampBlockV1(certificate) | Signature::StampBlockV2(certificate) => {
+                    println!("  {}: {}", "Type", signature.name().green());
+                    print_certificate(certificate);
+                }
                 Signature::ApkChannelBlock(channel) => {
                     println!("  {}: {}", signature.name(), channel.green());
                 }
