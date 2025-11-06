@@ -10,7 +10,6 @@ const-hex.workspace = true
 flate2.workspace = true
 log.workspace = true
 memchr.workspace = true
-openssl-sys.workspace = true
 openssl.workspace = true
 thiserror.workspace = true
 winnow.workspace = true

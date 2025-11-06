@@ -7,23 +7,20 @@
     fenix.url = "github:nix-community/fenix";
   };
 
-  outputs =
-    {
-      nixpkgs,
-      flake-utils,
-      fenix,
-      ...
-    }:
+  outputs = {
+    nixpkgs,
+    flake-utils,
+    fenix,
+    ...
+  }:
     flake-utils.lib.eachDefaultSystem (
-      system:
-      let
+      system: let
         pkgs = import nixpkgs {
           inherit system;
         };
         manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
         fenix-pkgs = fenix.packages.${system};
-        toolchain =
-          with fenix-pkgs;
+        toolchain = with fenix-pkgs;
           combine [
             (latest.withComponents [
               "cargo"
@@ -33,11 +30,11 @@
               "rustfmt"
             ])
           ];
-      in
-      {
+      in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             cargo-fuzz
+            cargo-udeps
             maturin
             openssl
             pkg-config

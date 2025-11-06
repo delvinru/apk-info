@@ -4,11 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-anyhow.workspace = true
 apk-info-axml.workspace = true
 apk-info-zip.workspace = true
-env_logger.workspace = true
-pyo3.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

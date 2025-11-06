@@ -1,4 +1,4 @@
-use log::{debug, warn};
+use log::{debug, info, warn};
 use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::prelude::*;
@@ -198,7 +198,8 @@ impl XmlElement for XmlStartElement {
         let tampered_attribute_size =
             attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE);
         if tampered_attribute_size != 0 {
-            warn!("skip tampered attribute size: {}", attribute_start);
+            info!("skip tampered attribute size: {}", attribute_start);
+
             take(attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE))
                 .parse_next(input)?;
         }
