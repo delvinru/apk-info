@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::hash::Hash;
 
-use log::{debug, error, info, warn};
+use log::{info, warn};
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed, StrContext, StrContextValue};
@@ -13,16 +13,6 @@ use winnow::token::take;
 use crate::structs::{
     ResChunkHeader, ResTableConfig, ResTableConfigFlags, ResourceType, ResourceValue, StringPool,
 };
-
-// TODO: maybe add as type definition, idk
-// https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/tools/aapt/ResourceTable.cpp;l=1769;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1
-// pub(crate) enum PackageType {
-//     App = 0x7f,
-//     System = 0x01,
-//     SharedLibrary = 0x00,
-
-//     Unknown(u32),
-// }
 
 /// Header for a resource table
 ///

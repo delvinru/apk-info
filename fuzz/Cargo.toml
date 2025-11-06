@@ -19,6 +19,12 @@ test = false
 doc = false
 
 [[bin]]
+name = "arsc-fuzzer"
+path = "fuzz_targets/arsc-fuzzer.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "zip-fuzzer"
 path = "fuzz_targets/zip-fuzzer.rs"
 test = false
