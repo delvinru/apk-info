@@ -5,10 +5,20 @@ A library for getting all the available information from an APK file.
 ## Features
 
 - A malware-friendly zip extractor. Great [article](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) about `BadPack` technique;
+- A malware-friendly axml and arsc extractor;
 - A full AXML (Android Binary XML) implementation;
-- Support for extracting signatures v1, v2, v3, v3.1, as well as additional information contained in the `APK Sig Block 42`;
+- A full ARSC (Android Resource) implementation;
+- Support for extracting information contained in the `APK Signature Block 42`:
+    - v1;
+    - v2;
+    - v3;
+    - v3.1;
+    - Stamp Block v1;
+    - Stamp Block v2;
+    - Apk Channel Block;
+    - Google Play Frosting (there are plans, but there is critically little information about it);
 - Correct extraction of the MainActivity based on how the Android OS [does it](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/core/java/android/app/ApplicationPackageManager.java;l=310?q=getLaunchIntentForPackage);
-- Bindings for python 3.10 with typing (no more `# type: ignore`);
+- Bindings for python 3.10+ with typings - no more `# type: ignore`;
 - And of course just a fast parser.
 
 ## Getting started
