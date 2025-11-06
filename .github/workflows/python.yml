@@ -32,10 +32,6 @@ jobs:
             target: aarch64
           - runner: ubuntu-22.04
             target: armv7
-          - runner: ubuntu-22.04
-            target: s390x
-          - runner: ubuntu-22.04
-            target: ppc64le
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,6 +44,14 @@ jobs:
           args: --release --out dist --find-interpreter --manifest-path ./python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
+          before-script-linux: |
+            if command -v yum &> /dev/null; then
+              yum install -y perl-IPC-Cmd perl-Time-Piece
+            elif command -v dnf &> /dev/null; then
+              dnf install -y perl-IPC-Cmd perl-Time-Piece
+            elif command -v apt-get &> /dev/null; then
+              apt-get update && apt-get install -y libmodule-build-perl libtime-piece-perl
+            fi
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
