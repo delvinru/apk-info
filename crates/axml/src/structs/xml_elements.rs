@@ -41,6 +41,7 @@ pub(crate) struct XMLHeader {
 }
 
 impl XMLHeader {
+    #[inline]
     pub fn parse(input: &mut &[u8], header: ResChunkHeader) -> ModalResult<XMLHeader> {
         let (line_number, comment) = (le_u32, le_u32).parse_next(input)?;
 
@@ -77,6 +78,7 @@ pub(crate) struct XmlNamespace {
 }
 
 impl XmlElement for XmlNamespace {
+    #[inline]
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
@@ -113,14 +115,14 @@ impl XmlAttributeElement {
         attribute_size: u16,
     ) -> impl FnMut(&mut &[u8]) -> ModalResult<XmlAttributeElement> {
         move |input: &mut &[u8]| {
-            let (namespace_uri, name, value) = (le_u32, le_u32, le_u32).parse_next(input)?;
-            let typed_value = ResourceValue::parse(input)?;
+            let (namespace_uri, name, value, typed_value) =
+                (le_u32, le_u32, le_u32, ResourceValue::parse).parse_next(input)?;
 
             // sometimes attribute size != 20, need to scroll through the data
             if let Some(extra) = attribute_size.checked_sub(Self::DEFAULT_ATTRIBUTE_SIZE)
                 && extra > 0
             {
-                take(extra).parse_next(input)?;
+                let _ = take(extra).parse_next(input)?;
             }
 
             Ok(XmlAttributeElement {
@@ -192,16 +194,16 @@ impl XmlElement for XmlStartElement {
         )
             .parse_next(input)?;
 
-        // TODO: need somehow show this "garbage" indicator
         // consume some garbage until attribute_start - probably packing techniques, idk
         // default "attribute_start" is 0x14, so we take garbage value and subtract
         let tampered_attribute_size =
             attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE);
         if tampered_attribute_size != 0 {
-            info!("skip tampered attribute size: {}", attribute_start);
+            debug!("skip tampered attribute size: {}", attribute_start);
 
-            take(attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE))
-                .parse_next(input)?;
+            let _ =
+                take(attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE))
+                    .parse_next(input)?;
         }
 
         let attributes = repeat(
@@ -216,7 +218,7 @@ impl XmlElement for XmlStartElement {
         let tampered_chunk_size = header.content_size().saturating_sub(readed_bytes as u32);
         if tampered_chunk_size != 0 {
             debug!("skip garbage bytes in chunk: {}", tampered_chunk_size);
-            take(tampered_chunk_size).parse_next(input)?;
+            let _ = take(tampered_chunk_size).parse_next(input)?;
         }
 
         Ok(XmlStartElement {
@@ -242,6 +244,7 @@ pub(crate) struct XmlEndElement {
 }
 
 impl XmlElement for XmlEndElement {
+    #[inline]
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
@@ -269,6 +272,7 @@ pub(crate) struct XmlCData {
 }
 
 impl XmlElement for XmlCData {
+    #[inline]
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,

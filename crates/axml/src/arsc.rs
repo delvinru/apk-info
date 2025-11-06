@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::{info, warn};
+use log::warn;
 use winnow::combinator::repeat;
 use winnow::prelude::*;
 
@@ -28,7 +28,6 @@ impl ARSC {
         let header = ResTableHeader::parse(input).map_err(|_| ARCSError::HeaderError)?;
 
         let mut is_tampered = false;
-
         // don't drop error, maybe another shit malware technique
         if header.header.type_ != ResourceType::Table {
             is_tampered = true;
@@ -88,27 +87,19 @@ impl ARSC {
         let config = ResTableConfig::default();
         let (package_id, type_id, entry_id) = self.split_resource_id(id);
 
-        let package = self.packages.get(&package_id).unwrap();
-        let entry = package.get_entry(&config, type_id, entry_id).unwrap();
+        let package = self.packages.get(&package_id)?;
+        let entry = package.get_entry(&config, type_id, entry_id)?;
 
         match entry {
             ResTableEntry::Default(e) => {
-                info!(
-                    "entry 0x{:08x} {:?} {:?}",
-                    e.value.data,
-                    e.value.data_type,
-                    e.value.to_string(&self.global_string_pool)
-                );
-
                 // TODO: check this and create resolver, infinite loop possible
                 match e.value.data_type {
                     ResourceValueType::Reference => self.get_resource(e.value.data),
                     _ => Some(e.value.to_string(&self.global_string_pool)),
                 }
             }
-            ResTableEntry::NoEntry => {
-                panic!("got no entry");
-            }
+            // if got nothing - gg
+            ResTableEntry::NoEntry => None,
             e => {
                 warn!("for now don't how to handle this: {:#?}", e);
                 None
@@ -116,7 +107,7 @@ impl ARSC {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     fn split_resource_id(&self, id: u32) -> (u8, u8, u16) {
         (
             (id >> 24) as u8,

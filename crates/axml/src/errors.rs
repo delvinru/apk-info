@@ -1,54 +1,57 @@
 use thiserror::Error;
 
+/// Errors that may occur while parsing an Android XML (AXML) manifest.
 #[derive(Error, Debug)]
 pub enum AXMLError {
-    /// Provided file too small to be manifest
+    /// The provided file is too small to contain a valid manifest.
     #[error("file size too small for manifest")]
     TooSmallError,
 
-    /// Invalid header
-    #[error("got error while parsing header")]
+    /// Failed to parse the header.
+    #[error("failed to parse header")]
     HeaderError,
 
-    /// Invalid header
-    #[error("got invalid header size, expected - 8")]
+    /// The header size is invalid.
+    #[error("invalid header size (expected 8, got {0})")]
     HeaderSizeError(u16),
 
-    /// Got error while parsing resource map
-    #[error("got error while parsing resource map")]
+    /// Failed to parse the resource map.
+    #[error("failed to parse resource map")]
     ResourceMapError,
 
-    /// Got error while parsing string pool
-    #[error("got error while parsing string pool")]
+    /// Failed to parse the string pool.
+    #[error("failed to parse string pool")]
     StringPoolError,
 
-    /// Got error while parsing xml tree
-    #[error("got error while parsing xml tree")]
+    /// Failed to parse the XML tree.
+    #[error("failed to parse XML tree")]
     XmlTreeError,
 
-    #[error("can't get root for xml tree")]
+    /// The XML tree does not have a root node.
+    #[error("missing root node in XML tree")]
     MissingRoot,
 
-    /// Got error while parsing manifest
-    #[error("got error while parsing manifest")]
+    /// Failed to parse the manifest.
+    #[error("failed to parse manifest")]
     ParseError,
 }
 
+/// Errors that may occur while parsing an Android resources.arsc file.
 #[derive(Error, Debug)]
 pub enum ARCSError {
-    /// Provided file too smal to be resources.arsc
+    /// The provided file is too small to contain a valid resources.arsc file.
     #[error("file size too small for resources file")]
     TooSmallError,
 
-    /// Invalid header
-    #[error("got error while parsing header")]
+    /// Failed to parse the header.
+    #[error("failed to parse header")]
     HeaderError,
 
-    /// Got error while parsing string pool
-    #[error("got error while parsing string pool")]
+    /// Failed to parse the string pool.
+    #[error("failed to parse string pool")]
     StringPoolError,
 
-    /// Got error while parsing resource table package
-    #[error("got error while parsing resource table package")]
+    /// Failed to parse the resource table package.
+    #[error("failed to parse resource table package")]
     ResourceTableError,
 }

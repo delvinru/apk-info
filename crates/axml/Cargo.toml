@@ -1,7 +1,11 @@
 [package]
 name = "apk-info-axml"
-version.workspace = true
+description = "Library for working with AXML and ARSC in APK files"
+authors.workspace = true
 edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 bitflags.workspace = true

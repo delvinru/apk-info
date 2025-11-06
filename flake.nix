@@ -25,6 +25,7 @@
             (latest.withComponents [
               "cargo"
               "clippy"
+              "miri"
               "rust-src"
               "rustc"
               "rustfmt"
@@ -34,7 +35,7 @@
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             cargo-fuzz
-            cargo-udeps
+            cargo-machete
             maturin
             openssl
             pkg-config

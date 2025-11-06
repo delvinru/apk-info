@@ -11,20 +11,12 @@ use crate::structs::{
 };
 use crate::system_types::SYSTEM_TYPES;
 
+/// Default android namespace
 const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
 
 #[derive(Debug)]
 pub struct AXML {
     pub is_tampered: bool,
-
-    #[allow(unused)]
-    header: ResChunkHeader,
-
-    #[allow(unused)]
-    string_pool: StringPool,
-
-    #[allow(unused)]
-    xml_resource: XMLResourceMap,
 
     pub root: Element,
 }
@@ -65,13 +57,7 @@ impl AXML {
         let root = Self::get_xml_tree(&elements, &string_pool, &xml_resource)
             .ok_or(AXMLError::MissingRoot)?;
 
-        Ok(AXML {
-            is_tampered,
-            header,
-            string_pool,
-            xml_resource,
-            root,
-        })
+        Ok(AXML { is_tampered, root })
     }
 
     fn parse_xml_tree(input: &mut &[u8]) -> ModalResult<Vec<XmlNodeElements>> {

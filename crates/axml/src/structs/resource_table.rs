@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::hash::Hash;
 
-use log::{info, warn};
+use log::warn;
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed, StrContext, StrContextValue};
@@ -77,7 +77,6 @@ pub(crate) struct ResTablePackageHeader {
 }
 
 impl ResTablePackageHeader {
-    #[inline(always)]
     pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTablePackageHeader> {
         let (header, id, name, type_strings, last_public_type, key_strings, last_public_key) = (
             ResChunkHeader::parse,
@@ -400,6 +399,7 @@ impl ResTableEntry {
 
     #[inline(always)]
     #[allow(unused)]
+    // don't know how to handle this flag for now
     pub(crate) fn is_weak(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_WEAK)
     }
@@ -411,6 +411,7 @@ impl ResTableEntry {
 
     #[inline(always)]
     #[allow(unused)]
+    // don't know how to handle this flag for now
     pub(crate) fn uses_feature_flags(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_USES_FEATURE_FLAGS)
     }
@@ -490,12 +491,9 @@ pub(crate) struct ResTableType {
 }
 
 impl ResTableType {
-    #[inline(always)]
     pub(crate) fn parse(header: ResChunkHeader, input: &mut &[u8]) -> ModalResult<ResTableType> {
-        let (id, flags, reserved, entry_count, entries_start) =
-            (u8, u8, le_u16, le_u32, le_u32).parse_next(input)?;
-
-        let config = ResTableConfig::parse(input)?;
+        let (id, flags, reserved, entry_count, entries_start, config) =
+            (u8, u8, le_u16, le_u32, le_u32, ResTableConfig::parse).parse_next(input)?;
 
         let is_offset16 = Self::is_offset16(flags);
 
@@ -562,6 +560,7 @@ impl ResTableType {
     }
 
     #[inline(always)]
+    // don't know how to handle this flag for now
     pub(crate) fn is_sparse(flags: u8) -> bool {
         ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::SPARCE)
     }
@@ -734,7 +733,7 @@ bitflags::bitflags! {
     /// Any changes to this set should also update
     /// `aidl/android/os/OverlayablePolicy.aidl`.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct PolicyFlags: u32 {
+    pub(crate) struct PolicyFlags: u32 {
         /// No flags set.
         const NONE              = 0x0000_0000;
         /// Any overlay can overlay these resources.
@@ -776,12 +775,13 @@ impl ResTableOverlayblePolicy {
         header: ResChunkHeader,
         input: &mut &[u8],
     ) -> ModalResult<ResTableOverlayblePolicy> {
-        let (policy_flags, entry_count) = (le_u32, le_u32).parse_next(input)?;
+        let (policy_flags, entry_count) =
+            (le_u32.map(PolicyFlags::from_bits_truncate), le_u32).parse_next(input)?;
         let entries = repeat(entry_count as usize, le_u32).parse_next(input)?;
 
         Ok(ResTableOverlayblePolicy {
             header,
-            policy_flags: PolicyFlags::from_bits_truncate(policy_flags),
+            policy_flags,
             entry_count,
             entries,
         })
@@ -867,7 +867,9 @@ impl ResTablePackage {
     ///
     /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/tools/aapt/ResourceTable.h;l=224;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=1;bpt=1)
     #[inline(always)]
+    #[allow(unused)]
     fn generate_res_id(package_id: u32, type_id: u32, name_id: u32) -> u32 {
+        // NOTE: don't remove this function, this is usefull mention
         name_id | (type_id << 16) | (package_id << 24)
     }
 
@@ -878,56 +880,11 @@ impl ResTablePackage {
         type_id: u8,
         entry_id: u16,
     ) -> Option<&ResTableEntry> {
-        fn log_entry(
-            res_id: u32,
-            type_id: u8,
-            entry: &ResTableEntry,
-            key_strings: &StringPool,
-            type_strings: &StringPool,
-        ) {
-            match entry {
-                ResTableEntry::Compact(e) => {
-                    if let Some(key) = key_strings.get(e.data) {
-                        info!("resource (compact) 0x{:08x} \"{}\"", res_id, key);
-                    }
-                }
-                ResTableEntry::Complex(e) => {
-                    if let Some(key) = key_strings.get(e.index) {
-                        info!("resource (complex) 0x{:08x} \"{}\"", res_id, key);
-                    }
-                }
-                ResTableEntry::Default(e) => {
-                    let unknown = "unknown".to_owned();
-                    let type_name = type_strings
-                        .get(type_id.saturating_sub(1) as u32)
-                        .unwrap_or(&unknown);
-
-                    if let Some(key) = key_strings.get(e.index) {
-                        info!(
-                            "type ({}) resource (default) 0x{:08x} \"{}\"",
-                            type_name, res_id, key
-                        );
-                    }
-                }
-                ResTableEntry::NoEntry => {
-                    info!("resource (noentry) 0x{:08x}", res_id);
-                }
-            }
-        }
-
         if let Some(type_map) = self.resources.get(config)
             && let Some(entries) = type_map.get(&type_id)
             && let Some(entry) = entries.get(entry_id as usize)
             && !matches!(entry, ResTableEntry::NoEntry)
         {
-            let res_id = Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
-            log_entry(
-                res_id,
-                type_id,
-                entry,
-                &self.key_strings,
-                &self.type_strings,
-            );
             return Some(entry);
         }
 
@@ -941,14 +898,6 @@ impl ResTablePackage {
                 && let Some(entry) = entries.get(entry_id as usize)
                 && !matches!(entry, ResTableEntry::NoEntry)
             {
-                let res_id = Self::generate_res_id(self.header.id, type_id as u32, entry_id as u32);
-                log_entry(
-                    res_id,
-                    type_id,
-                    entry,
-                    &self.key_strings,
-                    &self.type_strings,
-                );
                 return Some(entry);
             }
         }

@@ -142,6 +142,7 @@ impl Display for GrammaticalGender {
 /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1161;drc=61197364367c9e404c7da6900658f1b16c42d0da)
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
+#[allow(unused)]
 pub(crate) enum LayoutDir {
     /// Layout direction: value that corresponds to `ldltr` resource qualifier specified
     Ltr = 0x01 << 6,
@@ -681,12 +682,12 @@ impl Display for Navigation {
 /// [Default values (maybe)](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/java/android/content/res/Configuration.java;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1;l=1572)
 #[repr(C)]
 #[derive(Debug, Default, Eq, Clone, Copy)]
-pub(crate) struct ResTableConfig {
+pub struct ResTableConfig {
     /// Number of elements in this structure
-    pub(crate) size: u32,
+    pub size: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         // Mobile country code (from SIM).  0 means "any".
@@ -697,10 +698,10 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t imsi;
     /// };
     /// ```
-    pub(crate) imsi: u32,
+    pub imsi: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         // This field can take three different forms:
@@ -744,10 +745,10 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t locale;
     /// };
     /// ```
-    pub(crate) locale: u32,
+    pub locale: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         uint8_t orientation;
@@ -757,10 +758,10 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t screenType;
     /// };
     /// ```
-    pub(crate) screen_type: u32,
+    pub screen_type: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// struct {
     ///     union {
     ///         struct {
@@ -780,10 +781,10 @@ pub(crate) struct ResTableConfig {
     ///     };
     /// };
     /// ```
-    pub(crate) generic_purpose_field: u32,
+    pub generic_purpose_field: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         uint16_t screenWidth;
@@ -792,10 +793,10 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t screenSize;
     /// };
     /// ```
-    pub(crate) screen_size: u32,
+    pub screen_size: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         uint16_t sdkVersion;
@@ -806,10 +807,10 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t version;
     /// };
     /// ```
-    pub(crate) version: u32,
+    pub version: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         uint8_t screenLayout;
@@ -819,10 +820,10 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t screenConfig;
     /// };
     /// ```
-    pub(crate) screen_config: u32,
+    pub screen_config: u32,
 
     /// **cpp structure**
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         uint16_t screenWidthDp;
@@ -831,23 +832,23 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t screenSizeDp;
     /// };
     /// ```
-    pub(crate) screen_size_dp: u32,
+    pub screen_size_dp: u32,
 
     /// The ISO-15924 short name for the script corresponding to this configuration
     ///
     /// Eg. Hant, Latn, etc.
     ///
     /// Interpreted in conjunction with the locale field
-    pub(crate) locale_script: [u8; 4],
+    pub locale_script: [u8; 4],
 
     /// A single BCP-47 variant subrtag.
     /// Will vary in length between 4 and 8 cahrs
     /// Interpreted in conjunction with the locale field
-    pub(crate) locale_variant: [u8; 8],
+    pub locale_variant: [u8; 8],
 
     /// An extension of screenConfig.
     ///
-    /// ```
+    /// ```cpp
     /// union {
     ///     struct {
     ///         uint8_t screenLayout2;      // Contains round/notround qualifier.
@@ -857,20 +858,20 @@ pub(crate) struct ResTableConfig {
     ///     uint32_t screenConfig2;
     /// };
     /// ```
-    pub(crate) screen_config_2: u32,
+    pub screen_config_2: u32,
 
     /// If false and `locale_script` is set, it means that the script of the locale was explicitly provided
     ///
     /// If true, it means that `locale_script` was automatically computed
-    pub(crate) locale_script_was_computed: bool,
+    pub locale_script_was_computed: bool,
 
     /// The value of BCP 47 Unicode extension for key `nu` (numbering system)
     /// Varies in length from 3 to 8 chars
     /// Zero filled value
-    pub(crate) locale_numbering_system: [u8; 8],
+    pub locale_numbering_system: [u8; 8],
 
     /// Mark all padding explicitly so it's clear how much we can expand it
-    pub(crate) end_padding: [u8; 3],
+    pub end_padding: [u8; 3],
 }
 
 impl ResTableConfig {
@@ -952,14 +953,14 @@ impl ResTableConfig {
 
     /// Convert [`ResTableConfig::imsi`] to union like field
     #[inline]
-    pub(crate) fn get_mcc_mnc(&self) -> (u16, u16) {
+    pub fn get_mcc_mnc(&self) -> (u16, u16) {
         let mcc = (self.imsi & 0x0000_FFFF) as u16;
         let mnc = ((self.imsi >> 16) & 0x0000_FFFF) as u16;
         (mcc, mnc)
     }
 
     /// Convert [`ResTableConfig::screen_type`] to union like
-    pub(crate) fn get_orientation_touchscreen_density(&self) -> (u8, u8, u16) {
+    pub fn get_orientation_touchscreen_density(&self) -> (u8, u8, u16) {
         let orientation = (self.screen_type & 0x0000_00FF) as u8;
         let touchscreen = ((self.screen_type >> 8) & 0x0000_00FF) as u8;
         let density = ((self.screen_type >> 16) & 0x0000_FFFF) as u16;
@@ -967,7 +968,7 @@ impl ResTableConfig {
     }
 
     /// Extracts `keyboard`, `navigation`, and `inputFlags`
-    pub(crate) fn get_keyboard_navigation_input_flags(&self) -> (u8, u8, u8) {
+    pub fn get_keyboard_navigation_input_flags(&self) -> (u8, u8, u8) {
         let keyboard = (self.generic_purpose_field & 0x0000_00FF) as u8;
         let navigation = ((self.generic_purpose_field >> 8) & 0x0000_00FF) as u8;
         let input_flags = ((self.generic_purpose_field >> 16) & 0x0000_00FF) as u8;
@@ -975,44 +976,43 @@ impl ResTableConfig {
     }
 
     /// Extracts the 24-bit `input` value
-    #[allow(unused)]
     #[inline]
-    pub(crate) fn get_input(&self) -> u32 {
+    pub fn get_input(&self) -> u32 {
         self.generic_purpose_field & 0x00FF_FFFF
     }
 
     /// Extracts the 8-bit `grammaticalInflection`
     #[inline]
-    pub(crate) fn get_grammatical_inflection(&self) -> u8 {
+    pub fn get_grammatical_inflection(&self) -> u8 {
         ((self.generic_purpose_field >> 24) & 0xFF) as u8
     }
 
-    pub(crate) fn get_screen_width_height(&self) -> (u16, u16) {
+    pub fn get_screen_width_height(&self) -> (u16, u16) {
         let screen_width = (self.screen_size & 0x0000_FFFF) as u16;
         let screen_height = ((self.screen_size >> 16) & 0x0000_FFFF) as u16;
         (screen_width, screen_height)
     }
 
-    pub(crate) fn get_sdk_minor_version(&self) -> (u16, u16) {
+    pub fn get_sdk_minor_version(&self) -> (u16, u16) {
         let sdk_version = (self.version & 0x0000_FFFF) as u16;
         let minor_version = ((self.version >> 16) & 0x0000_FFFF) as u16;
         (sdk_version, minor_version)
     }
 
-    pub(crate) fn get_screen_layout_ui_smallest_width(&self) -> (u8, u8, u16) {
+    pub fn get_screen_layout_ui_smallest_width(&self) -> (u8, u8, u16) {
         let screen_layout = (self.screen_config & 0x0000_00FF) as u8;
         let ui_mode = ((self.screen_config >> 8) & 0x0000_00FF) as u8;
         let smallest_screen_width_dp = ((self.screen_config >> 16) & 0x0000_FFFF) as u16;
         (screen_layout, ui_mode, smallest_screen_width_dp)
     }
 
-    pub(crate) fn get_screen_width_height_dp(&self) -> (u16, u16) {
+    pub fn get_screen_width_height_dp(&self) -> (u16, u16) {
         let screen_width_dp = (self.screen_size_dp & 0x0000_FFFF) as u16;
         let screen_height_dp = ((self.screen_size_dp >> 16) & 0x0000_FFFF) as u16;
         (screen_width_dp, screen_height_dp)
     }
 
-    pub(crate) fn get_screen_layout_2_color_mode(&self) -> (u8, u8) {
+    pub fn get_screen_layout_2_color_mode(&self) -> (u8, u8) {
         let screen_layout2 = (self.screen_config_2 & 0x0000_00FF) as u8;
         let color_mode = ((self.screen_config_2 >> 8) & 0x0000_00FF) as u8;
         // NOTE: reserved padding, maybe sometimes in the future will be used
@@ -1074,7 +1074,7 @@ impl ResTableConfig {
     /// Decode locale field to readable string
     ///
     /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=3101;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1)
-    pub(crate) fn append_dir_locale(&self, result: &mut String) {
+    fn append_dir_locale(&self, result: &mut String) {
         let bytes = self.locale.to_le_bytes();
         let language = [bytes[0], bytes[1]];
         let country = [bytes[2], bytes[3]];
@@ -1150,7 +1150,7 @@ impl ResTableConfig {
     ///
     /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=3368)
     /// [App resource overview. Table 2](https://developer.android.com/guide/topics/resources/providing-resources#AlternativeResources)
-    pub(crate) fn as_string(&self) -> String {
+    pub fn as_string(&self) -> String {
         // preallocate some buffer just in case, maybe bad idea
         let mut result = String::with_capacity(self.size as usize);
 
