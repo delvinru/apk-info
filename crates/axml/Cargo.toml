@@ -12,12 +12,22 @@ bitflags.workspace = true
 log.workspace = true
 minidom.workspace = true
 once_cell.workspace = true
+phf = { workspace = true, features = ["macros"] }
 quick-xml.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
 winnow.workspace = true
+
+[build-dependencies]
+phf_codegen.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+build-converter = ["serde", "serde_json"]
 
 [[bin]]
 name = "xml-converter"
 path = "src/bin/xml-converter.rs"
+required-features = ["build-converter"]

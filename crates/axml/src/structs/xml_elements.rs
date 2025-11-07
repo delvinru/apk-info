@@ -1,4 +1,4 @@
-use log::{debug, info};
+use log::debug;
 use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::prelude::*;
@@ -286,14 +286,4 @@ impl XmlElement for XmlCData {
             typed_data,
         })
     }
-}
-
-#[derive(Debug)]
-pub(crate) enum XmlNodeElements {
-    XmlStartNamespace(XmlNamespace),
-    XmlEndNamespace(XmlNamespace),
-    XmlStartElement(XmlStartElement),
-    XmlEndElement(XmlEndElement),
-    XmlCData(XmlCData),
-    Unknown,
 }

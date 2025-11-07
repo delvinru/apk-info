@@ -7,12 +7,20 @@ use winnow::token::take;
 use crate::AXMLError;
 use crate::structs::{
     ResChunkHeader, ResourceType, StringPool, XMLHeader, XMLResourceMap, XmlCData, XmlElement,
-    XmlEndElement, XmlNamespace, XmlNodeElements, XmlStartElement,
+    XmlEndElement, XmlNamespace, XmlStartElement,
 };
-use crate::system_types::SYSTEM_TYPES;
 
 /// Default android namespace
 const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
+
+pub mod system_types {
+    include!(concat!(env!("OUT_DIR"), "/system_types.rs"));
+
+    #[inline(always)]
+    pub fn get_attr(idx: &u32) -> Option<&'static str> {
+        ATTR.get(idx).copied()
+    }
+}
 
 #[derive(Debug)]
 pub struct AXML {
@@ -50,95 +58,65 @@ impl AXML {
         // parse resource map
         let xml_resource = XMLResourceMap::parse(input).map_err(|_| AXMLError::ResourceMapError)?;
 
-        // parse xml tree
-        let elements = Self::parse_xml_tree(input).map_err(|_| AXMLError::XmlTreeError)?;
-
-        // create xml treee
-        let root = Self::get_xml_tree(&elements, &string_pool, &xml_resource)
-            .ok_or(AXMLError::MissingRoot)?;
+        // parse and get xml tree
+        let root =
+            Self::get_xml_tree(input, &string_pool, &xml_resource).ok_or(AXMLError::MissingRoot)?;
 
         Ok(AXML { is_tampered, root })
     }
 
-    fn parse_xml_tree(input: &mut &[u8]) -> ModalResult<Vec<XmlNodeElements>> {
-        // NOTE: very bad sample, need research - dcafcffab0cc9a435c23ac4aac76afb329893ccdc535b7e4d57175e05706efba
-        // NOTE: somehow aapt2 extracts all informations from this
-
-        let mut elements: Vec<XmlNodeElements> = Vec::new();
+    fn get_xml_tree<'a>(
+        input: &mut &[u8],
+        string_pool: &'a StringPool,
+        xml_resource: &'a XMLResourceMap,
+    ) -> Option<Element> {
+        let mut stack: Vec<Element> = Vec::with_capacity(16);
 
         loop {
             let chunk_header = match ResChunkHeader::parse(input) {
                 Ok(v) => v,
-                Err(ErrMode::Backtrack(_)) => return Ok(elements),
-                Err(e) => return Err(e),
+                Err(ErrMode::Backtrack(_)) => break,
+                Err(_) => return None,
             };
 
-            // skip non xml chunks
+            // Skip non-xml chunks
             if chunk_header.type_ < ResourceType::XmlStartNamespace
                 || chunk_header.type_ > ResourceType::XmlLastChunk
             {
                 warn!("not a xml resource chunk: {chunk_header:?}");
+
                 let _ =
                     take::<u32, &[u8], ContextError>(chunk_header.content_size()).parse_next(input);
-
                 continue;
-            };
+            }
 
-            // another junk malware techniques
+            // another malware technique
             if chunk_header.header_size != 0x10 {
                 warn!("xml resource chunk header size is not 0x10: {chunk_header:?}");
+
                 let _ =
                     take::<u32, &[u8], ContextError>(chunk_header.content_size()).parse_next(input);
-
                 continue;
             }
 
             let xml_header = match XMLHeader::parse(input, chunk_header) {
                 Ok(v) => v,
-                Err(_) => return Ok(elements),
+                Err(_) => break,
             };
 
-            let element = match xml_header.header.type_ {
+            match xml_header.header.type_ {
                 ResourceType::XmlStartNamespace => {
-                    let e = XmlNamespace::parse(input, xml_header)?;
-                    XmlNodeElements::XmlStartNamespace(e)
+                    let _ = XmlNamespace::parse(input, xml_header);
                 }
                 ResourceType::XmlEndNamespace => {
-                    let e = XmlNamespace::parse(input, xml_header)?;
-                    XmlNodeElements::XmlEndNamespace(e)
+                    let _ = XmlNamespace::parse(input, xml_header);
                 }
                 ResourceType::XmlStartElement => {
-                    let e = XmlStartElement::parse(input, xml_header)?;
-                    XmlNodeElements::XmlStartElement(e)
-                }
-                ResourceType::XmlEndElement => {
-                    let e = XmlEndElement::parse(input, xml_header)?;
-                    XmlNodeElements::XmlEndElement(e)
-                }
-                ResourceType::XmlCdata => {
-                    let e = XmlCData::parse(input, xml_header)?;
-                    XmlNodeElements::XmlCData(e)
-                }
-                _ => {
-                    warn!("unknown header type: {:#?}", xml_header.header.type_);
-                    XmlNodeElements::Unknown
-                }
-            };
+                    let node = match XmlStartElement::parse(input, xml_header) {
+                        Ok(v) => v,
+                        Err(_) => break,
+                    };
 
-            elements.push(element);
-        }
-    }
-
-    fn get_xml_tree<'a>(
-        elements: &[XmlNodeElements],
-        string_pool: &'a StringPool,
-        xml_resource: &'a XMLResourceMap,
-    ) -> Option<Element> {
-        let mut stack: Vec<Element> = vec![];
-
-        for node in elements {
-            match node {
-                XmlNodeElements::XmlStartElement(node) => {
                     let Some(name) = string_pool.get(node.name) else {
                         continue;
                     };
@@ -171,14 +149,20 @@ impl AXML {
 
                     stack.push(element.build());
                 }
+                ResourceType::XmlEndElement => {
+                    let _ = XmlEndElement::parse(input, xml_header);
 
-                XmlNodeElements::XmlEndElement(_) => {
                     if stack.len() > 1 {
                         let finished = stack.pop().unwrap();
                         stack.last_mut().unwrap().append_child(finished);
                     }
                 }
-                XmlNodeElements::XmlCData(node) => {
+                ResourceType::XmlCdata => {
+                    let node = match XmlCData::parse(input, xml_header) {
+                        Ok(v) => v,
+                        Err(_) => break,
+                    };
+
                     let Some(data) = string_pool.get(node.data) else {
                         continue;
                     };
@@ -187,28 +171,31 @@ impl AXML {
                         el.append_text(data);
                     }
                 }
-                _ => continue,
+                _ => {
+                    warn!("unknown header type: {:#?}", xml_header.header.type_);
+                }
             }
         }
 
         (!stack.is_empty()).then(|| stack.remove(0))
     }
 
+    #[inline]
     fn get_string_from_pool<'a>(
         idx: u32,
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
-    ) -> Option<&'a String> {
-        if let Some(v) = string_pool.get(idx)
-            && !v.is_empty()
-        {
-            return Some(v);
-        }
-
-        xml_resource
-            .resource_ids
-            .get(idx as usize)
-            .and_then(|v| SYSTEM_TYPES.get_attribute_name(v))
+    ) -> Option<&'a str> {
+        string_pool
+            .get(idx)
+            .map(|x| x.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| {
+                xml_resource
+                    .resource_ids
+                    .get(idx as usize)
+                    .and_then(|v| system_types::get_attr(v))
+            })
     }
 
     // TODO: made pretty output
