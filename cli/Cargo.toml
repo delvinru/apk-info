@@ -1,6 +1,6 @@
 [package]
 name = "apk-info-cli"
-description = "A command-line tool to get information from the apk files"
+description = "A command-line tool to inspect and extract APK files "
 authors.workspace = true
 edition.workspace = true
 license.workspace = true

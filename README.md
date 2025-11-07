@@ -23,13 +23,43 @@ A library for getting all the available information from an APK file.
 
 ## Getting started
 
-### Installation
+### cli
+
+#### Installation
+
+<!-- TODO: need actually check before release -->
+
+```bash
+cargo install apk-info
+```
+
+#### Help
+
+```bash
+A command-line tool to inspect and extract APK files
+
+Usage: apk-info [COMMAND]
+
+Commands:
+  show     Show basic information about apk file
+  extract  Unpack apk files as zip archive [aliases: x]
+  axml     Read and pretty-print binary AndroidManifest.xml
+  help     Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help     Print help
+  -V, --version  Print version
+```
+
+### Python
+
+#### Installation
 
 ```bash
 uv pip install apk-info
 ```
 
-### Get basic information about APK
+#### Get basic information about APK
 
 ```python
 from apk_info import APK

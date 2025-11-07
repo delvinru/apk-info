@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use apk_info_zip::ZipEntry;
+use colored::Colorize;
 use log::warn;
 
 use crate::commands::path_helpers::get_all_files;
@@ -82,6 +83,16 @@ fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
             .with_context(|| format!("can't create file {:?}", file_path))?;
         f.write_all(data.as_slice())
             .with_context(|| format!("can't write to {:?}", file_path))?;
+
+        // highligt interesting files
+        if file_name == "AndroidManifest.xml"
+            || file_name == "resourcers.arsc"
+            || file_name.ends_with(".so")
+        {
+            println!("[*] extracted \"{}\"", file_name.green().bold());
+        } else {
+            println!("[~] extracted \"{}\"", file_name);
+        }
     }
 
     Ok(())
