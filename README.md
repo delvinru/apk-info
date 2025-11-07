@@ -49,6 +49,66 @@ if not main_activities:
 print(f"Main Activity: {package_name}/{main_activities[0]}")
 ```
 
+## Performance Analysis
+
+Environment:
+- OS: macOS Tahoe 26.0.1 (25A362) arm64
+- CPU: Apple M3 Pro (12) @ 4.06 GHz
+
+The script:
+1. Extract all available signatures from a file;
+2. Extract the package name;
+3. Extract the minimum sdk version;
+4. Get a list of all Main Activities;
+5. Get the application name;
+
+apk-info library:
+- Release build;
+- Python bindings (honest comparison);
+
+---
+
+Test case:
+- 152 apk files;
+- Total size - 20GB;
+- Logging mode - warning;
+
+|#|**apk-info**|**androguard**|
+|---|---|---|
+|1|1.22s user 4.26s system 81% cpu 6.760 total|57.39s user 4.88s system 97% cpu 1:03.85 total|
+|2|1.21s user 4.22s system 81% cpu 6.657 total|57.98s user 5.04s system 97% cpu 1:04.80 total|
+|3|1.22s user 4.25s system 81% cpu 6.688 total|55.56s user 4.48s system 97% cpu 1:01.55 total|
+
+---
+
+Test case:
+- 3010 apk files;
+- Total size - 22GB;
+- Logging mode - warning;
+
+> [!IMPORTANT]
+> There are a lot of malicious samples in this set that androguard simply cannot parse.
+
+|#|**apk-info**|**androguard**|
+|---|---|---|
+|1|3.06s user 4.73s system 80% cpu 9.654 total|128.32s user 6.11s system 98% cpu 2:16.93 total|
+|2|3.27s user 5.25s system 84% cpu 10.126 total|131.12s user 6.60s system 98% cpu 2:20.23 total|
+|3|3.10s user 4.75s system 81% cpu 9.674 total|130.82s user 6.51s system 98% cpu 2:19.88 total|
+
+---
+
+On average, the speed gain is about x10.
+
+The main advantage is that `apk-info` can parse many more malicious files than `androguard`.
+
+For example, a list of hashes:
+- a045d8b62bbf4cdcfbd449a994958c1e051d06c0d888e0936838fff4be47aefc
+- 3f972448cf4fdf8938b56c0627a2e274e3c9968b0212975eadda8e4de7ab782e
+- d5fe92a103f643735d42e6070dc3fcc28f15e2cef488dae42ca235a061bc836a
+
+> [!NOTE]
+> There are many more such samples in everyday malware analysis.
+
 ## FAQ
 
 - Why not just use androguard?
