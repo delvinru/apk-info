@@ -6,7 +6,7 @@ use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::structs::{ResChunkHeader, ResourceHeaderType};
+use crate::structs::{ResChunkHeader, ResourceHeaderType, XMLResourceMap};
 
 bitflags! {
     #[derive(Debug)]
@@ -226,5 +226,18 @@ impl StringPool {
     #[inline]
     pub fn get(&self, idx: u32) -> Option<&String> {
         self.strings.get(idx as usize)
+    }
+
+    #[inline]
+    pub fn get_with_resources<'a>(
+        &'a self,
+        idx: u32,
+        xml_resource: &'a XMLResourceMap,
+    ) -> Option<&'a str> {
+        self.strings
+            .get(idx as usize)
+            .map(|x| x.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| xml_resource.get_attr(idx))
     }
 }

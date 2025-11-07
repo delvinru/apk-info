@@ -336,7 +336,6 @@ impl ZipEntry {
             .map_err(CertificateError::StackError)?
             .to_string();
 
-        // TODO: maybe compute fingerprint just based on raw data, without calling openssl
         let md5_fingerprint = digest_hex(certificate, MessageDigest::md5())?;
         let sha1_fingerprint = digest_hex(certificate, MessageDigest::sha1())?;
         let sha256_fingerprint = digest_hex(certificate, MessageDigest::sha256())?;

@@ -27,7 +27,6 @@ env_logger = { version = "0.11.8", features = ["auto-color"] }
 flate2 = "1.1.5"
 log = "0.4.28"
 memchr = "2.7.6"
-minidom = "0.17.0"
 once_cell = "1.21.3"
 openssl = { version = "0.10.74", features = ["vendored"] }
 phf = { version = "0.13.1", default-features = false }

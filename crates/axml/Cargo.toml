@@ -10,10 +10,8 @@ version.workspace = true
 [dependencies]
 bitflags.workspace = true
 log.workspace = true
-minidom.workspace = true
 once_cell.workspace = true
 phf = { workspace = true, features = ["macros"] }
-quick-xml.workspace = true
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
@@ -21,6 +19,7 @@ winnow.workspace = true
 
 [build-dependencies]
 phf_codegen.workspace = true
+quick-xml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

@@ -178,11 +178,13 @@ impl fmt::Debug for ResTablePackageHeader {
 /// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1448?q=ResourceTypes.h&ss=android)
 #[derive(Debug)]
 pub(crate) struct ResTableTypeSpec {
+    #[allow(unused)]
     pub(crate) header: ResChunkHeader,
 
     /// The type identifier this chunk is holding.
     /// Type IDs start at 1 (corresponding to the value of the type bits in a resource identifier).
     /// 0 is invalid.
+    #[allow(unused)]
     pub(crate) id: u8,
 
     /// Must be 0 (in documentation)
@@ -190,15 +192,19 @@ pub(crate) struct ResTableTypeSpec {
     /// Ideally, need to check this value, but this is not done on purpose
     ///
     /// Malware can intentionally change the value to break parsers
+    #[allow(unused)]
     pub(crate) res0: u8,
 
     /// Used to be reserved, if >0 specifies the number of [ResTableType] entries for this spec
+    #[allow(unused)]
     pub(crate) types_count: u16,
 
     /// Number of uint32_t entry configuration masks that follow
+    #[allow(unused)]
     pub(crate) entry_count: u32,
 
     /// Configuration mask
+    #[allow(unused)]
     pub(crate) type_spec_flags: Vec<ResTableConfigFlags>,
 }
 
@@ -264,8 +270,10 @@ pub(crate) struct ResTableMap {
     /// to supply meta-data about the attribute; for all other resource types it must be an attribute resource.
     ///
     /// NOTE: This is actually `ResTable_ref`, but for simplicity don't use that
+    #[allow(unused)]
     pub(crate) name: u32,
 
+    #[allow(unused)]
     pub(crate) value: ResourceValue,
 }
 
@@ -282,9 +290,11 @@ impl ResTableMap {
 #[derive(Debug)]
 pub(crate) struct ResTableMapEntry {
     /// Number of bytes in this structure
+    #[allow(unused)]
     pub(crate) size: u16,
 
     /// Flags describes in [`ResTableFlag`]
+    #[allow(unused)]
     pub(crate) flags: u16,
 
     /// Reference to [`ResTablePackage::key_strings`]
@@ -292,12 +302,15 @@ pub(crate) struct ResTableMapEntry {
 
     /// Resource identifier of the parent mapping, or 0 if there is none.
     /// This is always treated as a TYPE_DYNAMIC_REFERENCE.
+    #[allow(unused)]
     pub(crate) parent: u32,
 
     /// Number of name/value pairs that follow for [`ResTableFlag::FLAG_COMPLEX`]
+    #[allow(unused)]
     pub(crate) count: u32,
 
     /// Actual values of this entry
+    #[allow(unused)]
     pub(crate) values: Vec<ResTableMap>,
 }
 
@@ -329,9 +342,11 @@ impl ResTableMapEntry {
 #[derive(Debug)]
 pub(crate) struct ResTableEntryCompact {
     /// key index is encoded in 16-bit
+    #[allow(unused)]
     pub(crate) key: u16,
 
     /// Flags describes in [`ResTableFlag`]
+    #[allow(unused)]
     pub(crate) flags: u16,
 
     /// data is encoded directly in this entry
@@ -341,9 +356,11 @@ pub(crate) struct ResTableEntryCompact {
 #[derive(Debug)]
 pub(crate) struct ResTableEntryDefault {
     /// Number of bytes in this structure
+    #[allow(unused)]
     pub(crate) size: u16,
 
     /// Flags describes in [`ResTableFlag`]
+    #[allow(unused)]
     pub(crate) flags: u16,
 
     /// Reference to [`ResTablePackage::key_strings`]
@@ -456,6 +473,7 @@ bitflags::bitflags! {
 /// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1500?q=ResTable_config&ss=android)
 #[derive(Debug)]
 pub(crate) struct ResTableType {
+    #[allow(unused)]
     pub(crate) header: ResChunkHeader,
 
     /// The type identifier this chunk is holding
@@ -465,26 +483,32 @@ pub(crate) struct ResTableType {
     pub(crate) id: u8,
 
     /// Declares type of this resource
+    #[allow(unused)]
     pub(crate) flags: u8,
 
     /// The documentation says that this field should always be 0.
     ///
     /// NOTE: the value is intentionally not checked, because malware can break parsers
+    #[allow(unused)]
     pub(crate) reserved: u16,
 
     /// Number of uint32_t entry indices that follow
+    #[allow(unused)]
     pub(crate) entry_count: u32,
 
     /// Offset from header where ... data starts
     /// TODO: add link to structure
     /// TODO: expecting due to this shit parameter malware will sometimes fuckup resources
+    #[allow(unused)]
     pub(crate) entries_start: u32,
 
     /// Configuration this collection of entries is designed for
     /// This always must be last
+    #[allow(unused)]
     pub(crate) config: ResTableConfig,
 
     /// TODO: expecting due to this shit parameter malware will sometimes fuckup resources
+    #[allow(unused)]
     pub(crate) entry_offsets: Vec<u32>,
 
     /// Defined entries in this type
@@ -560,20 +584,17 @@ impl ResTableType {
         })
     }
 
-    #[inline(always)]
     // don't know how to handle this flag for now
+    #[allow(unused)]
+    #[inline(always)]
     pub(crate) fn is_sparse(flags: u8) -> bool {
         ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::SPARCE)
     }
 
     #[inline(always)]
+    #[allow(unused)]
     pub(crate) fn is_offset16(flags: u8) -> bool {
         ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::OFFSET16)
-    }
-
-    #[inline(always)]
-    pub(crate) fn id(&self) -> u8 {
-        self.id.saturating_sub(1)
     }
 }
 
@@ -632,11 +653,14 @@ impl fmt::Debug for ResTableLibraryEntry {
 /// [Source code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1735;drc=61197364367c9e404c7da6900658f1b16c42d0da)
 #[derive(Debug)]
 pub(crate) struct ResTableLibrary {
+    #[allow(unused)]
     pub(crate) header: ResChunkHeader,
 
     /// The number of shared libraries linked in this resource table
+    #[allow(unused)]
     pub(crate) count: u32,
 
+    #[allow(unused)]
     pub(crate) entries: Vec<ResTableLibraryEntry>,
 }
 
@@ -656,6 +680,7 @@ impl ResTableLibrary {
 
 /// Specifies the set of resourcers that are explicitly allowd to be overlaid by RPOs
 pub(crate) struct ResTableOverlayble {
+    #[allow(unused)]
     pub(crate) header: ResChunkHeader,
 
     /// The name of the overlaybalbe set of resources that overlays target
@@ -750,13 +775,17 @@ bitflags::bitflags! {
 
 #[derive(Debug)]
 pub(crate) struct ResTableOverlayblePolicy {
+    #[allow(unused)]
     pub(crate) header: ResChunkHeader,
 
+    #[allow(unused)]
     pub(crate) policy_flags: PolicyFlags,
 
     /// The number of ResTable_ref that follow this header
+    #[allow(unused)]
     pub(crate) entry_count: u32,
 
+    #[allow(unused)]
     pub(crate) entries: Vec<u32>,
 }
 

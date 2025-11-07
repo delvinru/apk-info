@@ -155,7 +155,6 @@ mod tests {
         let mut input = &data[..];
         let eocd = EndOfCentralDirectory::parse(&mut input).unwrap();
 
-        println!("{:#?}", eocd);
         assert_eq!(eocd.comment_length, comment.len() as u16);
         assert_eq!(eocd.comment.as_ref(), comment);
     }

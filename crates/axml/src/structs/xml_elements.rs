@@ -1,14 +1,19 @@
+use std::slice;
+
 use log::debug;
 use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::prelude::*;
 use winnow::token::take;
 
+use crate::axml::system_types;
 use crate::structs::{ResChunkHeader, ResourceValue};
 
 #[derive(Debug)]
 pub(crate) struct XMLResourceMap {
+    #[allow(unused)]
     pub(crate) header: ResChunkHeader,
+
     pub(crate) resource_ids: Vec<u32>,
 }
 
@@ -26,6 +31,13 @@ impl XMLResourceMap {
             resource_ids,
         })
     }
+
+    #[inline]
+    pub fn get_attr(&self, idx: u32) -> Option<&str> {
+        self.resource_ids
+            .get(idx as usize)
+            .and_then(|v| system_types::get_attr(v))
+    }
 }
 
 /// Basic XML tree node. A single item in the XML document.
@@ -34,9 +46,11 @@ pub(crate) struct XMLHeader {
     pub(crate) header: ResChunkHeader,
 
     /// Line number in original source file at which this element appeared
+    #[allow(unused)]
     pub(crate) line_number: u32,
 
-    // Optional XML comment that was associated with this element; -1 if none
+    /// Optional XML comment that was associated with this element; -1 if none
+    #[allow(unused)]
     pub(crate) comment: u32,
 }
 
@@ -60,7 +74,7 @@ impl XMLHeader {
     }
 }
 
-pub trait XmlElement {
+pub trait XmlParse {
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized;
@@ -69,15 +83,19 @@ pub trait XmlElement {
 /// Extended XML tree node for namespace start/end nodes
 #[derive(Debug)]
 pub(crate) struct XmlNamespace {
+    #[allow(unused)]
     pub(crate) header: XMLHeader,
+
     /// The prefix of the namespace
+    #[allow(unused)]
     pub(crate) prefix: u32,
 
     /// The URI of the namespace
+    #[allow(unused)]
     pub(crate) uri: u32,
 }
 
-impl XmlElement for XmlNamespace {
+impl XmlParse for XmlNamespace {
     #[inline]
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
@@ -102,6 +120,7 @@ pub(crate) struct XmlAttributeElement {
     pub(crate) name: u32,
 
     /// The original raw string value of this attribute
+    #[allow(unused)]
     pub(crate) value: u32,
 
     /// Processed typed value of this attribute
@@ -137,36 +156,45 @@ impl XmlAttributeElement {
 
 #[derive(Debug)]
 pub(crate) struct XmlStartElement {
+    #[allow(unused)]
     pub(crate) header: XMLHeader,
+
     /// String of the full namespace of this element
+    #[allow(unused)]
     pub(crate) namespace_uri: u32,
 
     /// String name of this node
     pub(crate) name: u32,
 
     /// Byte offset from the start of this structure where the attributes start
+    #[allow(unused)]
     pub(crate) attribute_start: u16,
 
     /// Size of the ...
+    #[allow(unused)]
     pub(crate) attribute_size: u16,
 
     /// Number of attributes associated with element
+    #[allow(unused)]
     pub(crate) attribute_count: u16,
 
     /// Index (1-based) of the "id" attribute. 0 if none.
+    #[allow(unused)]
     pub(crate) id_index: u16,
 
     /// Index (1-based) of the "class" attribute. 0 if none.
+    #[allow(unused)]
     pub(crate) class_index: u16,
 
     /// Index (1-based) of the "style" attribute. 0 if none.
+    #[allow(unused)]
     pub(crate) style_index: u16,
 
     /// List of associated attributes
     pub(crate) attributes: Vec<XmlAttributeElement>,
 }
 
-impl XmlElement for XmlStartElement {
+impl XmlParse for XmlStartElement {
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
@@ -238,12 +266,17 @@ impl XmlElement for XmlStartElement {
 
 #[derive(Debug)]
 pub(crate) struct XmlEndElement {
+    #[allow(unused)]
     pub(crate) header: XMLHeader,
+
+    #[allow(unused)]
     pub(crate) namespace_uri: u32,
+
+    #[allow(unused)]
     pub(crate) name: u32,
 }
 
-impl XmlElement for XmlEndElement {
+impl XmlParse for XmlEndElement {
     #[inline]
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
@@ -262,16 +295,19 @@ impl XmlElement for XmlEndElement {
 /// Extended XML tree node for CDATA tags - includes the CDATA string.
 #[derive(Debug)]
 pub(crate) struct XmlCData {
+    #[allow(unused)]
     pub(crate) header: XMLHeader,
 
-    // The raw CDATA character data
+    /// The raw CDATA character data
+    #[allow(unused)]
     pub(crate) data: u32,
 
-    // The typed value of the character data if this is a CDATA node
+    /// The typed value of the character data if this is a CDATA node
+    #[allow(unused)]
     pub(crate) typed_data: ResourceValue,
 }
 
-impl XmlElement for XmlCData {
+impl XmlParse for XmlCData {
     #[inline]
     fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
     where
@@ -285,5 +321,184 @@ impl XmlElement for XmlCData {
             data,
             typed_data,
         })
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+pub(crate) struct Attribute {
+    prefix: Option<String>,
+    name: String,
+    value: String,
+}
+
+impl Attribute {
+    pub(crate) fn new(prefix: Option<&str>, name: &str, value: &str) -> Attribute {
+        Self {
+            prefix: prefix.map(String::from),
+            name: name.to_owned(),
+            value: value.to_owned(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[inline(always)]
+    pub(crate) fn value(&self) -> &str {
+        &self.value
+    }
+}
+
+impl std::fmt::Display for Attribute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(prefix) = &self.prefix {
+            write!(f, "{}:{}=\"{}\"", prefix, self.name, self.value)
+        } else {
+            write!(f, "{}=\"{}\"", self.name, self.value)
+        }
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Element {
+    name: String,
+    attributes: Vec<Attribute>,
+    childrens: Vec<Element>,
+}
+
+impl Element {
+    pub(crate) fn new(name: &str) -> Element {
+        Element {
+            name: name.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    pub(crate) fn set_attribute(mut self, name: &str, value: &str) -> Element {
+        self.attributes.push(Attribute::new(None, name, value));
+        self
+    }
+
+    pub(crate) fn set_attribute_with_prefix(
+        mut self,
+        prefix: Option<&str>,
+        name: &str,
+        value: &str,
+    ) -> Element {
+        self.attributes.push(Attribute::new(prefix, name, value));
+        self
+    }
+
+    #[inline(always)]
+    pub(crate) fn append_child(&mut self, child: Element) {
+        self.childrens.push(child);
+    }
+
+    pub(crate) fn childrens(&self) -> impl Iterator<Item = &Element> {
+        ElementIter {
+            iter: self.childrens.iter(),
+        }
+    }
+
+    pub(crate) fn attributes(&self) -> impl Iterator<Item = &Attribute> {
+        AttributeIter {
+            iter: self.attributes.iter(),
+        }
+    }
+
+    #[inline(always)]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[inline(always)]
+    pub fn attr(&self, name: &str) -> Option<&str> {
+        self.attributes
+            .iter()
+            .find(|x| x.name() == name)
+            .map(|x| x.value())
+    }
+
+    pub(crate) fn fmt_with_indent(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        indent: usize,
+    ) -> std::fmt::Result {
+        let indent_str = "  ".repeat(indent);
+
+        write!(f, "{}<{}", indent_str, self.name)?;
+
+        if self.attributes.len() > 1 {
+            let indent_str = "  ".repeat(indent + 1);
+
+            write!(f, "\n{}", indent_str)?;
+
+            for (idx, attr) in self.attributes.iter().enumerate() {
+                write!(f, "{}", attr)?;
+
+                if idx != self.attributes.len() - 1 {
+                    write!(f, "\n{}", indent_str)?;
+                }
+            }
+        } else if self.attributes.len() == 1 {
+            // safe unwrap, checked that contains at least 1 item
+            write!(f, " {}", self.attributes.first().unwrap())?;
+        }
+
+        if self.childrens.is_empty() {
+            writeln!(f, "/>")?;
+        } else {
+            writeln!(f, ">")?;
+
+            for child in &self.childrens {
+                child.fmt_with_indent(f, indent + 1)?;
+            }
+
+            writeln!(f, "{}</{}>", indent_str, self.name)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Element {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // default xml header
+        writeln!(f, "<?xml version=\"1.0\" encoding=\"utf-8\"?>")?;
+
+        // pretty print
+        self.fmt_with_indent(f, 0)
+    }
+}
+
+pub(crate) struct ElementIter<'a> {
+    iter: slice::Iter<'a, Element>,
+}
+
+impl<'a> Iterator for ElementIter<'a> {
+    type Item = &'a Element;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for item in &mut self.iter {
+            return Some(item);
+        }
+        None
+    }
+}
+
+pub(crate) struct AttributeIter<'a> {
+    iter: slice::Iter<'a, Attribute>,
+}
+
+impl<'a> Iterator for AttributeIter<'a> {
+    type Item = &'a Attribute;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        for item in &mut self.iter {
+            return Some(item);
+        }
+        None
     }
 }

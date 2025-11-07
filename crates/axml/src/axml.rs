@@ -1,12 +1,11 @@
 use log::warn;
-use minidom::Element;
 use winnow::error::{ContextError, ErrMode};
 use winnow::prelude::*;
 use winnow::token::take;
 
 use crate::structs::{
-    ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
-    XmlElement, XmlEndElement, XmlNamespace, XmlStartElement,
+    Element, ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
+    XmlEndElement, XmlNamespace, XmlParse, XmlStartElement,
 };
 use crate::{ARSC, AXMLError};
 
@@ -122,21 +121,18 @@ impl AXML {
                         continue;
                     };
 
-                    let mut element = Element::builder(name, ANDROID_NAMESPACE);
+                    let mut element = Element::new(name);
 
                     if name == "manifest" {
-                        element = element.attr("xmlns:android", ANDROID_NAMESPACE);
+                        element = element.set_attribute("xmlns:android", ANDROID_NAMESPACE);
                     }
 
                     for attribute in &node.attributes {
-                        let attribute_name = match Self::get_string_from_pool(
-                            attribute.name,
-                            string_pool,
-                            xml_resource,
-                        ) {
-                            Some(name) => name,
-                            None => continue,
-                        };
+                        let attribute_name =
+                            match string_pool.get_with_resources(attribute.name, xml_resource) {
+                                Some(v) => v,
+                                None => continue,
+                            };
 
                         // skip garbage strings
                         if attribute_name.contains(char::is_whitespace) {
@@ -144,13 +140,25 @@ impl AXML {
                             continue;
                         }
 
-                        element = element.attr(
-                            attribute_name,
-                            attribute.typed_value.to_string(string_pool, arsc),
-                        );
+                        match string_pool.get_with_resources(attribute.namespace_uri, xml_resource)
+                        {
+                            Some(_) => {
+                                element = element.set_attribute_with_prefix(
+                                    Some("android"),
+                                    attribute_name,
+                                    &attribute.typed_value.to_string(string_pool, arsc),
+                                )
+                            }
+                            None => {
+                                element = element.set_attribute(
+                                    attribute_name,
+                                    &attribute.typed_value.to_string(string_pool, arsc),
+                                );
+                            }
+                        }
                     }
 
-                    stack.push(element.build());
+                    stack.push(element);
                 }
                 ResourceHeaderType::XmlEndElement => {
                     let _ = XmlEndElement::parse(input, xml_header);
@@ -161,18 +169,7 @@ impl AXML {
                     }
                 }
                 ResourceHeaderType::XmlCdata => {
-                    let node = match XmlCData::parse(input, xml_header) {
-                        Ok(v) => v,
-                        Err(_) => break,
-                    };
-
-                    let Some(data) = string_pool.get(node.data) else {
-                        continue;
-                    };
-
-                    if let Some(el) = stack.last_mut() {
-                        el.append_text(data);
-                    }
+                    let _ = XmlCData::parse(input, xml_header);
                 }
                 _ => {
                     warn!("unknown header type: {:#?}", xml_header.header.type_);
@@ -183,30 +180,8 @@ impl AXML {
         (!stack.is_empty()).then(|| stack.remove(0))
     }
 
-    #[inline]
-    fn get_string_from_pool<'a>(
-        idx: u32,
-        string_pool: &'a StringPool,
-        xml_resource: &'a XMLResourceMap,
-    ) -> Option<&'a str> {
-        string_pool
-            .get(idx)
-            .map(|x| x.as_str())
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                xml_resource
-                    .resource_ids
-                    .get(idx as usize)
-                    .and_then(|v| system_types::get_attr(v))
-            })
-    }
-
-    // TODO: made pretty output
     pub fn get_xml_string(&self) -> String {
-        let mut buf = Vec::new();
-        let _ = self.root.write_to(&mut buf);
-
-        String::from_utf8_lossy(&buf).to_string()
+        self.root.to_string()
     }
 
     pub fn get_attribute_value(
@@ -220,7 +195,7 @@ impl AXML {
             self.root.attr(name).map(|s| s.to_string())
         } else {
             self.root
-                .children()
+                .childrens()
                 .find(|child| child.name() == tag)
                 .and_then(|child| child.attr(name))
                 .map(|s| s.to_string())
@@ -250,16 +225,15 @@ impl AXML {
 
         std::iter::from_fn(move || {
             while let Some(elem) = stack.pop() {
-                // Push children in original order (no `.rev()`)
-                for child in elem.children() {
+                for child in elem.childrens() {
                     stack.push(child);
                 }
 
                 // If tag matches, yield the attribute value
                 if elem.name() == tag {
-                    for (attr_name, attr_value) in elem.attrs() {
-                        if attr_name == name {
-                            return Some(attr_value);
+                    for attribute in elem.attributes() {
+                        if attribute.name() == name {
+                            return Some(attribute.value());
                         }
                     }
                 }
@@ -273,8 +247,7 @@ impl AXML {
 
         std::iter::from_fn(move || {
             while let Some(elem) = stack.pop() {
-                // Push children in original order (no `.rev()`)
-                for child in elem.children() {
+                for child in elem.childrens() {
                     stack.push(child);
                 }
 
@@ -296,9 +269,9 @@ impl AXML {
     /// See: <https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/core/java/android/app/ApplicationPackageManager.java;l=310?q=getLaunchIntentForPackage>
     pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {
         self.root
-            .children()
+            .childrens()
             .filter(|c| c.name() == "application")
-            .flat_map(|app| app.children())
+            .flat_map(|app| app.childrens())
             .filter_map(|activity| {
                 // check tag and enabled state
                 let tag = activity.name();
@@ -309,7 +282,7 @@ impl AXML {
                 }
 
                 // find <intent-filter> with MAIN action + LAUNCHER/INFO category
-                let has_matching_intent = activity.children().any(|intent_filter| {
+                let has_matching_intent = activity.childrens().any(|intent_filter| {
                     if intent_filter.name() != "intent-filter" {
                         return false;
                     }
@@ -317,7 +290,7 @@ impl AXML {
                     let mut has_main = false;
                     let mut has_launcher = false;
 
-                    for child in intent_filter.children() {
+                    for child in intent_filter.childrens() {
                         match child.name() {
                             "action"
                                 if child.attr("name") == Some("android.intent.action.MAIN") =>
