@@ -481,10 +481,7 @@ impl<'a> Iterator for ElementIter<'a> {
     type Item = &'a Element;
 
     fn next(&mut self) -> Option<Self::Item> {
-        for item in &mut self.iter {
-            return Some(item);
-        }
-        None
+        self.iter.next()
     }
 }
 
@@ -496,9 +493,6 @@ impl<'a> Iterator for AttributeIter<'a> {
     type Item = &'a Attribute;
 
     fn next(&mut self) -> Option<Self::Item> {
-        for item in &mut self.iter {
-            return Some(item);
-        }
-        None
+        self.iter.next()
     }
 }

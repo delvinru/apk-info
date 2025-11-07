@@ -109,7 +109,7 @@ impl ARSC {
 
                     self.get_resource_value(e.value.data)
                 }
-                _ => Some(e.value.to_string(&self.global_string_pool, Some(&self))),
+                _ => Some(e.value.to_string(&self.global_string_pool, Some(self))),
             },
             // if got nothing - gg
             ResTableEntry::NoEntry => None,

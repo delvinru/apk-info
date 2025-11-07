@@ -7,7 +7,7 @@ use apk_info_axml::axml::AXML;
 use apk_info_zip::{FileCompressionType, Signature, ZipEntry, ZipError};
 
 use crate::errors::APKError;
-use crate::models::{ApkJson, Application, Receiver, Service, XAPKManifest};
+use crate::models::{Receiver, Service, XAPKManifest};
 
 const ANDROID_MANIFEST_PATH: &str = "AndroidManifest.xml";
 const RESOURCE_TABLE_PATH: &str = "resources.arsc";
@@ -118,48 +118,6 @@ impl Apk {
         let (zip, axml, arsc) = Self::init_zip_and_axml(path)?;
 
         Ok(Apk { zip, axml, arsc })
-    }
-
-    pub fn get_all_information(&self, pretty: bool) -> String {
-        let info = ApkJson {
-            package_name: self.get_package_name().map(String::from),
-            min_sdk_version: self.get_min_sdk_version().map(String::from),
-            target_sdk_version: self.get_target_sdk_version().map(String::from),
-            max_sdk_version: self.get_max_sdk_version().map(String::from),
-            declared_permissions: self.get_declared_permissions().map(String::from).collect(),
-            shared_user_id: self.get_shared_user_id().map(String::from),
-            shared_user_label: self.get_shared_user_label().map(String::from),
-            shared_user_max_sdk_version: self.get_shared_user_max_sdk_version().map(String::from),
-            version_code: self.get_version_code().map(String::from),
-            version_name: self.get_version_name().map(String::from),
-            install_location: self.get_install_location().map(String::from),
-            features: self.get_features().map(String::from).collect(),
-            permissions: self.get_permissions().map(String::from).collect(),
-            permissions_sdk23: self.get_permissions_sdk23().map(String::from).collect(),
-            application: Application {
-                allow_task_reparenting: self.get_application_task_reparenting().map(String::from),
-                allow_backup: self.get_application_allow_backup().map(String::from),
-                app_category: self.get_application_category().map(String::from),
-                backup_agent: self.get_application_backup_agent().map(String::from),
-                debuggable: self.get_application_debuggable().map(String::from),
-                description: self.get_application_description().map(String::from),
-                label: self.get_application_label(),
-                name: self.get_application_name().map(String::from),
-            },
-            main_activities: self.get_main_activities().map(String::from).collect(),
-            libraries: self.get_libraries().map(String::from).collect(),
-            activities: self.get_activities().map(String::from).collect(),
-            services: self.get_services().collect(),
-            receivers: self.get_receivers().collect(),
-            providers: self.get_providers().map(String::from).collect(),
-        };
-
-        // TODO: remove unwrap
-        if pretty {
-            serde_json::to_string_pretty(&info).unwrap()
-        } else {
-            serde_json::to_string(&info).unwrap()
-        }
     }
 
     /// Read data from zip by filename

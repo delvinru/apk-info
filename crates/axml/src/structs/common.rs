@@ -227,13 +227,13 @@ impl ResourceValue {
         match self.data_type {
             ResourceValueType::Reference => {
                 let pkg = self.fmt_package();
-                if let Some(arsc) = arsc {
-                    if let Some(value) = arsc.get_resource_name(self.data) {
-                        out.push('@');
-                        out.push_str(pkg);
-                        out.push_str(&value);
-                        return out;
-                    }
+                if let Some(arsc) = arsc
+                    && let Some(value) = arsc.get_resource_name(self.data)
+                {
+                    out.push('@');
+                    out.push_str(pkg);
+                    out.push_str(&value);
+                    return out;
                 }
                 // fallback
                 write!(&mut out, "@{}{:08x}", pkg, self.data).unwrap();
