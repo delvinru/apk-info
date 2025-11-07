@@ -27,7 +27,7 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
 
     println!(
         "Package Name: {}",
-        apk.get_package_name().unwrap_or("-").green()
+        apk.get_package_name().unwrap_or("-".to_string()).green()
     );
     println!(
         "Main Activity: {}",
@@ -35,15 +35,17 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
     );
     println!(
         "Min SDK Version: {}",
-        apk.get_min_sdk_version().unwrap_or("-").green()
+        apk.get_min_sdk_version().unwrap_or("-".to_string()).green()
     );
     println!(
         "Max SDK Version: {}",
-        apk.get_max_sdk_version().unwrap_or("-").green()
+        apk.get_max_sdk_version().unwrap_or("-".to_string()).green()
     );
     println!(
         "Target SDK Version: {}",
-        apk.get_target_sdk_version().unwrap_or("-").green()
+        apk.get_target_sdk_version()
+            .unwrap_or("-".to_string())
+            .green()
     );
     println!(
         "Application Label: {}",

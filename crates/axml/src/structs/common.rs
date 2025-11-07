@@ -1,12 +1,15 @@
+use std::fmt::Write;
+
 use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::prelude::*;
 
+use crate::ARSC;
 use crate::structs::StringPool;
 
 /// See: https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=237
 #[derive(Debug, PartialEq, Default, Eq, PartialOrd, Ord)]
 #[repr(u16)]
-pub(crate) enum ResourceType {
+pub(crate) enum ResourceHeaderType {
     #[default]
     Null = 0x0000,
     StringPool = 0x0001,
@@ -36,28 +39,28 @@ pub(crate) enum ResourceType {
     Unknown(u16),
 }
 
-impl From<u16> for ResourceType {
+impl From<u16> for ResourceHeaderType {
     fn from(value: u16) -> Self {
         match value {
-            0x0000 => ResourceType::Null,
-            0x0001 => ResourceType::StringPool,
-            0x0002 => ResourceType::Table,
-            0x0003 => ResourceType::Xml,
-            0x0100 => ResourceType::XmlStartNamespace,
-            0x0101 => ResourceType::XmlEndNamespace,
-            0x0102 => ResourceType::XmlStartElement,
-            0x0103 => ResourceType::XmlEndElement,
-            0x0104 => ResourceType::XmlCdata,
-            0x017f => ResourceType::XmlLastChunk,
-            0x0180 => ResourceType::XmlResourceMap,
-            0x0200 => ResourceType::TablePackage,
-            0x0201 => ResourceType::TableType,
-            0x0202 => ResourceType::TableTypeSpec,
-            0x0203 => ResourceType::TableLibrary,
-            0x0204 => ResourceType::TableOverlayable,
-            0x0205 => ResourceType::TableOverlayablePolicy,
-            0x0206 => ResourceType::TableStagedAlias,
-            other => ResourceType::Unknown(other),
+            0x0000 => ResourceHeaderType::Null,
+            0x0001 => ResourceHeaderType::StringPool,
+            0x0002 => ResourceHeaderType::Table,
+            0x0003 => ResourceHeaderType::Xml,
+            0x0100 => ResourceHeaderType::XmlStartNamespace,
+            0x0101 => ResourceHeaderType::XmlEndNamespace,
+            0x0102 => ResourceHeaderType::XmlStartElement,
+            0x0103 => ResourceHeaderType::XmlEndElement,
+            0x0104 => ResourceHeaderType::XmlCdata,
+            0x017f => ResourceHeaderType::XmlLastChunk,
+            0x0180 => ResourceHeaderType::XmlResourceMap,
+            0x0200 => ResourceHeaderType::TablePackage,
+            0x0201 => ResourceHeaderType::TableType,
+            0x0202 => ResourceHeaderType::TableTypeSpec,
+            0x0203 => ResourceHeaderType::TableLibrary,
+            0x0204 => ResourceHeaderType::TableOverlayable,
+            0x0205 => ResourceHeaderType::TableOverlayablePolicy,
+            0x0206 => ResourceHeaderType::TableStagedAlias,
+            other => ResourceHeaderType::Unknown(other),
         }
     }
 }
@@ -68,7 +71,7 @@ impl From<u16> for ResourceType {
 #[derive(Debug, Default)]
 pub(crate) struct ResChunkHeader {
     /// Type identifier for this chunk. The meaning of this value depends on the containing chunk.
-    pub(crate) type_: ResourceType,
+    pub(crate) type_: ResourceHeaderType,
 
     /// Size of the chunk header (in bytes).  Adding this value to
     /// the address of the chunk allows you to find its associated data
@@ -88,7 +91,7 @@ impl ResChunkHeader {
     pub fn parse(input: &mut &[u8]) -> ModalResult<ResChunkHeader> {
         (le_u16, le_u16, le_u32)
             .map(|(type_, header_size, size)| ResChunkHeader {
-                type_: ResourceType::from(type_),
+                type_: ResourceHeaderType::from(type_),
                 header_size,
                 size,
             })
@@ -218,37 +221,86 @@ impl ResourceValue {
             .parse_next(input)
     }
 
-    // TODO: maybe somehow make this better or optimize
-    pub fn to_string(&self, string_pool: &StringPool) -> String {
+    pub fn to_string(&self, string_pool: &StringPool, arsc: Option<&ARSC>) -> String {
+        let mut out = String::with_capacity(32);
+
         match self.data_type {
-            ResourceValueType::Reference => format!("@{}{:08x}", self.fmt_package(), self.data),
-            ResourceValueType::Attribute => format!("?{}{:08x}", self.fmt_package(), self.data),
-            ResourceValueType::String => string_pool.get(self.data).cloned().unwrap_or_default(),
-            ResourceValueType::Float => f32::from_bits(self.data).to_string(),
+            ResourceValueType::Reference => {
+                let pkg = self.fmt_package();
+                if let Some(arsc) = arsc {
+                    if let Some(value) = arsc.get_resource_name(self.data) {
+                        out.push('@');
+                        out.push_str(pkg);
+                        out.push_str(&value);
+                        return out;
+                    }
+                }
+                // fallback
+                write!(&mut out, "@{}{:08x}", pkg, self.data).unwrap();
+                out
+            }
+
+            ResourceValueType::Attribute => {
+                write!(&mut out, "?{}{:08x}", self.fmt_package(), self.data).unwrap();
+                out
+            }
+
+            ResourceValueType::String => {
+                // direct clone or fallback to empty
+                string_pool.get(self.data).cloned().unwrap_or_default()
+            }
+
+            ResourceValueType::Float => {
+                // avoid heap
+                let f = f32::from_bits(self.data);
+                write!(&mut out, "{}", f).unwrap();
+                out
+            }
+
             ResourceValueType::Dimension => {
                 let idx = (self.data & Self::COMPLEX_UNIT_MASK) as usize;
                 let unit = Self::DIMENSION_UNITS.get(idx).unwrap_or(&"");
-                format!("{}{}", self.complex_to_float(), unit)
+                write!(&mut out, "{}{}", self.complex_to_float(), unit).unwrap();
+                out
             }
+
             ResourceValueType::Fraction => {
                 let idx = (self.data & Self::COMPLEX_UNIT_MASK) as usize;
                 let unit = Self::FRACTION_UNITS.get(idx).unwrap_or(&"");
-                format!("{}{}", self.complex_to_float() * 100f64, unit)
+                write!(&mut out, "{}{}", self.complex_to_float() * 100.0, unit).unwrap();
+                out
             }
-            ResourceValueType::Dec => format!("{}", self.data),
-            ResourceValueType::Hex => format!("0x{:08x}", self.data),
+
+            ResourceValueType::Dec => {
+                write!(&mut out, "{}", self.data).unwrap();
+                out
+            }
+
+            ResourceValueType::Hex => {
+                write!(&mut out, "0x{:08x}", self.data).unwrap();
+                out
+            }
+
             ResourceValueType::Boolean => {
                 if self.data == 0 {
-                    "false".to_owned()
+                    "false".into()
                 } else {
-                    "true".to_owned()
+                    "true".into()
                 }
             }
+
             ResourceValueType::ColorArgb8
             | ResourceValueType::ColorRgb8
             | ResourceValueType::ColorArgb4
-            | ResourceValueType::ColorRgb4 => format!("#{:08x}", self.data),
-            _ => format!("<0x{:x}, type {:?}>", self.data, self.data_type),
+            | ResourceValueType::ColorRgb4 => {
+                write!(&mut out, "#{:08x}", self.data).unwrap();
+                out
+            }
+
+            _ => {
+                write!(&mut out, "<0x{:x}, type {:?}>", self.data, self.data_type).unwrap();
+                out
+            }
         }
     }
 

@@ -6,7 +6,7 @@ use ::apk_info::models::{Receiver as ApkReceiver, Service as ApkService};
 use ::apk_info_zip::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+use pyo3::types::{PyBytes, PyString};
 use pyo3::{Bound, PyAny, PyResult, create_exception, pyclass, pymethods};
 
 create_exception!(m, APKError, PyException, "Got error while parsing apk");
@@ -297,7 +297,7 @@ impl Receiver {
     }
 }
 
-#[pyclass(name = "APK")]
+#[pyclass(name = "APK", unsendable)]
 struct Apk {
     /// Store rust object in memory
     apkrs: ApkRust,
@@ -347,55 +347,55 @@ impl Apk {
         self.apkrs.get_files().collect()
     }
 
-    pub fn get_package_name(&self) -> Option<&str> {
+    pub fn get_package_name(&self) -> Option<String> {
         self.apkrs.get_package_name()
     }
 
-    pub fn get_shared_user_id(&self) -> Option<&str> {
+    pub fn get_shared_user_id(&self) -> Option<String> {
         self.apkrs.get_shared_user_id()
     }
 
-    pub fn get_shared_user_label(&self) -> Option<&str> {
+    pub fn get_shared_user_label(&self) -> Option<String> {
         self.apkrs.get_shared_user_label()
     }
 
-    pub fn get_shared_user_max_sdk_version(&self) -> Option<&str> {
+    pub fn get_shared_user_max_sdk_version(&self) -> Option<String> {
         self.apkrs.get_shared_user_max_sdk_version()
     }
 
-    pub fn get_version_code(&self) -> Option<&str> {
+    pub fn get_version_code(&self) -> Option<String> {
         self.apkrs.get_version_code()
     }
 
-    pub fn get_version_name(&self) -> Option<&str> {
+    pub fn get_version_name(&self) -> Option<String> {
         self.apkrs.get_version_name()
     }
 
-    pub fn get_install_location(&self) -> Option<&str> {
+    pub fn get_install_location(&self) -> Option<String> {
         self.apkrs.get_install_location()
     }
 
-    pub fn get_application_task_reparenting(&self) -> Option<&str> {
+    pub fn get_application_task_reparenting(&self) -> Option<String> {
         self.apkrs.get_application_task_reparenting()
     }
 
-    pub fn get_application_allow_backup(&self) -> Option<&str> {
+    pub fn get_application_allow_backup(&self) -> Option<String> {
         self.apkrs.get_application_allow_backup()
     }
 
-    pub fn get_application_category(&self) -> Option<&str> {
+    pub fn get_application_category(&self) -> Option<String> {
         self.apkrs.get_application_category()
     }
 
-    pub fn get_application_backup_agent(&self) -> Option<&str> {
+    pub fn get_application_backup_agent(&self) -> Option<String> {
         self.apkrs.get_application_backup_agent()
     }
 
-    pub fn get_application_debuggable(&self) -> Option<&str> {
+    pub fn get_application_debuggable(&self) -> Option<String> {
         self.apkrs.get_application_debuggable()
     }
 
-    pub fn get_application_description(&self) -> Option<&str> {
+    pub fn get_application_description(&self) -> Option<String> {
         self.apkrs.get_application_description()
     }
 
@@ -403,7 +403,7 @@ impl Apk {
         self.apkrs.get_application_label()
     }
 
-    pub fn get_application_name(&self) -> Option<&str> {
+    pub fn get_application_name(&self) -> Option<String> {
         self.apkrs.get_application_name()
     }
 
@@ -415,15 +415,15 @@ impl Apk {
         self.apkrs.get_permissions_sdk23().collect()
     }
 
-    pub fn get_min_sdk_version(&self) -> Option<&str> {
+    pub fn get_min_sdk_version(&self) -> Option<String> {
         self.apkrs.get_min_sdk_version()
     }
 
-    pub fn get_target_sdk_version(&self) -> Option<&str> {
+    pub fn get_target_sdk_version(&self) -> Option<String> {
         self.apkrs.get_target_sdk_version()
     }
 
-    pub fn get_max_sdk_version(&self) -> Option<&str> {
+    pub fn get_max_sdk_version(&self) -> Option<String> {
         self.apkrs.get_max_sdk_version()
     }
 

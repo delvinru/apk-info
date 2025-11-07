@@ -11,7 +11,8 @@ use winnow::stream::Stream;
 use winnow::token::take;
 
 use crate::structs::{
-    ResChunkHeader, ResTableConfig, ResTableConfigFlags, ResourceType, ResourceValue, StringPool,
+    ResChunkHeader, ResTableConfig, ResTableConfigFlags, ResourceHeaderType, ResourceValue,
+    StringPool,
 };
 
 /// Header for a resource table
@@ -570,19 +571,9 @@ impl ResTableType {
         ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::OFFSET16)
     }
 
-    /// Get "real" id to resolve name from [`ResTablePackage::type_strings`]
-    ///
-    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=7073;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=1;bpt=1)
     #[inline(always)]
     pub(crate) fn id(&self) -> u8 {
         self.id.saturating_sub(1)
-    }
-}
-
-impl Hash for ResTableType {
-    /// Generate hash based on config hash
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.config.hash(state);
     }
 }
 
@@ -818,7 +809,7 @@ impl ResTablePackage {
 
             let header = match ResChunkHeader::parse(input) {
                 // got other package, need return
-                Ok(v) if v.type_ == ResourceType::TablePackage => {
+                Ok(v) if v.type_ == ResourceHeaderType::TablePackage => {
                     input.reset(&checkpoint);
                     break;
                 }
@@ -828,11 +819,11 @@ impl ResTablePackage {
             };
 
             match header.type_ {
-                ResourceType::TableTypeSpec => {
+                ResourceHeaderType::TableTypeSpec => {
                     // idk what should i do with this value
                     let _ = ResTableTypeSpec::parse(header, input)?;
                 }
-                ResourceType::TableType => {
+                ResourceHeaderType::TableType => {
                     let type_type = ResTableType::parse(header, input)?;
 
                     resources
@@ -841,14 +832,14 @@ impl ResTablePackage {
                         .entry(type_type.id)
                         .or_insert_with(|| type_type.entries);
                 }
-                ResourceType::TableLibrary => {
+                ResourceHeaderType::TableLibrary => {
                     // idk what should i do with this value
                     let _ = ResTableLibrary::parse(header, input)?;
                 }
-                ResourceType::TableOverlayable => {
+                ResourceHeaderType::TableOverlayable => {
                     let _ = ResTableOverlayble::parse(header, input)?;
                 }
-                ResourceType::TableOverlayablePolicy => {
+                ResourceHeaderType::TableOverlayablePolicy => {
                     let _ = ResTableOverlayblePolicy::parse(header, input)?;
                 }
                 _ => warn!("got unknown header: {:?}", header),
@@ -904,5 +895,34 @@ impl ResTablePackage {
 
         // can't find anything
         None
+    }
+
+    pub(crate) fn get_reference_name(
+        &self,
+        config: &ResTableConfig,
+        type_id: u8,
+        entry_id: u16,
+    ) -> Option<String> {
+        let type_map = self.resources.get(config)?;
+        let (type_id, entries) = type_map.get_key_value(&type_id)?;
+        let entry = entries.get(entry_id as usize)?;
+
+        // get "real" id to resolve name
+        // [Source Code](https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/ResourceTypes.cpp#7101)
+        Some(format!(
+            "{}/{}",
+            self.type_strings.get(type_id.saturating_sub(1) as u32)?,
+            self.get_entry_key(entry)?
+        ))
+    }
+
+    #[inline]
+    fn get_entry_key(&self, entry: &ResTableEntry) -> Option<&String> {
+        match entry {
+            ResTableEntry::Compact(e) => self.key_strings.get(e.data),
+            ResTableEntry::Complex(e) => self.key_strings.get(e.index),
+            ResTableEntry::Default(e) => self.key_strings.get(e.index),
+            ResTableEntry::NoEntry => None,
+        }
     }
 }

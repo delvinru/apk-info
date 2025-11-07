@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
@@ -13,13 +13,7 @@ pub(crate) fn get_all_files(
                 .into_iter()
                 .filter_map(Result::ok)
                 .filter(|e| e.path().is_file())
-                .filter(move |e| {
-                    e.path()
-                        .extension()
-                        .and_then(|s| s.to_str())
-                        .map(|ext| allowed_exts.iter().any(|a| a == &ext.to_lowercase()))
-                        .unwrap_or(false)
-                })
+                .filter(move |e| contains_extensions(e.path(), allowed_exts))
                 .map(|e| e.path().to_path_buf())
                 .collect::<Vec<_>>() // intermediate vec because of closure capture
                 .into_iter()
@@ -39,4 +33,11 @@ pub(crate) fn get_all_files(
             Vec::new().into_iter()
         }
     })
+}
+
+pub(crate) fn contains_extensions(path: &Path, allowed_exts: &[&str]) -> bool {
+    path.extension()
+        .and_then(|x| x.to_str())
+        .map(|ext| allowed_exts.iter().any(|a| a == &ext.to_lowercase()))
+        .unwrap_or(false)
 }

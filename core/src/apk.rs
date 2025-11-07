@@ -1,5 +1,5 @@
-use std::fs;
-use std::io::{self};
+use std::fs::File;
+use std::io::{self, BufReader, Read};
 use std::path::Path;
 
 use apk_info_axml::ARSC;
@@ -20,14 +20,17 @@ const PROTO_RESOURCE_TABLE_PATH: &str = "resources.pb";
 pub struct Apk {
     pub zip: ZipEntry,
     pub axml: AXML,
-    pub arsc: ARSC,
+    pub arsc: Option<ARSC>,
 }
 
 /// Implementation of internal methods
 impl Apk {
     /// Helper function for reading apk files
-    fn init_zip_and_axml(p: &Path) -> Result<(ZipEntry, AXML, ARSC), APKError> {
-        let input = fs::read(p).map_err(APKError::IoError)?;
+    fn init_zip_and_axml(p: &Path) -> Result<(ZipEntry, AXML, Option<ARSC>), APKError> {
+        let file = File::open(p).map_err(APKError::IoError)?;
+        let mut reader = BufReader::with_capacity(1024 * 1024, file);
+        let mut input = Vec::new();
+        reader.read_to_end(&mut input).map_err(APKError::IoError)?;
 
         if input.is_empty() {
             return Err(APKError::InvalidInput("got empty file"));
@@ -43,17 +46,17 @@ impl Apk {
                     ));
                 }
 
-                let axml = AXML::new(&mut &manifest[..]).map_err(APKError::ManifestError)?;
-
-                // TODO: don't forget refactor
-                let (inner_resources_data, _) = zip.read(RESOURCE_TABLE_PATH).map_err(|_| {
-                    APKError::InvalidInput("can't find resources.arsc, is it apk/xapk?")
-                })?;
-
                 // d5b7d025712f0f22562b3d511d7603f5c8a0c477675c6578083fa7709ca41ba8 - sample without resourcers, but in theory we can show information, need research
                 // 3474625e63d0893fc8f83034e835472d95195254e1e4bdf99153b7c74eb44d86 - same
-                let arsc =
-                    ARSC::new(&mut &inner_resources_data[..]).map_err(APKError::ResourceError)?;
+                let arsc = match zip.read(RESOURCE_TABLE_PATH) {
+                    Ok((resource_data, _)) => {
+                        Some(ARSC::new(&mut &resource_data[..]).map_err(APKError::ResourceError)?)
+                    }
+                    Err(_) => None,
+                };
+
+                let axml = AXML::new(&mut &manifest[..], arsc.as_ref())
+                    .map_err(APKError::ManifestError)?;
 
                 Ok((zip, axml, arsc))
             }
@@ -84,15 +87,17 @@ impl Apk {
                     ));
                 }
 
-                let axml = AXML::new(&mut &inner_manifest[..]).map_err(APKError::ManifestError)?;
+                // d5b7d025712f0f22562b3d511d7603f5c8a0c477675c6578083fa7709ca41ba8 - sample without resourcers, but in theory we can show information, need research
+                // 3474625e63d0893fc8f83034e835472d95195254e1e4bdf99153b7c74eb44d86 - same
+                let arsc = match zip.read(RESOURCE_TABLE_PATH) {
+                    Ok((resource_data, _)) => {
+                        Some(ARSC::new(&mut &resource_data[..]).map_err(APKError::ResourceError)?)
+                    }
+                    Err(_) => None,
+                };
 
-                // TODO: don't forget refactor
-                let (inner_resources_data, _) =
-                    inner_apk.read(RESOURCE_TABLE_PATH).map_err(|_| {
-                        APKError::InvalidInput("can't find resources.arsc, is it apk/xapk?")
-                    })?;
-                let arsc =
-                    ARSC::new(&mut &inner_resources_data[..]).map_err(APKError::ResourceError)?;
+                let axml = AXML::new(&mut &inner_manifest[..], arsc.as_ref())
+                    .map_err(APKError::ManifestError)?;
 
                 Ok((zip, axml, arsc))
             }
@@ -175,30 +180,33 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#package>
-    pub fn get_package_name(&self) -> Option<&str> {
-        self.axml.get_attribute_value("manifest", "package")
+    pub fn get_package_name(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "package", self.arsc.as_ref())
     }
 
     /// Retrieves the `sharedUserId` defined in the `<manifest>` tag.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#uid>
-    pub fn get_shared_user_id(&self) -> Option<&str> {
-        self.axml.get_attribute_value("manifest", "sharedUserId")
+    pub fn get_shared_user_id(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "sharedUserId", self.arsc.as_ref())
     }
 
     /// Retrieves the `sharedUserLabel` defined in the `<manifest>` tag.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#uidlabel>
-    pub fn get_shared_user_label(&self) -> Option<&str> {
-        self.axml.get_attribute_value("manifest", "sharedUserLabel")
+    pub fn get_shared_user_label(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "sharedUserLabel", self.arsc.as_ref())
     }
 
     /// Retrieves the `sharedUserMaxSdkVersion` defined in the `<manifest>` tag.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#uidmaxsdk>
-    pub fn get_shared_user_max_sdk_version(&self) -> Option<&str> {
+    pub fn get_shared_user_max_sdk_version(&self) -> Option<String> {
         self.axml
-            .get_attribute_value("manifest", "sharedUserMaxSdkVersion")
+            .get_attribute_value("manifest", "sharedUserMaxSdkVersion", self.arsc.as_ref())
     }
 
     /// Retrieves the application version code.
@@ -209,8 +217,9 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#vcode>
-    pub fn get_version_code(&self) -> Option<&str> {
-        self.axml.get_attribute_value("manifest", "versionCode")
+    pub fn get_version_code(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "versionCode", self.arsc.as_ref())
     }
 
     /// Retrieves the application version name.
@@ -221,8 +230,9 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#vname>
-    pub fn get_version_name(&self) -> Option<&str> {
-        self.axml.get_attribute_value("manifest", "versionName")
+    pub fn get_version_name(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "versionName", self.arsc.as_ref())
     }
 
     /// Retrieves the preferred installation location.
@@ -230,23 +240,25 @@ impl Apk {
     /// Possible values: `"auto"`, `"internalOnly"`, `"preferExternal"`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#install>
-    pub fn get_install_location(&self) -> Option<&str> {
-        self.axml.get_attribute_value("manifest", "installLocation")
+    pub fn get_install_location(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "installLocation", self.arsc.as_ref())
     }
 
     /// Extract information from `<application android:allowTaskReparenting="true | false">`
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#reparent>
-    pub fn get_application_task_reparenting(&self) -> Option<&str> {
+    pub fn get_application_task_reparenting(&self) -> Option<String> {
         self.axml
-            .get_attribute_value("application", "allowTaskReparenting")
+            .get_attribute_value("application", "allowTaskReparenting", self.arsc.as_ref())
     }
 
     /// Extract information from `<application android:allowBackup="true | false"`
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#allowbackup>
-    pub fn get_application_allow_backup(&self) -> Option<&str> {
-        self.axml.get_attribute_value("application", "allowBackup")
+    pub fn get_application_allow_backup(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("application", "allowBackup", self.arsc.as_ref())
     }
 
     /// Extracts the `android:appCategory` attribute from `<application>`.
@@ -255,15 +267,17 @@ impl Apk {
     /// `"maps"`, `"news"`, `"productivity"`, `"social"`, `"video"`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#appCategory>
-    pub fn get_application_category(&self) -> Option<&str> {
-        self.axml.get_attribute_value("application", "appCategory")
+    pub fn get_application_category(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("application", "appCategory", self.arsc.as_ref())
     }
 
     /// Extracts the `android:backupAgent` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#agent>
-    pub fn get_application_backup_agent(&self) -> Option<&str> {
-        self.axml.get_attribute_value("application", "backupAgent")
+    pub fn get_application_backup_agent(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("application", "backupAgent", self.arsc.as_ref())
     }
 
     /// Extracts the `android:debuggable` attribute from `<application>`.
@@ -274,43 +288,35 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#debug>
-    pub fn get_application_debuggable(&self) -> Option<&str> {
-        self.axml.get_attribute_value("application", "debuggable")
+    pub fn get_application_debuggable(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("application", "debuggable", self.arsc.as_ref())
     }
 
     /// Extracts the `android:description` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#desc>
-    pub fn get_application_description(&self) -> Option<&str> {
+    pub fn get_application_description(&self) -> Option<String> {
         // TODO: resolve with resources
-        self.axml.get_attribute_value("application", "description")
+        self.axml
+            .get_attribute_value("application", "description", self.arsc.as_ref())
     }
 
     /// Extracts the `android:label` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#label>
     pub fn get_application_label(&self) -> Option<String> {
-        // TODO: probably not so easy
-        if let Some(label) = self.axml.get_attribute_value("application", "label") {
-            if label.starts_with("@") {
-                let label = label.trim_start_matches("@");
-                let id = u32::from_str_radix(label, 16).unwrap();
-
-                return self.arsc.get_resource(id);
-            } else {
-                return Some(label.to_owned());
-            }
-        }
-
-        None
+        self.axml
+            .get_attribute_value("application", "label", self.arsc.as_ref())
     }
 
     /// Extracts the `android:name` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#nm>
-    pub fn get_application_name(&self) -> Option<&str> {
+    pub fn get_application_name(&self) -> Option<String> {
         // TODO: probably not so easy
-        self.axml.get_attribute_value("application", "name")
+        self.axml
+            .get_attribute_value("application", "name", self.arsc.as_ref())
     }
 
     /// Retrieves all declared permissions from `<uses-permission android:name="...">`.
@@ -333,23 +339,25 @@ impl Apk {
     /// Retrieves the minimum SDK version required by the app.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#min>
-    pub fn get_min_sdk_version(&self) -> Option<&str> {
-        self.axml.get_attribute_value("uses-sdk", "minSdkVersion")
+    pub fn get_min_sdk_version(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("uses-sdk", "minSdkVersion", self.arsc.as_ref())
     }
 
     /// Retrieves the target SDK version requested by the app.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#target>
-    pub fn get_target_sdk_version(&self) -> Option<&str> {
+    pub fn get_target_sdk_version(&self) -> Option<String> {
         self.axml
-            .get_attribute_value("uses-sdk", "targetSdkVersion")
+            .get_attribute_value("uses-sdk", "targetSdkVersion", self.arsc.as_ref())
     }
 
     /// Retrieves the maximum SDK version supported by the app.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#max>
-    pub fn get_max_sdk_version(&self) -> Option<&str> {
-        self.axml.get_attribute_value("uses-sdk", "maxSdkVersion")
+    pub fn get_max_sdk_version(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("uses-sdk", "maxSdkVersion", self.arsc.as_ref())
     }
 
     /// Retrieves all libraries declared by `<uses-library android:name="...">`.

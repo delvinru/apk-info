@@ -4,11 +4,11 @@ use winnow::error::{ContextError, ErrMode};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::AXMLError;
 use crate::structs::{
-    ResChunkHeader, ResourceType, StringPool, XMLHeader, XMLResourceMap, XmlCData, XmlElement,
-    XmlEndElement, XmlNamespace, XmlStartElement,
+    ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
+    XmlElement, XmlEndElement, XmlNamespace, XmlStartElement,
 };
+use crate::{ARSC, AXMLError};
 
 /// Default android namespace
 const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
@@ -30,7 +30,7 @@ pub struct AXML {
 }
 
 impl AXML {
-    pub fn new(input: &mut &[u8]) -> Result<AXML, AXMLError> {
+    pub fn new(input: &mut &[u8], arsc: Option<&ARSC>) -> Result<AXML, AXMLError> {
         // basic sanity check
         if input.len() < 8 {
             return Err(AXMLError::TooSmallError);
@@ -43,7 +43,7 @@ impl AXML {
 
         // some malware tamper this parameter
         // 25cd28cbf4886ea29e6c378dbcdc3b077c2b33a8c58053bbaefb368f4df11529
-        if header.type_ != ResourceType::Xml {
+        if header.type_ != ResourceHeaderType::Xml {
             is_tampered = true;
         }
 
@@ -59,14 +59,15 @@ impl AXML {
         let xml_resource = XMLResourceMap::parse(input).map_err(|_| AXMLError::ResourceMapError)?;
 
         // parse and get xml tree
-        let root =
-            Self::get_xml_tree(input, &string_pool, &xml_resource).ok_or(AXMLError::MissingRoot)?;
+        let root = Self::get_xml_tree(input, arsc, &string_pool, &xml_resource)
+            .ok_or(AXMLError::MissingRoot)?;
 
         Ok(AXML { is_tampered, root })
     }
 
     fn get_xml_tree<'a>(
         input: &mut &[u8],
+        arsc: Option<&ARSC>,
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
     ) -> Option<Element> {
@@ -80,8 +81,8 @@ impl AXML {
             };
 
             // Skip non-xml chunks
-            if chunk_header.type_ < ResourceType::XmlStartNamespace
-                || chunk_header.type_ > ResourceType::XmlLastChunk
+            if chunk_header.type_ < ResourceHeaderType::XmlStartNamespace
+                || chunk_header.type_ > ResourceHeaderType::XmlLastChunk
             {
                 warn!("not a xml resource chunk: {chunk_header:?}");
 
@@ -105,13 +106,13 @@ impl AXML {
             };
 
             match xml_header.header.type_ {
-                ResourceType::XmlStartNamespace => {
+                ResourceHeaderType::XmlStartNamespace => {
                     let _ = XmlNamespace::parse(input, xml_header);
                 }
-                ResourceType::XmlEndNamespace => {
+                ResourceHeaderType::XmlEndNamespace => {
                     let _ = XmlNamespace::parse(input, xml_header);
                 }
-                ResourceType::XmlStartElement => {
+                ResourceHeaderType::XmlStartElement => {
                     let node = match XmlStartElement::parse(input, xml_header) {
                         Ok(v) => v,
                         Err(_) => break,
@@ -121,7 +122,7 @@ impl AXML {
                         continue;
                     };
 
-                    let mut element = Element::builder(name, "android");
+                    let mut element = Element::builder(name, ANDROID_NAMESPACE);
 
                     if name == "manifest" {
                         element = element.attr("xmlns:android", ANDROID_NAMESPACE);
@@ -143,13 +144,15 @@ impl AXML {
                             continue;
                         }
 
-                        element = element
-                            .attr(attribute_name, attribute.typed_value.to_string(string_pool));
+                        element = element.attr(
+                            attribute_name,
+                            attribute.typed_value.to_string(string_pool, arsc),
+                        );
                     }
 
                     stack.push(element.build());
                 }
-                ResourceType::XmlEndElement => {
+                ResourceHeaderType::XmlEndElement => {
                     let _ = XmlEndElement::parse(input, xml_header);
 
                     if stack.len() > 1 {
@@ -157,7 +160,7 @@ impl AXML {
                         stack.last_mut().unwrap().append_child(finished);
                     }
                 }
-                ResourceType::XmlCdata => {
+                ResourceHeaderType::XmlCdata => {
                     let node = match XmlCData::parse(input, xml_header) {
                         Ok(v) => v,
                         Err(_) => break,
@@ -200,19 +203,42 @@ impl AXML {
 
     // TODO: made pretty output
     pub fn get_xml_string(&self) -> String {
-        String::from(&self.root)
+        let mut buf = Vec::new();
+        let _ = self.root.write_to(&mut buf);
+
+        String::from_utf8_lossy(&buf).to_string()
     }
 
-    #[inline]
-    pub fn get_attribute_value(&self, tag: &str, name: &str) -> Option<&str> {
-        if self.root.name() == tag {
-            return self.root.attr(name);
-        }
+    pub fn get_attribute_value(
+        &self,
+        tag: &str,
+        name: &str,
+        arsc: Option<&ARSC>,
+    ) -> Option<String> {
+        // try to find the attribute value
+        let value = if self.root.name() == tag {
+            self.root.attr(name).map(|s| s.to_string())
+        } else {
+            self.root
+                .children()
+                .find(|child| child.name() == tag)
+                .and_then(|child| child.attr(name))
+                .map(|s| s.to_string())
+        };
 
-        self.root
-            .children()
-            .find(|x| x.name() == tag)
-            .and_then(|x| x.attr(name))
+        // If value starts with '@', resolve it via ARSC
+        match value {
+            Some(ref v) if v.starts_with('@') => {
+                if let Some(arsc) = arsc {
+                    // safe unwrap, we checked before
+                    return arsc.get_resource_value_by_name(v.strip_prefix("@").unwrap());
+                }
+
+                // if arsc was not provided just return found value
+                value
+            }
+            _ => value, // return the original value if not a resource reference
+        }
     }
 
     pub fn get_all_attribute_values<'a>(

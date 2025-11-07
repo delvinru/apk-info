@@ -6,7 +6,7 @@ use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::structs::{ResChunkHeader, ResourceType};
+use crate::structs::{ResChunkHeader, ResourceHeaderType};
 
 bitflags! {
     #[derive(Debug)]
@@ -38,7 +38,7 @@ impl ResStringPoolHeader {
         // https://github.com/REAndroid/APKEditor/blob/master/src/main/java/com/reandroid/apkeditor/protect/TableConfuser.java#L41
         // 791c3ed2d1cd986da043bb1b655098d2b7a0b99450440d756bc898f84a88fe3b
         // 131135a7c911bd45db8801ca336fc051246280c90ae5dafc33e68499d8514761
-        if header.type_ != ResourceType::StringPool {
+        if header.type_ != ResourceHeaderType::StringPool {
             let garbage_bytes = header.size.saturating_sub(ResChunkHeader::size_of() as u32);
             let _ = take(garbage_bytes as usize).parse_next(input)?;
             warn!("malformed string pool, skipped {} bytes", garbage_bytes);

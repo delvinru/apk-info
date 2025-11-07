@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use log::warn;
@@ -6,17 +7,19 @@ use winnow::prelude::*;
 
 use crate::ARCSError;
 use crate::structs::{
-    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceType,
+    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceHeaderType,
     ResourceValueType, StringPool,
 };
 
+#[derive(Debug)]
 pub struct ARSC {
     pub is_tampered: bool,
 
     global_string_pool: StringPool,
-
-    // HashMap< PackageID(u8), HashMap<TypeID(u8), HashMap<ResourceID(u8), HashMap<ResTableConfig, ResTableType > > > >
     packages: HashMap<u8, ResTablePackage>,
+
+    /// Mapping for resolved reference names
+    reference_names: RefCell<HashMap<u32, String>>,
 }
 
 impl ARSC {
@@ -29,7 +32,7 @@ impl ARSC {
 
         let mut is_tampered = false;
         // don't drop error, maybe another shit malware technique
-        if header.header.type_ != ResourceType::Table {
+        if header.header.type_ != ResourceHeaderType::Table {
             is_tampered = true;
         }
 
@@ -80,24 +83,34 @@ impl ARSC {
             is_tampered,
             global_string_pool,
             packages,
+            // preallocate some space
+            reference_names: RefCell::new(HashMap::with_capacity(32)),
         })
     }
 
-    pub fn get_resource(&self, id: u32) -> Option<String> {
+    pub fn get_resource_value(&self, id: u32) -> Option<String> {
+        // TODO: need somehow option for dynamic config, not hardcoded
         let config = ResTableConfig::default();
+
         let (package_id, type_id, entry_id) = self.split_resource_id(id);
 
-        let package = self.packages.get(&package_id)?;
-        let entry = package.get_entry(&config, type_id, entry_id)?;
+        let entry = self
+            .packages
+            .get(&package_id)?
+            .get_entry(&config, type_id, entry_id)?;
 
         match entry {
-            ResTableEntry::Default(e) => {
-                // TODO: check this and create resolver, infinite loop possible
-                match e.value.data_type {
-                    ResourceValueType::Reference => self.get_resource(e.value.data),
-                    _ => Some(e.value.to_string(&self.global_string_pool)),
+            ResTableEntry::Default(e) => match e.value.data_type {
+                ResourceValueType::Reference => {
+                    // recursion protect?
+                    if e.value.data == id {
+                        return None;
+                    }
+
+                    self.get_resource_value(e.value.data)
                 }
-            }
+                _ => Some(e.value.to_string(&self.global_string_pool, Some(&self))),
+            },
             // if got nothing - gg
             ResTableEntry::NoEntry => None,
             e => {
@@ -105,6 +118,40 @@ impl ARSC {
                 None
             }
         }
+    }
+
+    pub fn get_resource_value_by_name(&self, name: &str) -> Option<String> {
+        let (&id, _) = self
+            .reference_names
+            .borrow()
+            .iter()
+            .find(|(_, v)| v == &name)?;
+
+        self.get_resource_value(id)
+    }
+
+    pub fn get_resource_name(&self, id: u32) -> Option<String> {
+        // fast path: if we've already have this name in cache
+        if let Some(name) = self.reference_names.borrow().get(&id) {
+            return Some(name.clone());
+        }
+        // default config
+        // TODO: need somehow option for dynamic config, not hardcoded
+        let config = ResTableConfig::default();
+
+        // split id into components
+        let (package_id, type_id, entry_id) = self.split_resource_id(id);
+
+        // lookup package
+        let package = self.packages.get(&package_id)?;
+
+        // get resource name
+        let name = package.get_reference_name(&config, type_id, entry_id)?;
+
+        // save in cache
+        self.reference_names.borrow_mut().insert(id, name.clone());
+
+        Some(name)
     }
 
     #[inline(always)]

@@ -10,5 +10,5 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let mut input = data;
-    let _ = AXML::new(&mut input);
+    let _ = AXML::new(&mut input, None);
 });
