@@ -1,6 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["cli", "core", "crates/axml", "crates/zip", "fuzz", "python"]
+members = [
+    "cli",
+    "core",
+    "crates/axml",
+    "crates/xml",
+    "crates/zip",
+    "fuzz",
+    "python",
+]
 
 [workspace.package]
 authors = ["Alexey <delvinru@gmail.com>"]
@@ -13,9 +21,10 @@ version = "0.1.0"
 
 [workspace.dependencies]
 # internal
-apk-info-axml = { path = "crates/axml" }
-apk-info-zip = { path = "crates/zip" }
 apk-info = { path = "core" }
+apk-info-axml = { path = "crates/axml" }
+apk-info-xml = { path = "crates/xml" }
+apk-info-zip = { path = "crates/zip" }
 
 # external
 anyhow = "1.0.100"

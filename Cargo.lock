@@ -88,6 +88,7 @@ dependencies = [
 name = "apk-info-axml"
 version = "0.1.0"
 dependencies = [
+ "apk-info-xml",
  "bitflags",
  "log",
  "once_cell",
@@ -133,6 +134,10 @@ dependencies = [
  "env_logger",
  "pyo3",
 ]
+
+[[package]]
+name = "apk-info-xml"
+version = "0.1.0"
 
 [[package]]
 name = "apk-info-zip"

@@ -8,6 +8,7 @@ license.workspace = true
 version.workspace = true
 
 [dependencies]
+apk-info-xml.workspace = true
 bitflags.workspace = true
 log.workspace = true
 once_cell.workspace = true

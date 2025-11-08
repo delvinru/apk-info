@@ -15,3 +15,6 @@ memchr.workspace = true
 openssl.workspace = true
 thiserror.workspace = true
 winnow.workspace = true
+
+[lib]
+doctest = false

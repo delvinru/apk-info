@@ -1,10 +1,11 @@
+use apk_info_xml::Element;
 use log::warn;
 use winnow::error::{ContextError, ErrMode};
 use winnow::prelude::*;
 use winnow::token::take;
 
 use crate::structs::{
-    Element, ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
+    ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
     XmlEndElement, XmlNamespace, XmlParse, XmlStartElement,
 };
 use crate::{ARSC, AXMLError};

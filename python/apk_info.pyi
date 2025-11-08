@@ -170,6 +170,15 @@ class APK:
         """
         ...
 
+    def get_application_icon(self) -> str | None:
+        """
+        Extracts and resolve the `android:icon` attribute from `<application>`
+
+        Returns:
+            str | None: The path to the icon file, if available.
+        """
+        ...
+
     def get_application_label(self) -> str | None:
         """
         Extracts the `android:label` attribute from `<application>`.
