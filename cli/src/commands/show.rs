@@ -55,7 +55,7 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
     );
 
     if *show_signatures {
-        println!("\n{}:", "APK Signature block".blue().bold());
+        println!("{}:", "APK Signature block".blue().bold());
 
         let signatures = apk.get_signatures().with_context(|| {
             format!(

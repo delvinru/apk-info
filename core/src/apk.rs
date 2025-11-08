@@ -18,9 +18,9 @@ const PROTO_RESOURCE_TABLE_PATH: &str = "resources.pb";
 
 /// Main structure that represents APK file
 pub struct Apk {
-    pub zip: ZipEntry,
-    pub axml: AXML,
-    pub arsc: Option<ARSC>,
+    zip: ZipEntry,
+    axml: AXML,
+    arsc: Option<ARSC>,
 }
 
 /// Implementation of internal methods
@@ -130,6 +130,18 @@ impl Apk {
         self.zip.namelist()
     }
 
+    pub fn get_xml_string(&self) -> String {
+        self.axml.get_xml_string()
+    }
+
+    pub fn get_all_attribute_values<'a>(
+        &'a self,
+        tag: &'a str,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a str> {
+        self.axml.get_all_attribute_values(tag, name)
+    }
+
     /// Retrieves the package name defined in the `<manifest>` tag
     ///
     /// Example:
@@ -138,6 +150,7 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#package>
+    #[inline]
     pub fn get_package_name(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "package", self.arsc.as_ref())
@@ -146,6 +159,7 @@ impl Apk {
     /// Retrieves the `sharedUserId` defined in the `<manifest>` tag.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#uid>
+    #[inline]
     pub fn get_shared_user_id(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "sharedUserId", self.arsc.as_ref())
@@ -154,6 +168,7 @@ impl Apk {
     /// Retrieves the `sharedUserLabel` defined in the `<manifest>` tag.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#uidlabel>
+    #[inline]
     pub fn get_shared_user_label(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "sharedUserLabel", self.arsc.as_ref())
@@ -162,6 +177,7 @@ impl Apk {
     /// Retrieves the `sharedUserMaxSdkVersion` defined in the `<manifest>` tag.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#uidmaxsdk>
+    #[inline]
     pub fn get_shared_user_max_sdk_version(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "sharedUserMaxSdkVersion", self.arsc.as_ref())
@@ -175,6 +191,7 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#vcode>
+    #[inline]
     pub fn get_version_code(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "versionCode", self.arsc.as_ref())
@@ -188,6 +205,7 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#vname>
+    #[inline]
     pub fn get_version_name(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "versionName", self.arsc.as_ref())
@@ -198,6 +216,7 @@ impl Apk {
     /// Possible values: `"auto"`, `"internalOnly"`, `"preferExternal"`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/manifest-element#install>
+    #[inline]
     pub fn get_install_location(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "installLocation", self.arsc.as_ref())
@@ -206,6 +225,7 @@ impl Apk {
     /// Extract information from `<application android:allowTaskReparenting="true | false">`
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#reparent>
+    #[inline]
     pub fn get_application_task_reparenting(&self) -> Option<String> {
         self.axml
             .get_attribute_value("application", "allowTaskReparenting", self.arsc.as_ref())
@@ -214,6 +234,7 @@ impl Apk {
     /// Extract information from `<application android:allowBackup="true | false"`
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#allowbackup>
+    #[inline]
     pub fn get_application_allow_backup(&self) -> Option<String> {
         self.axml
             .get_attribute_value("application", "allowBackup", self.arsc.as_ref())
@@ -225,6 +246,7 @@ impl Apk {
     /// `"maps"`, `"news"`, `"productivity"`, `"social"`, `"video"`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#appCategory>
+    #[inline]
     pub fn get_application_category(&self) -> Option<String> {
         self.axml
             .get_attribute_value("application", "appCategory", self.arsc.as_ref())
@@ -233,6 +255,7 @@ impl Apk {
     /// Extracts the `android:backupAgent` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#agent>
+    #[inline]
     pub fn get_application_backup_agent(&self) -> Option<String> {
         self.axml
             .get_attribute_value("application", "backupAgent", self.arsc.as_ref())
@@ -246,6 +269,7 @@ impl Apk {
     /// ```
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#debug>
+    #[inline]
     pub fn get_application_debuggable(&self) -> Option<String> {
         self.axml
             .get_attribute_value("application", "debuggable", self.arsc.as_ref())
@@ -254,15 +278,27 @@ impl Apk {
     /// Extracts the `android:description` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#desc>
+    #[inline]
     pub fn get_application_description(&self) -> Option<String> {
         // TODO: resolve with resources
         self.axml
             .get_attribute_value("application", "description", self.arsc.as_ref())
     }
 
+    /// Extracts the `android:icon` attribute from `<application>`.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/application-element#icon>
+    #[inline]
+    pub fn get_application_icon(&self) -> Option<String> {
+        // TODO: need somehow resolve maximum resolution for icon or give option to search density
+        self.axml
+            .get_attribute_value("application", "icon", self.arsc.as_ref())
+    }
+
     /// Extracts the `android:label` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#label>
+    #[inline]
     pub fn get_application_label(&self) -> Option<String> {
         self.axml
             .get_attribute_value("application", "label", self.arsc.as_ref())
@@ -271,6 +307,7 @@ impl Apk {
     /// Extracts the `android:name` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#nm>
+    #[inline]
     pub fn get_application_name(&self) -> Option<String> {
         // TODO: probably not so easy
         self.axml
@@ -280,6 +317,7 @@ impl Apk {
     /// Retrieves all declared permissions from `<uses-permission android:name="...">`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-permission-element>
+    #[inline]
     pub fn get_permissions(&self) -> impl Iterator<Item = &str> {
         // TODO: some apk uses "<android:uses-permission", wtf this is
         self.axml
@@ -289,6 +327,7 @@ impl Apk {
     /// Retrieves all declared permissions for API 23+ from `<uses-permission-sdk-23>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-permission-sdk-23-element>
+    #[inline]
     pub fn get_permissions_sdk23(&self) -> impl Iterator<Item = &str> {
         self.axml
             .get_all_attribute_values("uses-permission-sdk-23", "name")
@@ -297,6 +336,7 @@ impl Apk {
     /// Retrieves the minimum SDK version required by the app.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#min>
+    #[inline]
     pub fn get_min_sdk_version(&self) -> Option<String> {
         self.axml
             .get_attribute_value("uses-sdk", "minSdkVersion", self.arsc.as_ref())
@@ -305,6 +345,7 @@ impl Apk {
     /// Retrieves the target SDK version requested by the app.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#target>
+    #[inline]
     pub fn get_target_sdk_version(&self) -> Option<String> {
         self.axml
             .get_attribute_value("uses-sdk", "targetSdkVersion", self.arsc.as_ref())
@@ -313,6 +354,7 @@ impl Apk {
     /// Retrieves the maximum SDK version supported by the app.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#max>
+    #[inline]
     pub fn get_max_sdk_version(&self) -> Option<String> {
         self.axml
             .get_attribute_value("uses-sdk", "maxSdkVersion", self.arsc.as_ref())
@@ -321,6 +363,7 @@ impl Apk {
     /// Retrieves all libraries declared by `<uses-library android:name="...">`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-library-element>
+    #[inline]
     pub fn get_libraries(&self) -> impl Iterator<Item = &str> {
         self.axml.get_all_attribute_values("uses-library", "name")
     }
@@ -328,6 +371,7 @@ impl Apk {
     /// Retrieves all hardware or software features declared by `<uses-feature>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element>
+    #[inline]
     pub fn get_features(&self) -> impl Iterator<Item = &str> {
         self.axml.get_all_attribute_values("uses-feature", "name")
     }
@@ -335,12 +379,14 @@ impl Apk {
     /// Retrieves all declared permissions defined by `<permission android:name="...">`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element>
+    #[inline]
     pub fn get_declared_permissions(&self) -> impl Iterator<Item = &str> {
         // TODO: maybe create some kind of structure, idk
         self.axml.get_all_attribute_values("permission", "name")
     }
 
     /// Retrieves all **main activities** (with intent filters `MAIN` + `LAUNCHER|INFO`).
+    #[inline]
     pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {
         self.axml.get_main_activities()
     }
@@ -348,6 +394,7 @@ impl Apk {
     /// Retrieves all activities declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/activity-element>
+    #[inline]
     pub fn get_activities(&self) -> impl Iterator<Item = &str> {
         self.axml.get_all_attribute_values("activity", "name")
     }
@@ -389,6 +436,7 @@ impl Apk {
     /// Retrieves all providers declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/provider-element>
+    #[inline]
     pub fn get_providers(&self) -> impl Iterator<Item = &str> {
         self.axml.get_all_attribute_values("provider", "name")
     }

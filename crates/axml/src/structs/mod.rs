@@ -2,6 +2,7 @@ pub(crate) mod common;
 pub(crate) mod res_string_pool;
 pub mod res_table_config;
 pub(crate) mod resource_table;
+pub(crate) mod system_types;
 pub(crate) mod xml_elements;
 
 pub(crate) use common::*;

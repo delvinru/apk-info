@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::hash::Hash;
 
-use log::warn;
+use log::{debug, warn};
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed, StrContext, StrContextValue};
@@ -498,7 +498,6 @@ pub(crate) struct ResTableType {
 
     /// Offset from header where ... data starts
     /// TODO: add link to structure
-    /// TODO: expecting due to this shit parameter malware will sometimes fuckup resources
     #[allow(unused)]
     pub(crate) entries_start: u32,
 
@@ -507,7 +506,6 @@ pub(crate) struct ResTableType {
     #[allow(unused)]
     pub(crate) config: ResTableConfig,
 
-    /// TODO: expecting due to this shit parameter malware will sometimes fuckup resources
     #[allow(unused)]
     pub(crate) entry_offsets: Vec<u32>,
 
@@ -517,20 +515,52 @@ pub(crate) struct ResTableType {
 
 impl ResTableType {
     pub(crate) fn parse(header: ResChunkHeader, input: &mut &[u8]) -> ModalResult<ResTableType> {
+        let start_chunk = input.len();
+
         let (id, flags, reserved, entry_count, entries_start, config) =
             (u8, u8, le_u16, le_u32, le_u32, ResTableConfig::parse).parse_next(input)?;
 
         let is_offset16 = Self::is_offset16(flags);
-
-        // TODO: handle "sparse" flag
-        let entry_offsets: Vec<u32> = if is_offset16 {
-            repeat(entry_count as usize, le_u16.map(|x| x as u32)).parse_next(input)?
+        // handle sparse flag based on jadx code
+        // https://github.com/skylot/jadx/blob/master/jadx-core/src/main/java/jadx/core/xmlgen/ResTableBinaryParser.java#L276
+        let entry_offsets: Vec<u32> = if Self::is_sparse(flags) {
+            repeat(
+                entry_count as usize,
+                (le_u16, le_u16).map(|(_, x)| {
+                    if x == u16::MAX {
+                        u32::MAX
+                    } else {
+                        u32::from(x) << 2
+                    }
+                }),
+            )
+            .parse_next(input)?
+        } else if is_offset16 {
+            repeat(
+                entry_count as usize,
+                le_u16.map(|x| {
+                    if x == u16::MAX {
+                        u32::MAX
+                    } else {
+                        u32::from(x) << 2
+                    }
+                }),
+            )
+            .parse_next(input)?
         } else {
             repeat(entry_count as usize, le_u32).parse_next(input)?
         };
 
         // whatsapp is doing some kind of crap with offsets, so we need to make a slice on this particular piece of data
         // da8963f347c26ede58c1087690f1af8ef308cd778c5aaf58094eeb57b6962b21
+        // also sometimes 2 bytes are missing - wtf? a kind of alignment, not found anywhere?
+        // jeb, jadx - they just skip it, so and i
+        let alignment_bytes = start_chunk.saturating_sub(input.len()) & 0x3;
+        if alignment_bytes != 0 {
+            debug!("skipping {} alignment bytes", alignment_bytes);
+            let _ = take(alignment_bytes).parse_next(input)?;
+        }
+
         let entries_size = header.size.saturating_sub(entries_start) as usize;
         let (entries_slice, rest) = input
             .split_at_checked(entries_size)
@@ -541,34 +571,19 @@ impl ResTableType {
         let mut entries = Vec::with_capacity(entry_count as usize);
         let entries_len = entries_slice.len();
 
-        if is_offset16 {
-            for &off16 in &entry_offsets {
-                if off16 as u16 == u16::MAX {
-                    entries.push(ResTableEntry::NoEntry);
-                    continue;
-                }
-
-                let off = off16 as usize;
-                if off >= entries_len {
-                    return Err(ErrMode::Incomplete(Needed::Unknown));
-                }
-                let mut slice = &entries_slice[off..];
-                entries.push(ResTableEntry::parse(&mut slice)?);
+        for &offset in &entry_offsets {
+            if offset == u32::MAX {
+                entries.push(ResTableEntry::NoEntry);
+                continue;
             }
-        } else {
-            for &off32 in &entry_offsets {
-                if off32 == u32::MAX {
-                    entries.push(ResTableEntry::NoEntry);
-                    continue;
-                }
 
-                let off = off32 as usize;
-                if off >= entries_len {
-                    return Err(ErrMode::Incomplete(Needed::Unknown));
-                }
-                let mut slice = &entries_slice[off..];
-                entries.push(ResTableEntry::parse(&mut slice)?);
+            let offset = offset as usize;
+            if offset >= entries_len {
+                return Err(ErrMode::Incomplete(Needed::Unknown));
             }
+
+            let mut slice = &entries_slice[offset..];
+            entries.push(ResTableEntry::parse(&mut slice)?);
         }
 
         Ok(ResTableType {
@@ -808,6 +823,67 @@ impl ResTableOverlayblePolicy {
     }
 }
 
+/// Maps the staged (non-finalized) resource id to its finalized resource id
+///
+/// [Source code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1770;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1)
+#[derive(Debug)]
+pub(crate) struct ResTableStagedAliasEntry {
+    /// The compile-time staged resource id to rewrite
+    #[allow(unused)]
+    pub(crate) staged_res_id: u32,
+
+    /// The compile-time finalized resource id to which the staged resource id should be rewritten
+    #[allow(unused)]
+    pub(crate) finalized_res_id: u32,
+}
+
+impl ResTableStagedAliasEntry {
+    #[inline(always)]
+    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTableStagedAliasEntry> {
+        (le_u32, le_u32)
+            .map(
+                |(staged_res_id, finalized_res_id)| ResTableStagedAliasEntry {
+                    staged_res_id,
+                    finalized_res_id,
+                },
+            )
+            .parse_next(input)
+    }
+}
+
+/// A map that allows rewriting staged (non-finalized) resource ids to therir finalized counterparts
+///
+/// [Source code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1759;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1)
+#[derive(Debug)]
+pub(crate) struct ResTableStagedAlias {
+    #[allow(unused)]
+    pub(crate) header: ResChunkHeader,
+
+    /// The number of [ResTableStagedAliasEntry] that follow this header
+    #[allow(unused)]
+    pub(crate) count: u32,
+
+    #[allow(unused)]
+    pub(crate) entries: Vec<ResTableStagedAliasEntry>,
+}
+
+impl ResTableStagedAlias {
+    #[inline(always)]
+    pub(crate) fn parse(
+        header: ResChunkHeader,
+        input: &mut &[u8],
+    ) -> ModalResult<ResTableStagedAlias> {
+        let count = le_u32.parse_next(input)?;
+        let entries = repeat(count as usize, ResTableStagedAliasEntry::parse).parse_next(input)?;
+
+        Ok(ResTableStagedAlias {
+            header,
+            count,
+            entries,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct ResTablePackage {
     pub(crate) header: ResTablePackageHeader,
@@ -871,6 +947,9 @@ impl ResTablePackage {
                 ResourceHeaderType::TableOverlayablePolicy => {
                     let _ = ResTableOverlayblePolicy::parse(header, input)?;
                 }
+                ResourceHeaderType::TableStagedAlias => {
+                    let _ = ResTableStagedAlias::parse(header, input)?;
+                }
                 _ => warn!("got unknown header: {:?}", header),
             }
         }
@@ -894,16 +973,16 @@ impl ResTablePackage {
     }
 
     // interesting sample - 197f49dec3aacc2855d08ee5ee2ae5635885b0163ecb50d2e21b68de59eb336a - need somehow fallback config or something
-    pub(crate) fn get_entry(
+    pub(crate) fn find_entry(
         &self,
         config: &ResTableConfig,
         type_id: u8,
         entry_id: u16,
     ) -> Option<&ResTableEntry> {
+        // fast track?
         if let Some(type_map) = self.resources.get(config)
             && let Some(entries) = type_map.get(&type_id)
             && let Some(entry) = entries.get(entry_id as usize)
-            && !matches!(entry, ResTableEntry::NoEntry)
         {
             return Some(entry);
         }
@@ -922,22 +1001,12 @@ impl ResTablePackage {
             }
         }
 
-        // can't find anything
+        // can't find anything - gg
         None
     }
 
-    pub(crate) fn get_reference_name(
-        &self,
-        config: &ResTableConfig,
-        type_id: u8,
-        entry_id: u16,
-    ) -> Option<String> {
-        let type_map = self.resources.get(config)?;
-        let (type_id, entries) = type_map.get_key_value(&type_id)?;
-        let entry = entries.get(entry_id as usize)?;
-
-        // get "real" id to resolve name
-        // [Source Code](https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/ResourceTypes.cpp#7101)
+    #[inline]
+    pub(crate) fn get_entry_full_name(&self, entry: &ResTableEntry, type_id: u8) -> Option<String> {
         Some(format!(
             "{}/{}",
             self.type_strings.get(type_id.saturating_sub(1) as u32)?,

@@ -6,8 +6,7 @@ use winnow::combinator::repeat;
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::axml::system_types;
-use crate::structs::{ResChunkHeader, ResourceValue};
+use crate::structs::{ResChunkHeader, ResourceValue, system_types};
 
 #[derive(Debug)]
 pub(crate) struct XMLResourceMap {
@@ -36,7 +35,7 @@ impl XMLResourceMap {
     pub fn get_attr(&self, idx: u32) -> Option<&str> {
         self.resource_ids
             .get(idx as usize)
-            .and_then(|v| system_types::get_attr(v))
+            .and_then(|v| system_types::get_type_name(v))
     }
 }
 

@@ -4,7 +4,7 @@ use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::prelude::*;
 
 use crate::ARSC;
-use crate::structs::StringPool;
+use crate::structs::{StringPool, system_types};
 
 /// See: https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=237
 #[derive(Debug, PartialEq, Default, Eq, PartialOrd, Ord)]
@@ -226,22 +226,43 @@ impl ResourceValue {
 
         match self.data_type {
             ResourceValueType::Reference => {
-                let pkg = self.fmt_package();
-                if let Some(arsc) = arsc
-                    && let Some(value) = arsc.get_resource_name(self.data)
-                {
-                    out.push('@');
-                    out.push_str(pkg);
-                    out.push_str(&value);
-                    return out;
+                out.push('@');
+
+                if self.is_system_type() {
+                    if let Some(name) = system_types::get_type_name(&self.data) {
+                        out.push_str(name);
+                    } else {
+                        // fallback
+                        write!(&mut out, "{:08x}", self.data).unwrap();
+                    }
+                } else if let Some(arsc) = arsc {
+                    if let Some(value) = arsc.get_resource_name(self.data) {
+                        out.push_str(&value);
+                        return out;
+                    } else {
+                        // fallback
+                        write!(&mut out, "{:08x}", self.data).unwrap();
+                    }
+                } else {
+                    // fallback
+                    write!(&mut out, "{:08x}", self.data).unwrap();
                 }
-                // fallback
-                write!(&mut out, "@{}{:08x}", pkg, self.data).unwrap();
+
                 out
             }
 
             ResourceValueType::Attribute => {
-                write!(&mut out, "?{}{:08x}", self.fmt_package(), self.data).unwrap();
+                if self.is_system_type() {
+                    if let Some(name) = system_types::get_type_name(&self.data) {
+                        out.push_str(name);
+                    } else {
+                        // fallback
+                        write!(&mut out, "@{:08x}", self.data).unwrap();
+                    }
+                } else {
+                    write!(&mut out, "?{:08x}", self.data).unwrap();
+                }
+
                 out
             }
 
@@ -272,7 +293,7 @@ impl ResourceValue {
             }
 
             ResourceValueType::Dec => {
-                write!(&mut out, "{}", self.data).unwrap();
+                write!(&mut out, "{}", self.data as i32).unwrap();
                 out
             }
 
@@ -310,7 +331,7 @@ impl ResourceValue {
     }
 
     #[inline(always)]
-    pub fn fmt_package(&self) -> &str {
-        if self.data >> 24 == 1 { "android:" } else { "" }
+    pub fn is_system_type(&self) -> bool {
+        self.data >> 24 == 1
     }
 }

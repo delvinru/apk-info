@@ -10,7 +10,7 @@ pub(crate) fn command_axml(path: &Path) -> Result<()> {
     if contains_extensions(path, &["apk", "zip", "jar"]) {
         let apk = Apk::new(path).with_context(|| format!("can't open apk file: {:?}", path))?;
 
-        print!("{}", apk.axml.get_xml_string());
+        print!("{}", apk.get_xml_string());
     } else {
         let file =
             std::fs::read(path).with_context(|| format!("can't open and read file: {:?}", path))?;

@@ -85,11 +85,10 @@ fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
             .with_context(|| format!("can't write to {:?}", file_path))?;
 
         // highligt interesting files
-        if file_name == "AndroidManifest.xml"
-            || file_name == "resourcers.arsc"
-            || file_name.ends_with(".so")
-        {
+        if file_name == "AndroidManifest.xml" || file_name == "resources.arsc" {
             println!("[*] extracted \"{}\"", file_name.green().bold());
+        } else if file_name.ends_with(".so") {
+            println!("[*] extracted \"{}\"", file_name.magenta().bold());
         } else {
             println!("[~] extracted \"{}\"", file_name);
         }

@@ -12,15 +12,6 @@ use crate::{ARSC, AXMLError};
 /// Default android namespace
 const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
 
-pub mod system_types {
-    include!(concat!(env!("OUT_DIR"), "/system_types.rs"));
-
-    #[inline(always)]
-    pub fn get_attr(idx: &u32) -> Option<&'static str> {
-        ATTR.get(idx).copied()
-    }
-}
-
 #[derive(Debug)]
 pub struct AXML {
     pub is_tampered: bool,
@@ -180,6 +171,8 @@ impl AXML {
         (!stack.is_empty()).then(|| stack.remove(0))
     }
 
+    /// Get pretty printed xml tree
+    #[inline]
     pub fn get_xml_string(&self) -> String {
         self.root.to_string()
     }

@@ -399,6 +399,10 @@ impl Apk {
         self.apkrs.get_application_description()
     }
 
+    pub fn get_application_icon(&self) -> Option<String> {
+        self.apkrs.get_application_icon()
+    }
+
     pub fn get_application_label(&self) -> Option<String> {
         self.apkrs.get_application_label()
     }

@@ -454,9 +454,9 @@ impl Display for UIModeNight {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[repr(u32)]
-pub(crate) enum Density {
+pub enum Density {
     Default = 0,
     Low = 120,
     Medium = 160,
@@ -484,6 +484,24 @@ impl From<u16> for Density {
             0xfffe => Self::Any,
             0xffff => Self::None,
             v => Self::Unknown(v),
+        }
+    }
+}
+
+impl From<Density> for u16 {
+    fn from(value: Density) -> Self {
+        match value {
+            Density::Default => 0,
+            Density::Low => 120,
+            Density::Medium => 160,
+            Density::TV => 213,
+            Density::High => 240,
+            Density::XHigh => 320,
+            Density::XXHigh => 480,
+            Density::XXXHigh => 640,
+            Density::Any => 0xfffe,
+            Density::None => 0xffff,
+            Density::Unknown(v) => v,
         }
     }
 }
@@ -965,6 +983,12 @@ impl ResTableConfig {
         let touchscreen = ((self.screen_type >> 8) & 0x0000_00FF) as u8;
         let density = ((self.screen_type >> 16) & 0x0000_FFFF) as u16;
         (orientation, touchscreen, density)
+    }
+
+    #[inline]
+    pub fn set_density(&mut self, density: Density) {
+        self.screen_type =
+            (self.screen_type & 0x0000_FFFF) | ((u32::from(u16::from(density))) << 16);
     }
 
     /// Extracts `keyboard`, `navigation`, and `inputFlags`
@@ -1455,5 +1479,18 @@ mod test {
         assert_eq!(mnc, 1);
 
         assert_eq!("mcc1-mnc1", config.as_string())
+    }
+
+    #[test]
+    fn test_config_density() {
+        let mut config = ResTableConfig::default();
+        config.set_density(Density::Low);
+        assert_eq!("ldpi", config.as_string());
+
+        config.set_density(Density::XXXHigh);
+        assert_eq!("xxxhdpi", config.as_string());
+
+        config.set_density(Density::Unknown(123));
+        assert_eq!("123dpi", config.as_string());
     }
 }

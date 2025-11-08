@@ -97,7 +97,7 @@ impl ARSC {
         let entry = self
             .packages
             .get(&package_id)?
-            .get_entry(&config, type_id, entry_id)?;
+            .find_entry(&config, type_id, entry_id)?;
 
         match entry {
             ResTableEntry::Default(e) => match e.value.data_type {
@@ -135,9 +135,6 @@ impl ARSC {
         if let Some(name) = self.reference_names.borrow().get(&id) {
             return Some(name.clone());
         }
-        // default config
-        // TODO: need somehow option for dynamic config, not hardcoded
-        let config = ResTableConfig::default();
 
         // split id into components
         let (package_id, type_id, entry_id) = self.split_resource_id(id);
@@ -145,8 +142,15 @@ impl ARSC {
         // lookup package
         let package = self.packages.get(&package_id)?;
 
-        // get resource name
-        let name = package.get_reference_name(&config, type_id, entry_id)?;
+        // default config
+        // TODO: need somehow option for dynamic config, not hardcoded
+        let config = ResTableConfig::default();
+
+        // search entry
+        let entry = package.find_entry(&config, type_id, entry_id)?;
+
+        // get full name
+        let name = package.get_entry_full_name(entry, type_id)?;
 
         // save in cache
         self.reference_names.borrow_mut().insert(id, name.clone());
