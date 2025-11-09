@@ -88,47 +88,53 @@ pub struct XAPKManifest {
 /// More information: <https://developer.android.com/guide/topics/manifest/service-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct Service<'a> {
-    // TODO: maybe lazy init resource or something, idk
-    // pub icon: Option<String>
-    // TODO: maybe lazy init resource or something, idk
-    // pub label: Option<String>,
     /// A user-readable description of the service.
+    ///
     /// Corresponds to the `android:description` attribute.
     pub description: Option<&'a str>,
 
     /// Indicates whether the service is aware of Direct Boot mode.
+    ///
     /// Corresponds to the `android:directBootAware` attribute.
     pub direct_boot_aware: Option<&'a str>,
 
     /// Specifies whether the service can be instantiated by the system.
+    ///
     /// Corresponds to the `android:enabled` attribute.
     pub enabled: Option<&'a str>,
 
     /// Defines whether the service can be used by other applications.
+    ///
     /// Corresponds to the `android:exported` attribute.
     pub exported: Option<&'a str>,
 
     /// Lists the types of foreground services this service can run as.
+    ///
     /// Corresponds to the `android:foregroundServiceType` attribute.
     pub foreground_service_type: Option<&'a str>,
 
     /// Indicates whether the service runs in an isolated process.
+    ///
     /// Corresponds to the `android:isolatedProcess` attribute.
     pub isolated_process: Option<&'a str>,
 
     /// The fully qualified name of the service class that implements the service.
+    ///
     /// Corresponds to the `android:name` attribute.
     pub name: Option<&'a str>,
 
     /// The name of a permission that clients must hold to use this service.
+    ///
     /// Corresponds to the `android:permission` attribute.
     pub permission: Option<&'a str>,
 
     /// The name of the process where the service should run.
+    ///
     /// Corresponds to the `android:process` attribute.
     pub process: Option<&'a str>,
 
     /// Indicates whether the service should be stopped when its task is removed.
+    ///
     /// Corresponds to the `android:stopWithTask` attribute.
     pub stop_with_task: Option<&'a str>,
 }

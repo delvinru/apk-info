@@ -26,7 +26,7 @@ pub struct Apk {
 /// Implementation of internal methods
 impl Apk {
     /// Helper function for reading apk files
-    fn init_zip_and_axml(p: &Path) -> Result<(ZipEntry, AXML, Option<ARSC>), APKError> {
+    fn init(p: &Path) -> Result<(ZipEntry, AXML, Option<ARSC>), APKError> {
         let file = File::open(p).map_err(APKError::IoError)?;
         let mut reader = BufReader::with_capacity(1024 * 1024, file);
         let mut input = Vec::new();
@@ -106,7 +106,7 @@ impl Apk {
 
 impl Apk {
     pub fn new(path: &Path) -> Result<Apk, APKError> {
-        // perform basic sanity check
+        // basic sanity check
         if !path.exists() {
             return Err(APKError::IoError(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -114,25 +114,52 @@ impl Apk {
             )));
         }
 
-        let (zip, axml, arsc) = Self::init_zip_and_axml(path)?;
+        let (zip, axml, arsc) = Self::init(path)?;
 
         Ok(Apk { zip, axml, arsc })
     }
 
     /// Read data from zip by filename
+    #[inline]
     pub fn read(&self, filename: &str) -> Result<(Vec<u8>, FileCompressionType), ZipError> {
         self.zip.read(filename)
     }
 
     /// List of the filenames included in the central directory
-    pub fn get_files(&self) -> impl Iterator<Item = &str> + '_ {
+    #[inline]
+    pub fn namelist(&self) -> impl Iterator<Item = &str> + '_ {
         self.zip.namelist()
     }
 
+    /// Returns nice representation of `AndroidManifest.xml`
     pub fn get_xml_string(&self) -> String {
         self.axml.get_xml_string()
     }
 
+    /// Check if the APK has multiple dex files or not
+    pub fn is_multidex(&self) -> bool {
+        self.zip
+            .namelist()
+            .filter(|name| {
+                // don't use regexes, i think it's overengineering for this task
+                if !name.starts_with("classes") || !name.ends_with(".dex") {
+                    return false;
+                }
+
+                let middle = &name["classes".len()..name.len() - ".dex".len()];
+
+                middle.is_empty() || middle.chars().all(|c| c.is_ascii_digit())
+            })
+            .count()
+            > 1
+    }
+
+    #[inline]
+    pub fn get_attribute_value(&self, tag: &str, name: &str) -> Option<String> {
+        self.axml.get_attribute_value(tag, name, self.arsc.as_ref())
+    }
+
+    #[inline]
     pub fn get_all_attribute_values<'a>(
         &'a self,
         tag: &'a str,
@@ -318,7 +345,6 @@ impl Apk {
     /// See: <https://developer.android.com/guide/topics/manifest/uses-permission-element>
     #[inline]
     pub fn get_permissions(&self) -> impl Iterator<Item = &str> {
-        // TODO: some apk uses "<android:uses-permission", wtf this is
         self.axml
             .get_all_attribute_values("uses-permission", "name")
     }
@@ -375,6 +401,37 @@ impl Apk {
         self.axml.get_all_attribute_values("uses-feature", "name")
     }
 
+    /// The app is designed to show its UI on a set of screens inside a vehicle
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    pub fn is_automotive(&self) -> bool {
+        self.get_features()
+            .any(|x| x == "android.hardware.type.automotive")
+    }
+
+    /// The app is designed to show its UI on a television
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    pub fn is_leanback(&self) -> bool {
+        self.get_features()
+            .any(|x| x == "android.hardware.type.television" || x == "android.software.leanback")
+    }
+
+    /// The app is designed to show its UI on a watch.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    pub fn is_wearable(&self) -> bool {
+        self.get_features()
+            .any(|x| x == "android.hardware.type.watch")
+    }
+
+    /// The app is designed to show its UI on Chromebooks.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    pub fn is_chromebook(&self) -> bool {
+        self.get_features().any(|x| x == "android.hardware.type.pc")
+    }
+
     /// Retrieves all declared permissions defined by `<permission android:name="...">`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element>
@@ -408,17 +465,19 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/service-element>
     pub fn get_services<'a>(&'a self) -> impl Iterator<Item = Service<'a>> {
-        self.axml.get_all_tags("service").map(|element| Service {
-            description: element.attr("description"),
-            direct_boot_aware: element.attr("direct_boot_aware"),
-            enabled: element.attr("enabled"),
-            exported: element.attr("exported"),
-            foreground_service_type: element.attr("foreground_service_type"),
-            isolated_process: element.attr("isolated_process"),
-            name: element.attr("name"),
-            permission: element.attr("permission"),
-            process: element.attr("process"),
-            stop_with_task: element.attr("stop_with_task"),
+        self.axml.root.descendants().filter_map(|el| {
+            (el.name() == "service").then(|| Service {
+                description: el.attr("description"),
+                direct_boot_aware: el.attr("direct_boot_aware"),
+                enabled: el.attr("enabled"),
+                exported: el.attr("exported"),
+                foreground_service_type: el.attr("foreground_service_type"),
+                isolated_process: el.attr("isolated_process"),
+                name: el.attr("name"),
+                permission: el.attr("permission"),
+                process: el.attr("process"),
+                stop_with_task: el.attr("stop_with_task"),
+            })
         })
     }
 
@@ -426,15 +485,17 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/receiver-element>
     pub fn get_receivers<'a>(&'a self) -> impl Iterator<Item = Receiver<'a>> {
-        self.axml.get_all_tags("receiver").map(|element| Receiver {
-            direct_boot_aware: element.attr("direct_boot_aware"),
-            enabled: element.attr("enabled"),
-            exported: element.attr("exported"),
-            icon: element.attr("icon"),
-            label: element.attr("label"),
-            name: element.attr("name"),
-            permission: element.attr("permission"),
-            process: element.attr("process"),
+        self.axml.root.descendants().filter_map(|el| {
+            (el.name() == "receiver").then(|| Receiver {
+                direct_boot_aware: el.attr("direct_boot_aware"),
+                enabled: el.attr("enabled"),
+                exported: el.attr("exported"),
+                icon: el.attr("icon"),
+                label: el.attr("label"),
+                name: el.attr("name"),
+                permission: el.attr("permission"),
+                process: el.attr("process"),
+            })
         })
     }
 

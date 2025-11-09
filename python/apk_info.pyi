@@ -1,32 +1,137 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 __version__: str
+"""
+Library version
+"""
+
+class APKError(Exception):
+    """
+    Generic exception related to issues with `apk-info` library
+    """
+
+    ...
 
 class APK:
+    """
+    `APK` class, the main entrypoint to use `apk-info` library.
+
+    **Example**
+
+    ```python
+    from apk_info import APK
+    apk = APK("./path-to-file")
+    ```
+    """
+
     def __init__(self, path: str | Path) -> None:
         """
         Create a new APK instance
 
-        Args:
-            path (str | Path): Path to the APK file on disk
+        Parameters
+        ----------
+            path : str | Path
+                Path to the APK file on disk
 
-        Raises:
-            PyFileNotFoundError: If file not exists
-            PyValueError: If got error while parsing zip entry
-            PyTypeError: If the argument is not str or Path
+        Raises
+        ------
+            PyFileNotFoundError
+                If file not exists
+            PyValueError
+                If got error while parsing zip entry
+            PyTypeError
+                If the argument is not str or Path
         """
         ...
 
     def read(self, filename: str) -> bytes:
         """
         Read raw data for the filename in the zip archive
+
+        Parameters
+        ----------
+            filename: str
+                The path to the file inside the APK archive
+
+        Raises
+        ------
+            PyValueError
+                If the passed name could not be converted to a rust string
+            APKError
+                If there are problems reading the file
+
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        with open("AndroidManifest.xml", "wb") as fd:
+            fd.write(apk.read("AndroidManifest.xml))
+        ```
         """
         ...
 
-    def get_files(self) -> list[str]:
+    def namelist(self) -> list[str]:
         """
-        List of the filenames included in the central directory
+        The list of files contained in the APK, obtained from the central directory (zip)
+
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        for file in apk.namelist():
+            print(f"get file - {file}")
+        ```
+        """
+        ...
+
+    def is_multidex(self) -> bool:
+        """
+        Checks if the APK has multiple `classes.dex` files or not
+
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        print(apk.is_multidex()) # True
+        ```
+        """
+        ...
+
+    def get_attribute_value(self, tag: str, name: str) -> str | None:
+        """
+        An auxiliary method that allows you to get the attribute value directly from AXML.
+
+        If the value is a link to a resource, it will be automatically resolved to the file name.
+
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        security_config = apk.get_attribute_value("application", "networkSecurityConfig")
+        if security_config:
+            with open("network_security_config.xml", "wb") as fd:
+                fd.write(apk.read(security_config))
+        ```
+        """
+        ...
+
+    def get_all_attribute_values(self, tag: str, name: str) -> list[str]:
+        """
+        An auxiliary method that allows you to get the value from all attributes from AXML.
+
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        print(apk.get_all_atribute_values("uses-permission", "name")) # just use apk.get_permissions()
+        ```
         """
         ...
 
@@ -34,12 +139,12 @@ class APK:
         """
         Retrieves the package name declared in the `<manifest>` element.
 
-        Example:
-            <manifest package="com.example.app" />
+        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#package
 
-        Returns:
-            str | None: The package name (e.g., "com.example.app") if found,
-            otherwise None.
+        Returns
+        -------
+            str | None
+                The package name (e.g., "com.example.app") if found, otherwise None
         """
         ...
 
@@ -47,8 +152,12 @@ class APK:
         """
         Retrieves the `sharedUserId` attribute from the `<manifest>` element.
 
-        Returns:
-            str | None: The shared user ID if declared, otherwise None.
+        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#uid
+
+        Returns
+        -------
+            str | None
+                The shared user ID if declared, otherwise None
         """
         ...
 
@@ -56,8 +165,12 @@ class APK:
         """
         Retrieves the `sharedUserLabel` attribute from the `<manifest>` element.
 
-        Returns:
-            str | None: The shared user label if declared, otherwise None.
+        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#uidlabel
+
+        Returns
+        -------
+            str | None
+                The shared user label if declared, otherwise None.
         """
         ...
 
@@ -65,8 +178,12 @@ class APK:
         """
         Retrieves the `sharedUserMaxSdkVersion` attribute from the `<manifest>` element.
 
-        Returns:
-            str | None: The maximum SDK version for the shared user, if declared.
+        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#uidmaxsdk
+
+        Returns
+        -------
+            str | None
+                The maximum SDK version for the shared user, if declared
         """
         ...
 
@@ -74,11 +191,25 @@ class APK:
         """
         Retrieves the application version code.
 
-        Example:
-            <manifest android:versionCode="42" />
+        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#vcode
 
-        Returns:
-            str | None: The version code as a string if present, otherwise None.
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        print(apk.get_version_code()) # 2025101912
+        ```
+
+        Notes
+        -----
+            The automatic conversion to int was not done on purpose,
+            because there is no certainty that malware will not try to insert random values there
+
+        Returns
+        -------
+            str | None
+                The version code as a string if present, otherwise None
         """
         ...
 
@@ -86,23 +217,39 @@ class APK:
         """
         Retrieves the human-readable application version name.
 
-        Example:
-            <manifest android:versionName="1.2.3" />
+        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#vname
 
-        Returns:
-            str | None: The version name as a string if present, otherwise None.
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        print(apk.get_version_name()) # 1.2.3
+        ```
+
+        Returns
+        -------
+            str | None
+                The version name as a string if present, otherwise None
         """
         ...
 
-    def get_install_location(self) -> str | None:
+    def get_install_location(self) -> Literal["auto", "internalOnly", "preferExternal"] | None:
         """
         Retrieves the preferred installation location declared in the manifest.
 
-        Possible values:
-            "auto", "internalOnly", or "preferExternal".
+        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#install
 
-        Returns:
-            str | None: The installation location if specified, otherwise None.
+        Returns
+        -------
+            auto
+                Let the system decie ideal install location
+            internalOnly
+                Explicitly request to be installed on internal phone storage only
+            preferExternal
+                Prefer to be installed on SD card
+            None
+                The installation location is not specified
         """
         ...
 
@@ -267,6 +414,10 @@ class APK:
         """
         ...
 
+    def is_automotive(self) -> bool: ...
+    def is_leanback(self) -> bool: ...
+    def is_wearable(self) -> bool: ...
+    def is_chromebook(self) -> bool: ...
     def get_declared_permissions(self) -> list[str]:
         """
         Retrieves all custom permissions defined by `<permission android:name="...">`.

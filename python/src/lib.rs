@@ -299,7 +299,6 @@ impl Receiver {
 
 #[pyclass(name = "APK", unsendable)]
 struct Apk {
-    /// Store rust object in memory
     apkrs: ApkRust,
 }
 
@@ -326,7 +325,6 @@ impl Apk {
         Ok(Apk { apkrs })
     }
 
-    /// Read data from zip by filename
     pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<Vec<u8>> {
         let filename = match filename.extract::<&str>() {
             Ok(name) => name,
@@ -342,9 +340,20 @@ impl Apk {
         }
     }
 
-    /// List of the filenames included in the central directory
-    pub fn get_files(&self) -> Vec<&str> {
-        self.apkrs.get_files().collect()
+    pub fn namelist(&self) -> Vec<&str> {
+        self.apkrs.namelist().collect()
+    }
+
+    pub fn is_multidex(&self) -> bool {
+        self.apkrs.is_multidex()
+    }
+
+    pub fn get_attribute_value(&self, tag: &str, name: &str) -> Option<String> {
+        self.apkrs.get_attribute_value(tag, name)
+    }
+
+    pub fn get_all_attribute_values<'a>(&'a self, tag: &'a str, name: &'a str) -> Vec<&'a str> {
+        self.apkrs.get_all_attribute_values(tag, name).collect()
     }
 
     pub fn get_package_name(&self) -> Option<String> {
@@ -437,6 +446,22 @@ impl Apk {
 
     pub fn get_features(&self) -> HashSet<&str> {
         self.apkrs.get_features().collect()
+    }
+
+    pub fn is_automotive(&self) -> bool {
+        self.apkrs.is_automotive()
+    }
+
+    pub fn is_leanback(&self) -> bool {
+        self.apkrs.is_leanback()
+    }
+
+    pub fn is_wearable(&self) -> bool {
+        self.apkrs.is_wearable()
+    }
+
+    pub fn is_chromebook(&self) -> bool {
+        self.apkrs.is_chromebook()
     }
 
     pub fn get_declared_permissions(&self) -> HashSet<&str> {

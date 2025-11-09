@@ -189,74 +189,48 @@ impl AXML {
         name: &str,
         arsc: Option<&ARSC>,
     ) -> Option<String> {
-        // try to find the attribute value
+        // check if root itself matches (<manifest> tag)
         let value = if self.root.name() == tag {
-            self.root.attr(name).map(|s| s.to_string())
+            self.root.attr(name)
         } else {
+            // otherwise check other child elements
             self.root
-                .childrens()
-                .find(|child| child.name() == tag)
-                .and_then(|child| child.attr(name))
-                .map(|s| s.to_string())
+                .descendants()
+                .find(|el| el.name() == tag)
+                .and_then(|el| el.attr(name))
         };
 
-        // If value starts with '@', resolve it via ARSC
         match value {
-            Some(ref v) if v.starts_with('@') => {
+            // resolve reference we found
+            Some(v) if v.starts_with('@') => {
                 if let Some(arsc) = arsc {
-                    // safe unwrap, we checked before
-                    return arsc.get_resource_value_by_name(v.strip_prefix("@").unwrap());
+                    // safe slice, we checked before
+                    let name = &v[1..];
+                    arsc.get_resource_value_by_name(name)
+                } else {
+                    Some(v.to_string())
                 }
-
-                // if arsc was not provided just return found value
-                value
             }
-            _ => value, // return the original value if not a resource reference
+            // just a value, not a reference
+            Some(v) => Some(v.to_string()),
+            None => None,
         }
     }
 
+    #[inline]
     pub fn get_all_attribute_values<'a>(
         &'a self,
         tag: &'a str,
         name: &'a str,
     ) -> impl Iterator<Item = &'a str> + 'a {
-        let mut stack = vec![&self.root];
-
-        std::iter::from_fn(move || {
-            while let Some(elem) = stack.pop() {
-                for child in elem.childrens() {
-                    stack.push(child);
-                }
-
-                // If tag matches, yield the attribute value
-                if elem.name() == tag {
-                    for attribute in elem.attributes() {
-                        if attribute.name() == name {
-                            return Some(attribute.value());
-                        }
-                    }
-                }
-            }
-            None
-        })
-    }
-
-    pub fn get_all_tags<'a>(&'a self, tag: &'a str) -> impl Iterator<Item = &'a Element> + 'a {
-        let mut stack = vec![&self.root];
-
-        std::iter::from_fn(move || {
-            while let Some(elem) = stack.pop() {
-                for child in elem.childrens() {
-                    stack.push(child);
-                }
-
-                // If tag matches, yield the element
-                if elem.name() == tag {
-                    return Some(elem);
-                }
-            }
-            None
-        })
+        self.root
+            .descendants()
+            .filter(move |el| el.name() == tag)
+            .flat_map(move |el| {
+                el.attributes()
+                    .filter(move |attr| attr.name() == name)
+                    .map(|attr| attr.value())
+            })
     }
 
     /// Get main activities from APK

@@ -161,7 +161,7 @@ impl Element {
     /// let mut root = Element::new("root");
     /// root.append_child(Element::new("child"));
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn append_child(&mut self, child: Element) {
         self.childrens.push(child);
     }
@@ -177,8 +177,28 @@ impl Element {
     ///
     /// assert_eq!(root.childrens().count(), 1);
     /// ```
+    #[inline]
     pub fn childrens(&self) -> impl Iterator<Item = &Element> {
         self.childrens.iter()
+    }
+
+    /// Return an iterator over all [Element]'s from the current root
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use apk_info_xml::Element;
+    ///
+    /// let mut root = Element::new("root");
+    /// let mut child = Element::new("child");
+    /// child.append_child(Element::new("subchild"));
+    /// root.append_child(child);
+    ///
+    /// assert_eq!(root.descendants().count(), 2);
+    /// ```
+    #[inline]
+    pub fn descendants(&self) -> Descendants<'_> {
+        Descendants::new(self)
     }
 
     /// Returns an iterator over the element's attributes.
@@ -190,12 +210,13 @@ impl Element {
     /// let e = Element::new("node").set_attribute("id", "42");
     /// assert_eq!(e.attributes().count(), 1);
     /// ```
+    #[inline]
     pub fn attributes(&self) -> impl Iterator<Item = &Attribute> {
         self.attributes.iter()
     }
 
     /// Returns the element's tag name.
-    #[inline(always)]
+    #[inline]
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -210,7 +231,7 @@ impl Element {
     /// assert_eq!(e.attr("id"), Some("42"));
     /// assert_eq!(e.attr("missing"), None);
     /// ```
-    #[inline(always)]
+    #[inline]
     pub fn attr(&self, name: &str) -> Option<&str> {
         self.attributes
             .iter()
@@ -267,5 +288,36 @@ impl std::fmt::Display for Element {
 
         // pretty print
         self.fmt_with_indent(f, 0)
+    }
+}
+
+pub struct Descendants<'a> {
+    stack: Vec<std::slice::Iter<'a, Element>>,
+}
+
+impl<'a> Descendants<'a> {
+    fn new(root: &'a Element) -> Descendants<'a> {
+        Descendants {
+            stack: vec![root.childrens.iter()],
+        }
+    }
+}
+
+impl<'a> Iterator for Descendants<'a> {
+    type Item = &'a Element;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(top_iter) = self.stack.last_mut() {
+            if let Some(next_elem) = top_iter.next() {
+                if !next_elem.childrens.is_empty() {
+                    self.stack.push(next_elem.childrens.iter());
+                }
+                return Some(next_elem);
+            } else {
+                self.stack.pop();
+            }
+        }
+
+        None
     }
 }
