@@ -1,3 +1,4 @@
+pub(crate) mod attrs_manifest;
 pub(crate) mod common;
 pub(crate) mod res_string_pool;
 pub mod res_table_config;

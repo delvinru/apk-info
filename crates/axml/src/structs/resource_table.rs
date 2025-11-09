@@ -983,6 +983,7 @@ impl ResTablePackage {
         if let Some(type_map) = self.resources.get(config)
             && let Some(entries) = type_map.get(&type_id)
             && let Some(entry) = entries.get(entry_id as usize)
+            && !matches!(entry, ResTableEntry::NoEntry)
         {
             return Some(entry);
         }

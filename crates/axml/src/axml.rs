@@ -6,7 +6,7 @@ use winnow::token::take;
 
 use crate::structs::{
     ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
-    XmlEndElement, XmlNamespace, XmlParse, XmlStartElement,
+    XmlEndElement, XmlNamespace, XmlParse, XmlStartElement, attrs_manifest,
 };
 use crate::{ARSC, AXMLError};
 
@@ -136,23 +136,26 @@ impl AXML {
                             continue;
                         }
 
-                        match string_pool.get_with_resources(attribute.namespace_uri, xml_resource)
+                        let ns_prefix = if string_pool
+                            .get_with_resources(attribute.namespace_uri, xml_resource)
+                            .is_some()
                         {
-                            Some(_) => {
-                                // use hardcoded "android" prefix to avoid possible shenanigans from malware
-                                element = element.set_attribute_with_prefix(
-                                    Some("android"),
-                                    attribute_name,
-                                    &attribute.typed_value.to_string(string_pool, arsc),
-                                )
-                            }
-                            None => {
-                                element = element.set_attribute(
-                                    attribute_name,
-                                    &attribute.typed_value.to_string(string_pool, arsc),
-                                );
-                            }
-                        }
+                            Some("android")
+                        } else {
+                            None
+                        };
+
+                        let value_str = attrs_manifest::get_attr_value(
+                            attribute_name,
+                            &attribute.typed_value.data,
+                        )
+                        .unwrap_or_else(|| attribute.typed_value.to_string(string_pool, arsc));
+
+                        element = element.set_attribute_with_prefix(
+                            ns_prefix,
+                            attribute_name,
+                            &value_str,
+                        );
                     }
 
                     stack.push(element);

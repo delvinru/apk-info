@@ -465,8 +465,11 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/service-element>
     pub fn get_services<'a>(&'a self) -> impl Iterator<Item = Service<'a>> {
-        self.axml.root.descendants().filter_map(|el| {
-            (el.name() == "service").then(|| Service {
+        self.axml
+            .root
+            .descendants()
+            .filter(|&el| el.name() == "service")
+            .map(|el| Service {
                 description: el.attr("description"),
                 direct_boot_aware: el.attr("direct_boot_aware"),
                 enabled: el.attr("enabled"),
@@ -478,15 +481,17 @@ impl Apk {
                 process: el.attr("process"),
                 stop_with_task: el.attr("stop_with_task"),
             })
-        })
     }
 
     /// Retrieves all receivers declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/receiver-element>
     pub fn get_receivers<'a>(&'a self) -> impl Iterator<Item = Receiver<'a>> {
-        self.axml.root.descendants().filter_map(|el| {
-            (el.name() == "receiver").then(|| Receiver {
+        self.axml
+            .root
+            .descendants()
+            .filter(|&el| el.name() == "receiver")
+            .map(|el| Receiver {
                 direct_boot_aware: el.attr("direct_boot_aware"),
                 enabled: el.attr("enabled"),
                 exported: el.attr("exported"),
@@ -496,7 +501,6 @@ impl Apk {
                 permission: el.attr("permission"),
                 process: el.attr("process"),
             })
-        })
     }
 
     /// Retrieves all providers declared in the manifest.
