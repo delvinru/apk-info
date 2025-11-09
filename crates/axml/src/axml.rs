@@ -116,7 +116,11 @@ impl AXML {
                     let mut element = Element::new(name);
 
                     if name == "manifest" {
-                        element = element.set_attribute("xmlns:android", ANDROID_NAMESPACE);
+                        element = element.set_attribute_with_prefix(
+                            Some("xlmns"),
+                            "android",
+                            ANDROID_NAMESPACE,
+                        );
                     }
 
                     for attribute in &node.attributes {
@@ -135,6 +139,7 @@ impl AXML {
                         match string_pool.get_with_resources(attribute.namespace_uri, xml_resource)
                         {
                             Some(_) => {
+                                // use hardcoded "android" prefix to avoid possible shenanigans from malware
                                 element = element.set_attribute_with_prefix(
                                     Some("android"),
                                     attribute_name,

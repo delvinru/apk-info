@@ -1,5 +1,3 @@
-use std::slice;
-
 /// Represents a single XML attribute, including an optional namespace prefix.
 ///
 /// This struct models attributes like `id="123"` or `android:name="..."`.
@@ -16,7 +14,7 @@ use std::slice;
 /// let prefixed = Attribute::new(Some("android"), "name", "android.intent.action.PACKAGE_REMOVED");
 /// assert_eq!(prefixed.to_string(), "android:name=\"android.intent.action.PACKAGE_REMOVED\"");
 /// ```
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, Hash)]
 pub struct Attribute {
     prefix: Option<String>,
     name: String,
@@ -117,6 +115,11 @@ impl Element {
     /// let e = Element::new("node").set_attribute("id", "42");
     /// ```
     pub fn set_attribute(mut self, name: &str, value: &str) -> Element {
+        // if attribute with same already exists - do nothing
+        if self.attr(name).is_some() {
+            return self;
+        }
+
         self.attributes.push(Attribute::new(None, name, value));
         self
     }
@@ -140,6 +143,11 @@ impl Element {
         name: &str,
         value: &str,
     ) -> Element {
+        // if attribute with same already exists - do nothing
+        if self.attr(name).is_some() {
+            return self;
+        }
+
         self.attributes.push(Attribute::new(prefix, name, value));
         self
     }
@@ -170,9 +178,7 @@ impl Element {
     /// assert_eq!(root.childrens().count(), 1);
     /// ```
     pub fn childrens(&self) -> impl Iterator<Item = &Element> {
-        ElementIter {
-            iter: self.childrens.iter(),
-        }
+        self.childrens.iter()
     }
 
     /// Returns an iterator over the element's attributes.
@@ -185,9 +191,7 @@ impl Element {
     /// assert_eq!(e.attributes().count(), 1);
     /// ```
     pub fn attributes(&self) -> impl Iterator<Item = &Attribute> {
-        AttributeIter {
-            iter: self.attributes.iter(),
-        }
+        self.attributes.iter()
     }
 
     /// Returns the element's tag name.
@@ -237,7 +241,7 @@ impl Element {
             }
         } else if self.attributes.len() == 1 {
             // safe unwrap, checked that contains at least 1 item
-            write!(f, " {}", self.attributes.first().unwrap())?;
+            write!(f, " {}", self.attributes().next().unwrap())?;
         }
 
         if self.childrens.is_empty() {
@@ -263,31 +267,5 @@ impl std::fmt::Display for Element {
 
         // pretty print
         self.fmt_with_indent(f, 0)
-    }
-}
-
-/// Iterator over child [`Element`] references within an [`Element`].
-pub(crate) struct ElementIter<'a> {
-    iter: slice::Iter<'a, Element>,
-}
-
-impl<'a> Iterator for ElementIter<'a> {
-    type Item = &'a Element;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
-    }
-}
-
-/// Iterator over [`Attribute`] references within an [`Element`].
-pub(crate) struct AttributeIter<'a> {
-    iter: slice::Iter<'a, Attribute>,
-}
-
-impl<'a> Iterator for AttributeIter<'a> {
-    type Item = &'a Attribute;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
     }
 }

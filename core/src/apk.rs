@@ -47,7 +47,6 @@ impl Apk {
                 }
 
                 // d5b7d025712f0f22562b3d511d7603f5c8a0c477675c6578083fa7709ca41ba8 - sample without resourcers, but in theory we can show information, need research
-                // 3474625e63d0893fc8f83034e835472d95195254e1e4bdf99153b7c74eb44d86 - same
                 let arsc = match zip.read(RESOURCE_TABLE_PATH) {
                     Ok((resource_data, _)) => {
                         Some(ARSC::new(&mut &resource_data[..]).map_err(APKError::ResourceError)?)
@@ -383,6 +382,12 @@ impl Apk {
     pub fn get_declared_permissions(&self) -> impl Iterator<Item = &str> {
         // TODO: maybe create some kind of structure, idk
         self.axml.get_all_attribute_values("permission", "name")
+    }
+
+    /// Get first found main activity (with intent filters `MAIN` + `LAUNCHER|INFO`)
+    #[inline]
+    pub fn get_main_activity(&self) -> Option<&str> {
+        self.axml.get_main_activities().next()
     }
 
     /// Retrieves all **main activities** (with intent filters `MAIN` + `LAUNCHER|INFO`).

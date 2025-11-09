@@ -38,7 +38,7 @@ fn main() {
         if let Some(entries) = json.get(cat).and_then(|v| v.as_object()) {
             for (k, v) in entries {
                 if let (Ok(id), Some(name)) = (k.parse::<u32>(), v.as_str()) {
-                    let name = format!("\"{}/{}\"", cat, name);
+                    let name = format!("\"{}\"", name);
                     map.entry(id, name);
                 }
             }

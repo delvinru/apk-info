@@ -276,6 +276,18 @@ class APK:
         """
         ...
 
+    def get_main_activity(self) -> str | None:
+        """
+        Retrieves first main (launchable) activity defined in the manifest.
+
+        A main activity is typically one that has an intent filter
+        with actions `MAIN` and categories `LAUNCHER` or `INFO`.
+
+        Returns:
+            str | None: A main activity class name
+        """
+        ...
+
     def get_main_activities(self) -> list[str]:
         """
         Retrieves all main (launchable) activities defined in the manifest.
