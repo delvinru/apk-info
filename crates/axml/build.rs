@@ -56,7 +56,7 @@ fn generate_system_types() {
 #[derive(Debug, Deserialize)]
 pub struct AttrCollection {
     pub kind: String,
-    pub items: HashMap<i64, String>,
+    pub items: HashMap<u32, String>,
 }
 
 pub type AttrMap = HashMap<String, AttrCollection>;
@@ -76,7 +76,7 @@ fn generate_map(map: &mut Map<'_, String>, path: &str) {
             .map(|(value, name)| (name.as_str(), *value))
             .collect();
 
-        pairs.sort_unstable_by(|a, b| a.0.cmp(b.0));
+        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 
         let pairs_str = pairs
             .into_iter()
@@ -104,7 +104,7 @@ fn generate_attrs_manifest() {
     let mut output = String::new();
     output.push_str("#[allow(clippy::type_complexity)]\n");
     output.push_str(&format!(
-        "static ATTRS_MANIFEST: phf::Map<&'static str, (&'static str, &'static [(&'static str, i64)])> = {};\n\n",
+        "static ATTRS_MANIFEST: phf::Map<&'static str, (&'static str, &'static [(&'static str, u32)])> = {};\n\n",
         map.build()
     ));
 

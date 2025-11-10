@@ -1,37 +1,41 @@
+use std::borrow::Cow;
+
 include!(concat!(env!("OUT_DIR"), "/attrs_manifest_phf.rs"));
 
-#[inline]
-pub fn get_attr_value(name: &str, value: &u32) -> Option<String> {
+pub fn get_attr_value<'a>(name: &'a str, value: &'a u32) -> Option<Cow<'a, str>> {
     let attrs = ATTRS_MANIFEST.get(name)?;
-    let i64_value = if *value == u32::MAX {
-        -1
-    } else {
-        *value as i64
-    };
 
+    let mut attribute_value = *value;
     match attrs.0 {
         "enum" => {
             for &(item_name, item_value) in attrs.1.iter() {
-                if item_value == i64_value {
-                    return Some(item_name.to_string());
+                if item_value == attribute_value {
+                    return Some(Cow::Borrowed(item_name));
                 }
             }
-            Some(i64_value.to_string())
+            Some(Cow::Owned(u32::to_string(value)))
         }
         "flag" => {
-            let mut result = String::new();
-            for &(flag_name, flag_value) in attrs.1.iter() {
-                if flag_value == i64_value {
-                    result.push_str(flag_name);
-                    break;
-                } else if flag_value != 0 && flag_value & i64_value == flag_value {
-                    if !result.is_empty() {
-                        result.push('|');
+            let parts: Vec<&str> = attrs
+                .1
+                .iter()
+                .filter_map(|&(name, val)| {
+                    if val != 0 && (val & attribute_value) == val {
+                        attribute_value ^= val;
+                        Some(name)
+                    } else {
+                        None
                     }
-                    result.push_str(flag_name);
-                }
+                })
+                .collect();
+
+            if parts.is_empty() {
+                None
+            } else if parts.len() == 1 {
+                Some(Cow::Borrowed(parts[0]))
+            } else {
+                Some(Cow::Owned(parts.join("|")))
             }
-            Some(result)
         }
         _ => unreachable!(),
     }
@@ -42,23 +46,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn get_attr_value_1() {
+    fn test_attr_value_1() {
         let value = get_attr_value("installLocation", &1);
-        assert_eq!(value, Some("internalOnly".to_owned()))
+        assert_eq!(value, Some(Cow::Owned("internalOnly".to_owned())))
     }
 
     #[test]
-    fn get_attr_value_2() {
+    fn test_attr_value_2() {
         let value = get_attr_value("recreateOnConfigChanges", &3);
-        assert_eq!(value, Some("mcc|mnc".to_owned()))
+        assert_eq!(value, Some(Cow::Owned("mnc|mcc".to_owned())))
     }
 
     #[test]
-    fn get_attr_value_3() {
+    fn test_attr_value_3() {
         let value = get_attr_value("configChanges", &0x130);
         assert_eq!(
             value,
-            Some("keyboard|keyboardHidden|screenLayout".to_owned())
+            Some(Cow::Owned(
+                "screenLayout|keyboardHidden|keyboard".to_owned()
+            ))
         )
+    }
+
+    #[test]
+    fn test_attr_value_4() {
+        let value = get_attr_value("protectionLevel", &3);
+        assert_eq!(value, Some(Cow::Owned("signatureOrSystem".to_owned())))
+    }
+
+    #[test]
+    fn test_attr_value_5() {
+        let value = get_attr_value("screenOrientation", &u32::MAX);
+        assert_eq!(value, Some(Cow::Owned("unspecified".to_owned())))
     }
 }

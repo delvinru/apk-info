@@ -7,7 +7,7 @@ use apk_info_axml::axml::AXML;
 use apk_info_zip::{FileCompressionType, Signature, ZipEntry, ZipError};
 
 use crate::errors::APKError;
-use crate::models::{Receiver, Service, XAPKManifest};
+use crate::models::{Activity, Permission, Provider, Receiver, Service, XAPKManifest};
 
 const ANDROID_MANIFEST_PATH: &str = "AndroidManifest.xml";
 const RESOURCE_TABLE_PATH: &str = "resources.arsc";
@@ -152,6 +152,21 @@ impl Apk {
             })
             .count()
             > 1
+    }
+
+    pub fn get_resource_value(&self, name: &str) -> Option<String> {
+        // if not a reference name - return nothing
+        if !name.starts_with('@') {
+            return None;
+        }
+
+        if let Some(arsc) = &self.arsc {
+            // safe slice, checked before
+            let name = &name[1..];
+            return arsc.get_resource_value_by_name(name);
+        }
+
+        None
     }
 
     #[inline]
@@ -306,7 +321,6 @@ impl Apk {
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#desc>
     #[inline]
     pub fn get_application_description(&self) -> Option<String> {
-        // TODO: resolve with resources
         self.axml
             .get_attribute_value("application", "description", self.arsc.as_ref())
     }
@@ -319,6 +333,12 @@ impl Apk {
         // TODO: need somehow resolve maximum resolution for icon or give option to search density
         self.axml
             .get_attribute_value("application", "icon", self.arsc.as_ref())
+    }
+
+    #[inline]
+    pub fn get_application_logo(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("application", "logo", self.arsc.as_ref())
     }
 
     /// Extracts the `android:label` attribute from `<application>`.
@@ -335,7 +355,6 @@ impl Apk {
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#nm>
     #[inline]
     pub fn get_application_name(&self) -> Option<String> {
-        // TODO: probably not so easy
         self.axml
             .get_attribute_value("application", "name", self.arsc.as_ref())
     }
@@ -346,7 +365,7 @@ impl Apk {
     #[inline]
     pub fn get_permissions(&self) -> impl Iterator<Item = &str> {
         self.axml
-            .get_all_attribute_values("uses-permission", "name")
+            .get_root_attribute_values("uses-permission", "name")
     }
 
     /// Retrieves all declared permissions for API 23+ from `<uses-permission-sdk-23>`.
@@ -355,7 +374,7 @@ impl Apk {
     #[inline]
     pub fn get_permissions_sdk23(&self) -> impl Iterator<Item = &str> {
         self.axml
-            .get_all_attribute_values("uses-permission-sdk-23", "name")
+            .get_root_attribute_values("uses-permission-sdk-23", "name")
     }
 
     /// Retrieves the minimum SDK version required by the app.
@@ -371,9 +390,12 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#target>
     #[inline]
-    pub fn get_target_sdk_version(&self) -> Option<String> {
+    pub fn get_target_sdk_version(&self) -> u32 {
         self.axml
             .get_attribute_value("uses-sdk", "targetSdkVersion", self.arsc.as_ref())
+            .or_else(|| self.get_min_sdk_version())
+            .and_then(|sdk| sdk.parse::<u32>().ok())
+            .unwrap_or(1)
     }
 
     /// Retrieves the maximum SDK version supported by the app.
@@ -393,17 +415,24 @@ impl Apk {
         self.axml.get_all_attribute_values("uses-library", "name")
     }
 
+    #[inline]
+    pub fn get_native_libraries(&self) -> impl Iterator<Item = &str> {
+        self.axml
+            .get_all_attribute_values("uses-native-library", "name")
+    }
+
     /// Retrieves all hardware or software features declared by `<uses-feature>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element>
     #[inline]
     pub fn get_features(&self) -> impl Iterator<Item = &str> {
-        self.axml.get_all_attribute_values("uses-feature", "name")
+        self.axml.get_root_attribute_values("uses-feature", "name")
     }
 
     /// The app is designed to show its UI on a set of screens inside a vehicle
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    #[inline]
     pub fn is_automotive(&self) -> bool {
         self.get_features()
             .any(|x| x == "android.hardware.type.automotive")
@@ -412,6 +441,7 @@ impl Apk {
     /// The app is designed to show its UI on a television
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    #[inline]
     pub fn is_leanback(&self) -> bool {
         self.get_features()
             .any(|x| x == "android.hardware.type.television" || x == "android.software.leanback")
@@ -420,6 +450,7 @@ impl Apk {
     /// The app is designed to show its UI on a watch.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    #[inline]
     pub fn is_wearable(&self) -> bool {
         self.get_features()
             .any(|x| x == "android.hardware.type.watch")
@@ -428,6 +459,7 @@ impl Apk {
     /// The app is designed to show its UI on Chromebooks.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
+    #[inline]
     pub fn is_chromebook(&self) -> bool {
         self.get_features().any(|x| x == "android.hardware.type.pc")
     }
@@ -436,9 +468,20 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element>
     #[inline]
-    pub fn get_declared_permissions(&self) -> impl Iterator<Item = &str> {
-        // TODO: maybe create some kind of structure, idk
-        self.axml.get_all_attribute_values("permission", "name")
+    pub fn get_declared_permissions<'a>(&'a self) -> impl Iterator<Item = Permission<'a>> {
+        // We iterate only on children, since this tag lives only as a child of the <manifest> tag
+        self.axml
+            .root
+            .childrens()
+            .filter(|&el| el.name() == "permission")
+            .map(|el| Permission {
+                description: el.attr("description"),
+                icon: el.attr("icon"),
+                label: el.attr("label"),
+                name: el.attr("name"),
+                permission_group: el.attr("permissionGroup"),
+                protection_level: el.attr("protectionLevel"),
+            })
     }
 
     /// Get first found main activity (with intent filters `MAIN` + `LAUNCHER|INFO`)
@@ -457,13 +500,27 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/activity-element>
     #[inline]
-    pub fn get_activities(&self) -> impl Iterator<Item = &str> {
-        self.axml.get_all_attribute_values("activity", "name")
+    pub fn get_activities<'a>(&'a self) -> impl Iterator<Item = Activity<'a>> {
+        self.axml
+            .root
+            .descendants()
+            .filter(|&el| el.name() == "activity")
+            .map(|el| Activity {
+                enabled: el.attr("enabled"),
+                exported: el.attr("exported"),
+                icon: el.attr("icon"),
+                label: el.attr("label"),
+                name: el.attr("name"),
+                parent_activity_name: el.attr("parent_activity_name"),
+                permission: el.attr("permission"),
+                process: el.attr("process"),
+            })
     }
 
     /// Retrieves all services declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/service-element>
+    #[inline]
     pub fn get_services<'a>(&'a self) -> impl Iterator<Item = Service<'a>> {
         self.axml
             .root
@@ -475,7 +532,9 @@ impl Apk {
                 enabled: el.attr("enabled"),
                 exported: el.attr("exported"),
                 foreground_service_type: el.attr("foreground_service_type"),
+                icon: el.attr("icon"),
                 isolated_process: el.attr("isolated_process"),
+                label: el.attr("label"),
                 name: el.attr("name"),
                 permission: el.attr("permission"),
                 process: el.attr("process"),
@@ -486,6 +545,7 @@ impl Apk {
     /// Retrieves all receivers declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/receiver-element>
+    #[inline]
     pub fn get_receivers<'a>(&'a self) -> impl Iterator<Item = Receiver<'a>> {
         self.axml
             .root
@@ -507,8 +567,28 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/provider-element>
     #[inline]
-    pub fn get_providers(&self) -> impl Iterator<Item = &str> {
-        self.axml.get_all_attribute_values("provider", "name")
+    pub fn get_providers<'a>(&'a self) -> impl Iterator<Item = Provider<'a>> {
+        self.axml
+            .root
+            .descendants()
+            .filter(|&el| el.name() == "provider")
+            .map(|el| Provider {
+                authorities: el.attr("authorities"),
+                enabled: el.attr("enabled"),
+                direct_boot_aware: el.attr("direct_boot_aware"),
+                exported: el.attr("exported"),
+                grant_uri_permissions: el.attr("grant_uri_permissions"),
+                icon: el.attr("icon"),
+                init_order: el.attr("init_order"),
+                label: el.attr("label"),
+                multiprocess: el.attr("multiprocess"),
+                name: el.attr("name"),
+                permission: el.attr("permission"),
+                process: el.attr("process"),
+                read_permission: el.attr("read_permission"),
+                syncable: el.attr("syncable"),
+                write_permission: el.attr("write_permission"),
+            })
     }
 
     /// Retrieves all APK signing signatures (v1, v2, v3 and v3.1).

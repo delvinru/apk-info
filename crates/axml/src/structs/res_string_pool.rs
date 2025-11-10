@@ -233,11 +233,21 @@ impl StringPool {
         &'a self,
         idx: u32,
         xml_resource: &'a XMLResourceMap,
+        is_attribute_name: bool,
     ) -> Option<&'a str> {
         self.strings
             .get(idx as usize)
             .map(|x| x.as_str())
             .filter(|s| !s.is_empty())
-            .or_else(|| xml_resource.get_attr(idx))
+            .or_else(|| {
+                xml_resource.get_attr(idx).map(|x| {
+                    // need remove prefix if looked up in system attributes
+                    if is_attribute_name {
+                        x.strip_prefix("android:attr/").unwrap_or(x)
+                    } else {
+                        x
+                    }
+                })
+            })
     }
 }

@@ -104,9 +104,24 @@ impl Element {
         }
     }
 
-    /// Adds a new attribute without a namespace prefix to the element.
+    /// Creates a new [`Element`] with the specified tag name and preallocated space for attributes
     ///
-    /// Returns the modified [`Element`] to allow method chaining.
+    /// # Example
+    /// ```
+    /// use apk_info_xml::Element;
+    ///
+    /// let e = Element::with_capacity("root", 16);
+    /// assert_eq!(e.name(), "root");
+    /// ```
+    pub fn with_capacity(name: &str, capacity: usize) -> Element {
+        Element {
+            name: name.to_owned(),
+            attributes: Vec::with_capacity(capacity),
+            ..Default::default()
+        }
+    }
+
+    /// Adds a new attribute without a namespace prefix to the element.
     ///
     /// # Example
     /// ```
@@ -114,19 +129,16 @@ impl Element {
     ///
     /// let e = Element::new("node").set_attribute("id", "42");
     /// ```
-    pub fn set_attribute(mut self, name: &str, value: &str) -> Element {
+    pub fn set_attribute(&mut self, name: &str, value: &str) {
         // if attribute with same already exists - do nothing
-        if self.attr(name).is_some() {
-            return self;
+        if self.attributes.iter().any(|a| a.name() == name) {
+            return;
         }
 
         self.attributes.push(Attribute::new(None, name, value));
-        self
     }
 
     /// Adds a new attribute with an optional namespace prefix to the element.
-    ///
-    /// Returns the modified [`Element`] to allow method chaining.
     ///
     /// # Example
     /// ```
@@ -137,19 +149,17 @@ impl Element {
     ///
     /// assert!(e.attributes().collect::<Vec<_>>().len() > 0)
     /// ```
-    pub fn set_attribute_with_prefix(
-        mut self,
-        prefix: Option<&str>,
-        name: &str,
-        value: &str,
-    ) -> Element {
+    pub fn set_attribute_with_prefix(&mut self, prefix: Option<&str>, name: &str, value: &str) {
         // if attribute with same already exists - do nothing
-        if self.attr(name).is_some() {
-            return self;
+        if self
+            .attributes
+            .iter()
+            .any(|a| a.name() == name && a.prefix.as_deref() == prefix)
+        {
+            return;
         }
 
         self.attributes.push(Attribute::new(prefix, name, value));
-        self
     }
 
     /// Appends a new child [`Element`] to this element.

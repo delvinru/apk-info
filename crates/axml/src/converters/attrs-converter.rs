@@ -11,7 +11,7 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 struct AttrCollection {
     kind: AttrType,
-    items: HashMap<i64, String>, // value -> name
+    items: HashMap<u32, String>, // value -> name
 }
 
 #[derive(Debug, Serialize)]
@@ -109,10 +109,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn parse_hex_or_dec(s: &str) -> Result<i64, std::num::ParseIntError> {
+fn parse_hex_or_dec(s: &str) -> Result<u32, std::num::ParseIntError> {
     if let Some(hex) = s.strip_prefix("0x") {
-        i64::from_str_radix(hex, 16)
+        u32::from_str_radix(hex, 16)
     } else {
-        s.parse::<i64>()
+        // sometimes there "-1" so we threat this as u32::MAX to avoid performance drawback at runtime
+        Ok(s.parse::<u32>().unwrap_or(u32::MAX))
     }
 }

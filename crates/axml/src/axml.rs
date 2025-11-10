@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use apk_info_xml::Element;
 use log::warn;
 use winnow::error::{ContextError, ErrMode};
@@ -113,10 +115,10 @@ impl AXML {
                         continue;
                     };
 
-                    let mut element = Element::new(name);
+                    let mut element = Element::with_capacity(name, node.attributes.len());
 
                     if name == "manifest" {
-                        element = element.set_attribute_with_prefix(
+                        element.set_attribute_with_prefix(
                             Some("xlmns"),
                             "android",
                             ANDROID_NAMESPACE,
@@ -124,11 +126,11 @@ impl AXML {
                     }
 
                     for attribute in &node.attributes {
-                        let attribute_name =
-                            match string_pool.get_with_resources(attribute.name, xml_resource) {
-                                Some(v) => v,
-                                None => continue,
-                            };
+                        let Some(attribute_name) =
+                            string_pool.get_with_resources(attribute.name, xml_resource, true)
+                        else {
+                            continue;
+                        };
 
                         // skip garbage strings
                         if attribute_name.contains(char::is_whitespace) {
@@ -137,7 +139,7 @@ impl AXML {
                         }
 
                         let ns_prefix = if string_pool
-                            .get_with_resources(attribute.namespace_uri, xml_resource)
+                            .get_with_resources(attribute.namespace_uri, xml_resource, false)
                             .is_some()
                         {
                             Some("android")
@@ -149,13 +151,11 @@ impl AXML {
                             attribute_name,
                             &attribute.typed_value.data,
                         )
-                        .unwrap_or_else(|| attribute.typed_value.to_string(string_pool, arsc));
+                        .unwrap_or_else(|| {
+                            Cow::Owned(attribute.typed_value.to_string(string_pool, arsc))
+                        });
 
-                        element = element.set_attribute_with_prefix(
-                            ns_prefix,
-                            attribute_name,
-                            &value_str,
-                        );
+                        element.set_attribute_with_prefix(ns_prefix, attribute_name, &value_str);
                     }
 
                     stack.push(element);
@@ -207,7 +207,7 @@ impl AXML {
             // resolve reference we found
             Some(v) if v.starts_with('@') => {
                 if let Some(arsc) = arsc {
-                    // safe slice, we checked before
+                    // safe slice, checked before
                     let name = &v[1..];
                     arsc.get_resource_value_by_name(name)
                 } else {
@@ -218,6 +218,23 @@ impl AXML {
             Some(v) => Some(v.to_string()),
             None => None,
         }
+    }
+
+    /// Same as [AXML::get_all_attribute_values] but it only allows you to go through the children (for optimization purposes)
+    #[inline]
+    pub fn get_root_attribute_values<'a>(
+        &'a self,
+        tag: &'a str,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a str> + 'a {
+        self.root
+            .childrens()
+            .filter(move |el| el.name() == tag)
+            .flat_map(move |el| {
+                el.attributes()
+                    .filter(move |attr| attr.name() == name)
+                    .map(|attr| attr.value())
+            })
     }
 
     #[inline]
@@ -242,7 +259,7 @@ impl AXML {
     /// - Search for all `<activity>` and `<activity-alias>` tags
     /// - Search for `android.intent.action.MAIN` with `android.intent.category.LAUNCHER` or `android.intent.category.INFO`
     ///
-    /// See: <https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/core/java/android/app/ApplicationPackageManager.java;l=310?q=getLaunchIntentForPackage>
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310>
     pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {
         self.root
             .childrens()

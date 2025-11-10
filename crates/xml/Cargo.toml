@@ -7,3 +7,6 @@ edition.workspace = true
 homepage.workspace = true
 license.workspace = true
 version.workspace = true
+
+[dependencies]
+smallvec.workspace = true

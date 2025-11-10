@@ -18,7 +18,8 @@ class APK:
     """
     `APK` class, the main entrypoint to use `apk-info` library.
 
-    **Example**
+    Examples
+    --------
 
     ```python
     from apk_info import APK
@@ -102,6 +103,43 @@ class APK:
         """
         ...
 
+    def get_xml_string(self) -> str:
+        """
+        Converts the internal xml representation of the tree to a human readable format
+
+        Returns
+        -------
+            str
+                pretty-printed AndroidManifest.xml
+        """
+        ...
+
+    def get_resource_value(self, name: str) -> str | None:
+        """
+        An auxiliary method that allows you to get a value from a reference to a resource
+
+        Parameters
+        ----------
+            name : str
+                The reference to the resource in the `@string/app_name` format
+
+        Examples
+        --------
+
+        >>> print(apk.get_resource_value("@string/app_name"))
+        "Cool Application"
+
+        >>> print(apk.get_resource_value("@drawable/ic_launcher"))
+        "res/drawable-xhdpi/ic_launcher.png"
+
+        Returns
+        -------
+            str | None
+                If something was found, the value will be returned.
+
+                It can be a string, a file path, etc., depending on the context in which this function is used.
+        """
+
     def get_attribute_value(self, tag: str, name: str) -> str | None:
         """
         An auxiliary method that allows you to get the attribute value directly from AXML.
@@ -117,6 +155,13 @@ class APK:
         if security_config:
             with open("network_security_config.xml", "wb") as fd:
                 fd.write(apk.read(security_config))
+        ```
+
+        Example of how to get additional information from the <application> tag
+
+        ```python
+        apk = APK("./file")
+        print(apk.get_attribute_value("application", "allowClearUserData"))
         ```
         """
         ...
@@ -253,34 +298,62 @@ class APK:
         """
         ...
 
-    def get_application_task_reparenting(self) -> str | None:
+    def get_application_task_reparenting(self) -> Literal["true", "false"] | None:
         """
         Extracts the `android:allowTaskReparenting` attribute from `<application>`.
 
-        Returns:
-            str | None: "true" or "false" if declared, otherwise None.
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#reparent
+
+        Returns
+        -------
+            "true" | "false" | None
+                "true" or "false" if declared, otherwise None.
         """
         ...
 
-    def get_application_allow_backup(self) -> str | None:
+    def get_application_allow_backup(self) -> Literal["true", "false"] | None:
         """
         Extracts the `android:allowBackup` attribute from `<application>`.
 
-        Returns:
-            str | None: "true" or "false" if declared, otherwise None.
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#allowbackup
+
+        Returns
+        -------
+            "true" | "false" | None
+                "true" or "false" if declared, otherwise None.
         """
         ...
 
-    def get_application_category(self) -> str | None:
+    def get_application_category(
+        self,
+    ) -> Literal["accessibility", "audio", "game", "image", "maps", "news", "productivity", "social", "video"] | None:
         """
         Extracts the `android:appCategory` attribute from `<application>`.
 
-        Possible values include:
-            "accessibility", "audio", "game", "image", "maps",
-            "news", "productivity", "social", or "video".
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#appCategory
 
-        Returns:
-            str | None: The app category if defined, otherwise None.
+        Returns
+        -------
+            accessibility
+                Apps that are primarily accessibility apps, such as screen-readers
+            audio
+                Apps that primarily work with audio or music, such as music players
+            game
+                Apps that are primarily games
+            image
+                Apps that primarily work with images or photos, such as camera or gallery apps
+            maps
+                Apps that are primarily map apps, such as navigation apps
+            news
+                Apps that are primarily news apps, such as newspapers, magazines, or sports apps
+            productivity
+                Apps that are primarily productivity apps, such as cloud storage or workplace apps
+            social
+                Apps that are primarily social apps, such as messaging, communication, email, or social network apps
+            video
+                Apps that primarily work with video or movies, such as streaming video apps
+            None
+                Value not defined
         """
         ...
 
@@ -288,53 +361,116 @@ class APK:
         """
         Extracts the `android:backupAgent` attribute from `<application>`.
 
-        Returns:
-            str | None: The name of the backup agent class if declared, otherwise None.
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#agent
+
+        Examples
+        --------
+
+        >>> apk.get_application_backup_agent()
+        >>> "com.android.launcher3.LauncherBackupAgent"
+
+        Returns
+        -------
+            str | None
+                The name of the backup agent class if declared, otherwise None.
         """
         ...
 
-    def get_application_debuggable(self) -> str | None:
+    def get_application_debuggable(self) -> Literal["true", "false"] | None:
         """
         Extracts the `android:debuggable` attribute from `<application>`.
 
-        Example:
-            <application android:debuggable="true" />
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#debug
 
-        Returns:
-            str | None: "true" or "false" if declared, otherwise None.
+        Returns
+        -------
+            str | None
+                "true" or "false" if declared, otherwise None.
         """
         ...
 
     def get_application_description(self) -> str | None:
         """
-        Extracts the `android:description` attribute from `<application>`.
+        Extracts and resolve the `android:description` attribute from `<application>`.
 
-        Note:
-            This may refer to a string resource (e.g., "@string/app_desc").
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#desc
+
+        Notes
+        -----
+            The link to the resource will be automatically resolved and this value will be returned
 
         Returns:
-            str | None: The description resource or literal value, if available.
+            str | None
+                The description resource or literal value, if available.
         """
         ...
 
     def get_application_icon(self) -> str | None:
         """
-        Extracts and resolve the `android:icon` attribute from `<application>`
+        Extracts and resolves the `android:icon` attribute from `<application>`
+
+        .. aplication: https://developer.android.com/guide/topics/manifest/application-element#icon
+
+        Notes
+        ----
+            There is no way to choose a resolution yet, it will be implemented in the future.
+
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        icon = apk.get_application_icon()
+        if icon:
+            # it's not always png, maybe webp or even xml.
+            with open("icon.png", "wb") as fd:
+                fd.write(apk.read(icon))
+        ```
 
         Returns:
-            str | None: The path to the icon file, if available.
+            str | None
+                The path to the icon file, if available.
         """
         ...
 
     def get_application_label(self) -> str | None:
         """
-        Extracts the `android:label` attribute from `<application>`.
+        Extracts and resolves the `android:label` attribute from `<application>`.
 
-        Note:
-            This may refer to a string resource (e.g., "@string/app_name").
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#label
+
+        Notes
+        -----
+            The link to the resource will be automatically resolved and this value will be returned
+
+        Returns
+        -------
+            str | None
+                The label resource or literal value, if available
+        """
+        ...
+
+    def get_application_logo(self) -> str | None:
+        """
+        Extracts and resolves the `android:logo` attribute from `<application>`
+
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#logo
+
+        Examples
+        --------
+
+        ```python
+        apk = APK("./file")
+        logo = apk.get_application_logo()
+        if logo:
+            # it's not always png, maybe webp or even xml.
+            with open("logo.png", "wb") as fd:
+                fd.write(apk.read(logo))
+        ```
 
         Returns:
-            str | None: The label resource or literal value, if available.
+            str | None
+                The path to the logo file, if available.
         """
         ...
 
@@ -342,47 +478,81 @@ class APK:
         """
         Extracts the `android:name` attribute from `<application>`.
 
-        Returns:
-            str | None: The fully qualified application class name, if defined.
+        .. application: https://developer.android.com/guide/topics/manifest/application-element#nm
+
+        Examples
+        --------
+        >>> apk.get_application_name()
+        "com.whatsapp.AppShell"
+
+        Returns
+        -------
+            str | None
+                The fully qualified application class name, if defined.
         """
         ...
 
-    def get_permissions(self) -> list[str]:
+    def get_permissions(self) -> set[str]:
         """
-        Retrieves all declared permissions from `<uses-permission>` elements.
+        Retrieves all permissions names from `<uses-permission>`
 
-        Returns:
-            list[str]: A list of all permission names (e.g., "android.permission.INTERNET").
+        .. uses-permission: https://developer.android.com/guide/topics/manifest/uses-permission-element
+
+        Returns
+        -------
+            set[str]
+                A list of all permission names (e.g., "android.permission.INTERNET").
         """
         ...
 
     def get_permissions_sdk23(self) -> list[str]:
         """
-        Retrieves all declared permissions for API level 23 and above
-        from `<uses-permission-sdk-23>` elements.
+        Retrieves all declared permissions for API level 23 and above from `<uses-permission-sdk-23>` elements
+
+        .. uses-permission-sdk-23: https://developer.android.com/guide/topics/manifest/uses-permission-sdk-23-element
 
         Returns:
-            list[str]: A list of permission names if any are declared.
+            set[str]
+                A list of permission names
         """
         ...
 
     def get_min_sdk_version(self) -> str | None:
         """
-        Extracts the minimum supported SDK version (`minSdkVersion`)
-        from the `<uses-sdk>` element.
+        Extracts the minimum supported SDK version (`minSdkVersion`) from the `<uses-sdk>` element
 
-        Returns:
-            str | None: The minimum SDK version as a string, or None if not specified.
+        ..uses-sdk: https://developer.android.com/guide/topics/manifest/uses-sdk-element#min
+
+        Examples
+        --------
+        >>> apk.get_min_sdk_version()
+        "26"
+
+        Returns
+        -------
+            str | None
+                The minimum SDK version as a string, or None if not specified.
         """
         ...
 
-    def get_target_sdk_version(self) -> str | None:
+    def get_target_sdk_version(self) -> int:
         """
-        Extracts the target SDK version (`targetSdkVersion`)
-        from the `<uses-sdk>` element.
+        Extracts the target SDK version (`targetSdkVersion`) from the `<uses-sdk>` element.
 
-        Returns:
-            str | None: The target SDK version as a string, or None if not specified.
+        .. uses-sdk: https://developer.android.com/guide/topics/manifest/uses-sdk-element#target
+
+        Notes
+        -----
+            Determines the version based on the following algorithm:
+                1. check `targetSdkVersion`;
+                2. if empty => check `minSdkVersion`;
+                3. if empty => return 1
+
+
+        Returns
+        -------
+            int
+                The target SDK version
         """
         ...
 
@@ -390,40 +560,95 @@ class APK:
         """
         Retrieves the maximum supported SDK version (`maxSdkVersion`) if declared.
 
-        Returns:
-            str | None: The maximum SDK version as a string, or None if not specified.
+        .. uses-sdk: https://developer.android.com/guide/topics/manifest/uses-sdk-element#max
+
+        Returns
+        -------
+            str | None
+                The maximum SDK version as a string, or None if not specified
         """
         ...
 
-    def get_libraries(self) -> list[str]:
+    def get_libraries(self) -> set[str]:
         """
         Retrieves all libraries declared by `<uses-library android:name="...">`.
 
-        Returns:
-            list[str]: A list of library names.
+        .. uses-library: https://developer.android.com/guide/topics/manifest/uses-library-element
+
+        Returns
+        -------
+            set[str]
+                A set of library names
         """
         ...
+
+    def get_native_libraries(self) -> set[str]:
+        """
+        Retrieves all native libraries declared by `<uses-native-library android:name="...">`
+
+        .. uses-native-library: https://developer.android.com/guide/topics/manifest/uses-native-library-element
+
+        Returns
+        -------
+            set[str]
+                A set of native library names
+        """
 
     def get_features(self) -> list[str]:
         """
-        Retrieves all hardware or software features declared
-        by `<uses-feature android:name="...">`.
+        Retrieves all hardware or software features declared by `<uses-feature android:name="...">`
 
-        Returns:
-            list[str]: A list of declared feature names.
+        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element
+
+        Returns
+        -------
+            set[str]
+                A set of declared feature names
         """
         ...
 
-    def is_automotive(self) -> bool: ...
-    def is_leanback(self) -> bool: ...
-    def is_wearable(self) -> bool: ...
-    def is_chromebook(self) -> bool: ...
-    def get_declared_permissions(self) -> list[str]:
+    def is_automotive(self) -> bool:
         """
-        Retrieves all custom permissions defined by `<permission android:name="...">`.
+        Checks whether the app is designed to display its user interface on multiple screens inside the vehicle.
 
-        Returns:
-            list[str]: A list of permission names defined by the application.
+        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        """
+        ...
+
+    def is_leanback(self) -> bool:
+        """
+        Checks whether the app is designed to show its UI on a television.
+
+        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        """
+        ...
+
+    def is_wearable(self) -> bool:
+        """
+        Checks whether the app is designed to show its UI on a watch.
+
+        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        """
+        ...
+
+    def is_chromebook(self) -> bool:
+        """
+        Checks whether app is designed to show its UI on Chromebooks.
+
+        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        """
+        ...
+
+    def get_declared_permissions(self) -> set[Permission]:
+        """
+        Retrieves all user defines permissions
+
+        .. permission: https://developer.android.com/guide/topics/manifest/permission-element
+
+        Returns
+        -------
+            set[str]
+                A set of permission names defined by the application
         """
         ...
 
@@ -431,11 +656,22 @@ class APK:
         """
         Retrieves first main (launchable) activity defined in the manifest.
 
-        A main activity is typically one that has an intent filter
-        with actions `MAIN` and categories `LAUNCHER` or `INFO`.
+        A main activity is typically one that has an intent filter with actions `MAIN` and categories `LAUNCHER` or `INFO`.
 
-        Returns:
-            str | None: A main activity class name
+        .. activity: https://developer.android.com/guide/topics/manifest/activity-element
+
+        .. resolve logic based on this: https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310
+
+        Examples
+        --------
+
+        >>> apk.get_main_activity()
+        "com.example.app.MainActivity"
+
+        Returns
+        -------
+            str | None
+                A main activity class name
         """
         ...
 
@@ -443,20 +679,29 @@ class APK:
         """
         Retrieves all main (launchable) activities defined in the manifest.
 
-        A main activity is typically one that has an intent filter
-        with actions `MAIN` and categories `LAUNCHER` or `INFO`.
+        A main activity is typically one that has an intent filter with actions `MAIN` and categories `LAUNCHER` or `INFO`.
 
-        Returns:
-            list[str]: A list of main activity class names.
+        .. activity: https://developer.android.com/guide/topics/manifest/activity-element
+
+        .. resolve logic based on this: https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310
+
+        Returns
+        -------
+            list[str]
+                A list of main activity class names
         """
         ...
 
-    def get_activities(self) -> list[str]:
+    def get_activities(self) -> list[Activity]:
         """
         Retrieves all `<activity>` components declared in the manifest.
 
-        Returns:
-            list[str]: A list of fully qualified activity class names.
+        .. activity: https://developer.android.com/guide/topics/manifest/activity-element
+
+        Returns
+        -------
+            list[Activity]
+                A list of found activites
         """
         ...
 
@@ -464,8 +709,12 @@ class APK:
         """
         Retrieves all `<service>` components declared in the manifest.
 
-        Returns:
-            list[str]: A list of service class names.
+        .. service: https://developer.android.com/guide/topics/manifest/service-element
+
+        Returns
+        -------
+            list[Service]
+                A list of found services
         """
         ...
 
@@ -473,28 +722,36 @@ class APK:
         """
         Retrieves all `<receiver>` components declared in the manifest.
 
-        Returns:
-            list[str]: A list of broadcast receiver class names.
+        .. receiver: https://developer.android.com/guide/topics/manifest/receiver-element
+
+        Returns
+        -------
+            list[Receiver]
+                A list of broadcast receivers
         """
         ...
 
-    def get_providers(self) -> list[str]:
+    def get_providers(self) -> list[Provider]:
         """
         Retrieves all `<provider>` components declared in the manifest.
 
-        Returns:
-            list[str]: A list of content provider class names.
+        Returns
+        -------
+            list[Provider]
+                A list of content providers
         """
         ...
 
     def get_signatures(self) -> list[SignatureType]:
         """
-        Retrieves all APK signing signatures (v1, v2, v3, and v3.1).
+        Retrieves all APK signing signatures (v1, v2, v3, v3.1, etc).
 
         Combines results from multiple signature blocks within the APK file.
 
-        Returns:
-            list[str]: A list of certificate signature strings.
+        Returns
+        -------
+            list[SignatureType]
+                A list of certificate signatures
         """
         ...
 
@@ -627,75 +884,328 @@ SignatureType = (
 Represents all available signatures
 """
 
-from dataclasses import dataclass
+@dataclass(frozen=True)
+class Activity:
+    """
+    Represents an Android activity defined in an app's manifest.
+
+    More information:
+    https://developer.android.com/guide/topics/manifest/activity-element
+    """
+
+    enabled: str | None
+    """
+    Whether the activity can be instantiated by the system.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#enabled
+    """
+
+    exported: str | None
+    """
+    Whether the activity can be launched by components of other applications.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#exported
+    """
+
+    icon: str | None
+    """
+    An icon representing the activity.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#icon
+    """
+
+    label: str | None
+    """
+    A user-readable label for the activity.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#label
+    """
+
+    name: str | None
+    """
+    The name of the class that implements the activity, a subclass of `Activity`.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#nm
+    """
+
+    parent_activity_name: str | None
+    """
+    The class name of the logical parent of the activity.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#parent
+    """
+
+    permission: str | None
+    """
+    The name of a permission that clients must have to launch the activity or otherwise
+    get it to respond to an intent.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#prmsn
+    """
+
+    process: str | None
+    """
+    The name of the process in which the activity runs.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-element#proc
+    """
+
+@dataclass(frozen=True)
+class Permission:
+    """
+    Represents an Android permission defined in an app's manifest.
+
+    More information: https://developer.android.com/guide/topics/manifest/permission-element
+    """
+
+    description: str | None
+    """
+    A user-readable description of the permission that is longer and more informative than the label.
+
+    See: https://developer.android.com/guide/topics/manifest/permission-element#desc
+    """
+
+    icon: str | None
+    """
+    A reference to a drawable resource for an icon that represents the permission.
+
+    See: https://developer.android.com/guide/topics/manifest/permission-element#icon
+    """
+
+    label: str | None
+    """
+    A user-readable name for the permission.
+
+    See: https://developer.android.com/guide/topics/manifest/permission-element#label
+    """
+
+    name: str | None
+    """
+    The name to be used in code to refer to the permission, such as in a <uses-permission> element
+    or the permission attributes of application components.
+
+    See: https://developer.android.com/guide/topics/manifest/permission-element#nm
+    """
+
+    permission_group: str | None
+    """
+    Assigns this permission to a group.
+
+    See: https://developer.android.com/guide/topics/manifest/permission-element#pgroup
+    """
+
+    protection_level: str | None
+    """
+    Characterizes the potential risk implied in the permission and indicates the procedure for
+    the system to follow when determining whether to grant the permission to an application
+    requesting it.
+
+    See: https://developer.android.com/guide/topics/manifest/permission-element#plevel
+    """
+
+@dataclass(frozen=True)
+class Provider:
+    """
+    Represents an Android content provider defined in an app's manifest.
+
+    More information: https://developer.android.com/guide/topics/manifest/provider-element
+    """
+
+    authorities: str | None
+    """
+    A list of URI authorities identifying data offered by the content provider.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#auth
+    """
+
+    enabled: str | None
+    """
+    Whether the content provider can be instantiated by the system.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#enabled
+    """
+
+    direct_boot_aware: str | None
+    """
+    Whether the content provider is Direct Boot aware.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#directBootAware
+    """
+
+    exported: str | None
+    """
+    Whether the content provider is available for other applications to use.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#exported
+    """
+
+    grant_uri_permissions: str | None
+    """
+    Whether temporary URI permissions can be granted to access the provider’s data.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#granturi
+    """
+
+    icon: str | None
+    """
+    An icon representing the content provider.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#icon
+    """
+
+    init_order: str | None
+    """
+    The order in which the provider is instantiated relative to others in the same process.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#init
+    """
+
+    label: str | None
+    """
+    A user-readable label for the content provider.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#label
+    """
+
+    multiprocess: str | None
+    """
+    Whether multiple instances of the provider are created in multiprocess apps.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#multiprocess
+    """
+
+    name: str | None
+    """
+    The name of the class implementing the content provider.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#nm
+    """
+
+    permission: str | None
+    """
+    A permission required to read or write the provider’s data.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#prmsn
+    """
+
+    process: str | None
+    """
+    The name of the process where the provider runs.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#proc
+    """
+
+    read_permission: str | None
+    """
+    A permission that clients must have to read the provider’s data.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#read
+    """
+
+    syncable: str | None
+    """
+    Whether the provider’s data can be synchronized with a server.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#syncable
+    """
+
+    write_permission: str | None
+    """
+    A permission that clients must have to modify the provider’s data.
+
+    See: https://developer.android.com/guide/topics/manifest/provider-element#write
+    """
 
 @dataclass(frozen=True)
 class Service:
     """
     Represents an Android service defined in an app's manifest.
 
-    Each attribute corresponds to an attribute in the <service> element
-    of the AndroidManifest.xml.
+    More information: https://developer.android.com/guide/topics/manifest/service-element
     """
 
     description: str | None
     """
     A user-readable description of the service.
-    Corresponds to the `android:description` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#desc
     """
 
     direct_boot_aware: str | None
     """
     Indicates whether the service is aware of Direct Boot mode.
-    Corresponds to the `android:directBootAware` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#directBootAware
     """
 
     enabled: str | None
     """
     Specifies whether the service can be instantiated by the system.
-    Corresponds to the `android:enabled` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#enabled
     """
 
     exported: str | None
     """
     Defines whether the service can be used by other applications.
-    Corresponds to the `android:exported` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#exported
     """
 
     foreground_service_type: str | None
     """
     Lists the types of foreground services this service can run as.
-    Corresponds to the `android:foregroundServiceType` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#foregroundservicetype
+    """
+
+    icon: str | None
+    """
+    An icon representing the service.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#icon
     """
 
     isolated_process: str | None
     """
     Indicates whether the service runs in an isolated process.
-    Corresponds to the `android:isolatedProcess` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#isolated
+    """
+
+    label: str | None
+    """
+    A user-readable name for the service.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#label
     """
 
     name: str | None
     """
     The fully qualified name of the service class that implements the service.
-    Corresponds to the `android:name` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#nm
     """
 
     permission: str | None
     """
     The name of a permission that clients must hold to use this service.
-    Corresponds to the `android:permission` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#prmsn
     """
 
     process: str | None
     """
     The name of the process where the service should run.
-    Corresponds to the `android:process` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#proc
     """
 
     stop_with_task: str | None
     """
     Indicates whether the service should be stopped when its task is removed.
-    Corresponds to the `android:stopWithTask` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/service-element#stopWithTask
     """
 
 @dataclass(frozen=True)
@@ -703,54 +1213,61 @@ class Receiver:
     """
     Represents an Android broadcast receiver defined in an app's manifest.
 
-    Each attribute corresponds to an attribute in the <receiver> element
-    of the AndroidManifest.xml.
+    More information: https://developer.android.com/guide/topics/manifest/receiver-element
     """
 
     direct_boot_aware: str | None
     """
     Indicates whether the broadcast receiver is direct boot aware.
-    Corresponds to the `android:directBootAware` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/receiver-element#enabled
     """
 
     enabled: str | None
     """
     Whether the broadcast receiver can be instantiated by the system.
-    Corresponds to the `android:enabled` attribute.
+
+    See: developer.android.com/guide/topics/manifest/receiver-element#enabled
     """
 
     exported: str | None
     """
     Specifies whether the broadcast receiver is accessible to other applications.
-    Corresponds to the `android:exported` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/receiver-element#exported
     """
 
     icon: str | None
     """
     An icon representing the broadcast receiver in the user interface.
-    Corresponds to the `android:icon` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/receiver-element#icon
     """
 
     label: str | None
     """
     A user-readable label for the broadcast receiver.
-    Corresponds to the `android:label` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/receiver-element#label
     """
 
     name: str | None
     """
     The fully qualified name of the broadcast receiver class that implements the receiver.
-    Corresponds to the `android:name` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/receiver-element#nm
     """
 
     permission: str | None
     """
     The name of a permission that broadcasters must hold to send messages to this receiver.
-    Corresponds to the `android:permission` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/receiver-element#prmsn
     """
 
     process: str | None
     """
     The name of the process in which the broadcast receiver should run.
-    Corresponds to the `android:process` attribute.
+
+    See: https://developer.android.com/guide/topics/manifest/receiver-element#proc
     """

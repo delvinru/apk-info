@@ -520,7 +520,6 @@ impl ResTableType {
         let (id, flags, reserved, entry_count, entries_start, config) =
             (u8, u8, le_u16, le_u32, le_u32, ResTableConfig::parse).parse_next(input)?;
 
-        let is_offset16 = Self::is_offset16(flags);
         // handle sparse flag based on jadx code
         // https://github.com/skylot/jadx/blob/master/jadx-core/src/main/java/jadx/core/xmlgen/ResTableBinaryParser.java#L276
         let entry_offsets: Vec<u32> = if Self::is_sparse(flags) {
@@ -535,7 +534,7 @@ impl ResTableType {
                 }),
             )
             .parse_next(input)?
-        } else if is_offset16 {
+        } else if Self::is_offset16(flags) {
             repeat(
                 entry_count as usize,
                 le_u16.map(|x| {

@@ -43,9 +43,7 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
     );
     println!(
         "Target SDK Version: {}",
-        apk.get_target_sdk_version()
-            .unwrap_or("-".to_string())
-            .green()
+        apk.get_target_sdk_version().to_string().green()
     );
     println!(
         "Application Label: {}",
