@@ -4,7 +4,7 @@ from typing import Literal
 
 __version__: str
 """
-Library version
+Gets the package version as defined in `Cargo.toml`
 """
 
 class APKError(Exception):
@@ -16,15 +16,7 @@ class APKError(Exception):
 
 class APK:
     """
-    `APK` class, the main entrypoint to use `apk-info` library.
-
-    Examples
-    --------
-
-    ```python
-    from apk_info import APK
-    apk = APK("./path-to-file")
-    ```
+    APK class, the main entrypoint to use `apk-info` library.
     """
 
     def __init__(self, path: str | Path) -> None:
@@ -33,17 +25,17 @@ class APK:
 
         Parameters
         ----------
-            path : str | Path
-                Path to the APK file on disk
+        path : str | Path
+            Path to the APK file on disk
 
         Raises
         ------
-            PyFileNotFoundError
-                If file not exists
-            PyValueError
-                If got error while parsing zip entry
-            PyTypeError
-                If the argument is not str or Path
+        PyFileNotFoundError
+            If file not exists
+        PyValueError
+            If got error while parsing zip entry
+        PyTypeError
+            If the argument is not str or Path
         """
         ...
 
@@ -53,15 +45,15 @@ class APK:
 
         Parameters
         ----------
-            filename: str
-                The path to the file inside the APK archive
+        filename: str
+            The path to the file inside the APK archive
 
         Raises
         ------
-            PyValueError
-                If the passed name could not be converted to a rust string
-            APKError
-                If there are problems reading the file
+        PyValueError
+            If the passed name could not be converted to a rust string
+        APKError
+            If there are problems reading the file
 
         Examples
         --------
@@ -109,8 +101,8 @@ class APK:
 
         Returns
         -------
-            str
-                pretty-printed AndroidManifest.xml
+        str
+            pretty-printed AndroidManifest.xml
         """
         ...
 
@@ -120,8 +112,8 @@ class APK:
 
         Parameters
         ----------
-            name : str
-                The reference to the resource in the `@string/app_name` format
+        name : str
+            The reference to the resource in the `@string/app_name` format
 
         Examples
         --------
@@ -134,10 +126,9 @@ class APK:
 
         Returns
         -------
-            str | None
-                If something was found, the value will be returned.
-
-                It can be a string, a file path, etc., depending on the context in which this function is used.
+        str | None
+            If something was found, the value will be returned.
+            It can be a string, a file path, etc., depending on the context in which this function is used.
         """
 
     def get_attribute_value(self, tag: str, name: str) -> str | None:
@@ -175,7 +166,7 @@ class APK:
 
         ```python
         apk = APK("./file")
-        print(apk.get_all_atribute_values("uses-permission", "name")) # just use apk.get_permissions()
+        print(apk.get_all_atribute_values("uses-permission", "name"))
         ```
         """
         ...
@@ -184,7 +175,7 @@ class APK:
         """
         Retrieves the package name declared in the `<manifest>` element.
 
-        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#package
+        See: <a href="https://developer.android.com/guide/topics/manifest/manifest-element#package" target="_blank">https://developer.android.com/guide/topics/manifest/manifest-element#package</a>
 
         Returns
         -------
@@ -197,12 +188,12 @@ class APK:
         """
         Retrieves the `sharedUserId` attribute from the `<manifest>` element.
 
-        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#uid
+        See: <a href="https://developer.android.com/guide/topics/manifest/manifest-element#uid" target="_blank">https://developer.android.com/guide/topics/manifest/manifest-element#uid</a>
 
         Returns
         -------
-            str | None
-                The shared user ID if declared, otherwise None
+        str | None
+            The shared user ID if declared, otherwise None
         """
         ...
 
@@ -210,12 +201,12 @@ class APK:
         """
         Retrieves the `sharedUserLabel` attribute from the `<manifest>` element.
 
-        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#uidlabel
+        See: <a href="https://developer.android.com/guide/topics/manifest/manifest-element#uidlabel" target="_blank">https://developer.android.com/guide/topics/manifest/manifest-element#uidlabel</a>
 
         Returns
         -------
-            str | None
-                The shared user label if declared, otherwise None.
+        str | None
+            The shared user label if declared, otherwise None.
         """
         ...
 
@@ -223,12 +214,12 @@ class APK:
         """
         Retrieves the `sharedUserMaxSdkVersion` attribute from the `<manifest>` element.
 
-        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#uidmaxsdk
+        See: <a href="https://developer.android.com/guide/topics/manifest/manifest-element#uidmaxsdk" target="_blank">https://developer.android.com/guide/topics/manifest/manifest-element#uidmaxsdk</a>
 
         Returns
         -------
-            str | None
-                The maximum SDK version for the shared user, if declared
+        str | None
+            The maximum SDK version for the shared user, if declared
         """
         ...
 
@@ -236,25 +227,26 @@ class APK:
         """
         Retrieves the application version code.
 
-        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#vcode
+        See: <a href="https://developer.android.com/guide/topics/manifest/manifest-element#vcode" target="_blank">https://developer.android.com/guide/topics/manifest/manifest-element#vcode</a>
 
         Examples
         --------
 
         ```python
         apk = APK("./file")
-        print(apk.get_version_code()) # 2025101912
+        print(apk.get_version_code())
+        "2025101912"
         ```
 
         Notes
         -----
-            The automatic conversion to int was not done on purpose,
-            because there is no certainty that malware will not try to insert random values there
+        The automatic conversion to `int` was not done on purpose,
+        because there is no certainty that malware will not try to insert random values there
 
         Returns
         -------
-            str | None
-                The version code as a string if present, otherwise None
+        str | None
+            The version code as a string if present, otherwise None
         """
         ...
 
@@ -262,7 +254,7 @@ class APK:
         """
         Retrieves the human-readable application version name.
 
-        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#vname
+        See: <a href="https://developer.android.com/guide/topics/manifest/manifest-element#vname" target="_blank">https://developer.android.com/guide/topics/manifest/manifest-element#vname</a>
 
         Examples
         --------
@@ -274,8 +266,8 @@ class APK:
 
         Returns
         -------
-            str | None
-                The version name as a string if present, otherwise None
+        str | None
+            The version name as a string if present, otherwise None
         """
         ...
 
@@ -283,18 +275,18 @@ class APK:
         """
         Retrieves the preferred installation location declared in the manifest.
 
-        .. manifest: https://developer.android.com/guide/topics/manifest/manifest-element#install
+        See: <a href="https://developer.android.com/guide/topics/manifest/manifest-element#install" target="_blank">https://developer.android.com/guide/topics/manifest/manifest-element#install</a>
 
         Returns
         -------
-            auto
-                Let the system decie ideal install location
-            internalOnly
-                Explicitly request to be installed on internal phone storage only
-            preferExternal
-                Prefer to be installed on SD card
-            None
-                The installation location is not specified
+        auto
+            Let the system decie ideal install location
+        internalOnly
+            Explicitly request to be installed on internal phone storage only
+        preferExternal
+            Prefer to be installed on SD card
+        None
+            The installation location is not specified
         """
         ...
 
@@ -302,12 +294,14 @@ class APK:
         """
         Extracts the `android:allowTaskReparenting` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#reparent
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#reparent" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#reparent</a>
 
         Returns
         -------
-            "true" | "false" | None
-                "true" or "false" if declared, otherwise None.
+        "true" | "false"
+            If value is declared
+        None
+            If value is not declared
         """
         ...
 
@@ -315,12 +309,14 @@ class APK:
         """
         Extracts the `android:allowBackup` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#allowbackup
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#allowbackup" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#allowbackup</a>
 
         Returns
         -------
-            "true" | "false" | None
-                "true" or "false" if declared, otherwise None.
+        "true" | "false"
+            If value is declared
+        None
+            If value is not declared
         """
         ...
 
@@ -330,30 +326,30 @@ class APK:
         """
         Extracts the `android:appCategory` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#appCategory
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#appCategory" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#appCategory</a>
 
         Returns
         -------
-            accessibility
-                Apps that are primarily accessibility apps, such as screen-readers
-            audio
-                Apps that primarily work with audio or music, such as music players
-            game
-                Apps that are primarily games
-            image
-                Apps that primarily work with images or photos, such as camera or gallery apps
-            maps
-                Apps that are primarily map apps, such as navigation apps
-            news
-                Apps that are primarily news apps, such as newspapers, magazines, or sports apps
-            productivity
-                Apps that are primarily productivity apps, such as cloud storage or workplace apps
-            social
-                Apps that are primarily social apps, such as messaging, communication, email, or social network apps
-            video
-                Apps that primarily work with video or movies, such as streaming video apps
-            None
-                Value not defined
+        accessibility
+            Apps that are primarily accessibility apps, such as screen-readers
+        audio
+            Apps that primarily work with audio or music, such as music players
+        game
+            Apps that are primarily games
+        image
+            Apps that primarily work with images or photos, such as camera or gallery apps
+        maps
+            Apps that are primarily map apps, such as navigation apps
+        news
+            Apps that are primarily news apps, such as newspapers, magazines, or sports apps
+        productivity
+            Apps that are primarily productivity apps, such as cloud storage or workplace apps
+        social
+            Apps that are primarily social apps, such as messaging, communication, email, or social network apps
+        video
+            Apps that primarily work with video or movies, such as streaming video apps
+        None
+            Value not defined
         """
         ...
 
@@ -361,18 +357,20 @@ class APK:
         """
         Extracts the `android:backupAgent` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#agent
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#agent" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#agent</a>
 
         Examples
         --------
 
-        >>> apk.get_application_backup_agent()
-        >>> "com.android.launcher3.LauncherBackupAgent"
+        ```python
+        print(apk.get_application_backup_agent())
+        "com.android.launcher3.LauncherBackupAgent"
+        ```
 
         Returns
         -------
-            str | None
-                The name of the backup agent class if declared, otherwise None.
+        str | None
+            The name of the backup agent class if declared, otherwise None.
         """
         ...
 
@@ -380,12 +378,12 @@ class APK:
         """
         Extracts the `android:debuggable` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#debug
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#debug" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#debug</a>
 
         Returns
         -------
-            str | None
-                "true" or "false" if declared, otherwise None.
+        str | None
+            "true" or "false" if declared, otherwise None.
         """
         ...
 
@@ -393,15 +391,16 @@ class APK:
         """
         Extracts and resolve the `android:description` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#desc
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#desc" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#desc</a>
 
         Notes
         -----
-            The link to the resource will be automatically resolved and this value will be returned
+        The link to the resource will be automatically resolved and this value will be returned
 
-        Returns:
-            str | None
-                The description resource or literal value, if available.
+        Returns
+        -------
+        str | None
+            The description resource or literal value, if available.
         """
         ...
 
@@ -409,11 +408,11 @@ class APK:
         """
         Extracts and resolves the `android:icon` attribute from `<application>`
 
-        .. aplication: https://developer.android.com/guide/topics/manifest/application-element#icon
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#icon" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#icon</a>
 
         Notes
         ----
-            There is no way to choose a resolution yet, it will be implemented in the future.
+        There is no way to choose a resolution yet, it will be implemented in the future.
 
         Examples
         --------
@@ -427,9 +426,10 @@ class APK:
                 fd.write(apk.read(icon))
         ```
 
-        Returns:
-            str | None
-                The path to the icon file, if available.
+        Returns
+        -------
+        str | None
+            The path to the icon file, if available.
         """
         ...
 
@@ -437,16 +437,16 @@ class APK:
         """
         Extracts and resolves the `android:label` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#label
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#label" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#label</a>
 
         Notes
         -----
-            The link to the resource will be automatically resolved and this value will be returned
+        The link to the resource will be automatically resolved and this value will be returned
 
         Returns
         -------
-            str | None
-                The label resource or literal value, if available
+        str | None
+            The label resource or literal value, if available
         """
         ...
 
@@ -454,7 +454,8 @@ class APK:
         """
         Extracts and resolves the `android:logo` attribute from `<application>`
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#logo
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#logo" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#logo</a>
+
 
         Examples
         --------
@@ -468,9 +469,10 @@ class APK:
                 fd.write(apk.read(logo))
         ```
 
-        Returns:
-            str | None
-                The path to the logo file, if available.
+        Returns
+        -------
+        str | None
+            The path to the logo file, if available
         """
         ...
 
@@ -478,17 +480,20 @@ class APK:
         """
         Extracts the `android:name` attribute from `<application>`.
 
-        .. application: https://developer.android.com/guide/topics/manifest/application-element#nm
+        See: <a href="https://developer.android.com/guide/topics/manifest/application-element#nm" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#nm</a>
 
         Examples
         --------
-        >>> apk.get_application_name()
+
+        ```python
+        print(apk.get_application_name())
         "com.whatsapp.AppShell"
+        ```
 
         Returns
         -------
-            str | None
-                The fully qualified application class name, if defined.
+        str | None
+            The fully qualified application class name, if defined.
         """
         ...
 
@@ -496,12 +501,12 @@ class APK:
         """
         Retrieves all permissions names from `<uses-permission>`
 
-        .. uses-permission: https://developer.android.com/guide/topics/manifest/uses-permission-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-permission-element" target="_blank">https://developer.android.com/guide/topics/manifest/uses-permission-element</a>
 
         Returns
         -------
-            set[str]
-                A list of all permission names (e.g., "android.permission.INTERNET").
+        set[str]
+            A list of all permission names (e.g., "android.permission.INTERNET").
         """
         ...
 
@@ -509,11 +514,12 @@ class APK:
         """
         Retrieves all declared permissions for API level 23 and above from `<uses-permission-sdk-23>` elements
 
-        .. uses-permission-sdk-23: https://developer.android.com/guide/topics/manifest/uses-permission-sdk-23-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-permission-sdk-23-element" target="_blank">https://developer.android.com/guide/topics/manifest/uses-permission-sdk-23-element</a>
 
-        Returns:
-            set[str]
-                A list of permission names
+        Returns
+        -------
+        set[str]
+            A list of permission names
         """
         ...
 
@@ -521,17 +527,20 @@ class APK:
         """
         Extracts the minimum supported SDK version (`minSdkVersion`) from the `<uses-sdk>` element
 
-        ..uses-sdk: https://developer.android.com/guide/topics/manifest/uses-sdk-element#min
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-sdk-element#min" target="_blank">https://developer.android.com/guide/topics/manifest/uses-sdk-element#min</a>
 
         Examples
         --------
-        >>> apk.get_min_sdk_version()
+
+        ```python
+        print(apk.get_min_sdk_version())
         "26"
+        ```
 
         Returns
         -------
-            str | None
-                The minimum SDK version as a string, or None if not specified.
+        str | None
+            The minimum SDK version as a string, or None if not specified.
         """
         ...
 
@@ -539,20 +548,20 @@ class APK:
         """
         Extracts the target SDK version (`targetSdkVersion`) from the `<uses-sdk>` element.
 
-        .. uses-sdk: https://developer.android.com/guide/topics/manifest/uses-sdk-element#target
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-sdk-element#target" target="_blank">https://developer.android.com/guide/topics/manifest/uses-sdk-element#target</a>
 
         Notes
         -----
-            Determines the version based on the following algorithm:
-                1. check `targetSdkVersion`;
-                2. if empty => check `minSdkVersion`;
-                3. if empty => return 1
+        Determines the version based on the following algorithm:
 
+        1. Check `targetSdkVersion`;
+        2. If empty => check `minSdkVersion`;
+        3. If empty => return 1;
 
         Returns
         -------
-            int
-                The target SDK version
+        int
+            The target SDK version
         """
         ...
 
@@ -560,12 +569,12 @@ class APK:
         """
         Retrieves the maximum supported SDK version (`maxSdkVersion`) if declared.
 
-        .. uses-sdk: https://developer.android.com/guide/topics/manifest/uses-sdk-element#max
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-sdk-element#max" target="_blank">https://developer.android.com/guide/topics/manifest/uses-sdk-element#max</a>
 
         Returns
         -------
-            str | None
-                The maximum SDK version as a string, or None if not specified
+        str | None
+            The maximum SDK version as a string, or None if not specified
         """
         ...
 
@@ -573,12 +582,12 @@ class APK:
         """
         Retrieves all libraries declared by `<uses-library android:name="...">`.
 
-        .. uses-library: https://developer.android.com/guide/topics/manifest/uses-library-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-library-element" target="_blank">https://developer.android.com/guide/topics/manifest/uses-library-element</a>
 
         Returns
         -------
-            set[str]
-                A set of library names
+        set[str]
+            A set of library names
         """
         ...
 
@@ -586,24 +595,24 @@ class APK:
         """
         Retrieves all native libraries declared by `<uses-native-library android:name="...">`
 
-        .. uses-native-library: https://developer.android.com/guide/topics/manifest/uses-native-library-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-native-library-element" target="_blank">https://developer.android.com/guide/topics/manifest/uses-native-library-element</a>
 
         Returns
         -------
-            set[str]
-                A set of native library names
+        set[str]
+            A set of native library names
         """
 
     def get_features(self) -> list[str]:
         """
         Retrieves all hardware or software features declared by `<uses-feature android:name="...">`
 
-        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element</a>
 
         Returns
         -------
-            set[str]
-                A set of declared feature names
+        set[str]
+            A set of declared feature names
         """
         ...
 
@@ -611,7 +620,7 @@ class APK:
         """
         Checks whether the app is designed to display its user interface on multiple screens inside the vehicle.
 
-        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
         ...
 
@@ -619,7 +628,7 @@ class APK:
         """
         Checks whether the app is designed to show its UI on a television.
 
-        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
         ...
 
@@ -627,7 +636,7 @@ class APK:
         """
         Checks whether the app is designed to show its UI on a watch.
 
-        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
         ...
 
@@ -635,7 +644,7 @@ class APK:
         """
         Checks whether app is designed to show its UI on Chromebooks.
 
-        .. uses-feature: https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features
+        See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
         ...
 
@@ -643,12 +652,12 @@ class APK:
         """
         Retrieves all user defines permissions
 
-        .. permission: https://developer.android.com/guide/topics/manifest/permission-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/permission-element" target="_blank">https://developer.android.com/guide/topics/manifest/permission-element</a>
 
         Returns
         -------
-            set[str]
-                A set of permission names defined by the application
+        set[str]
+            A set of permission names defined by the application
         """
         ...
 
@@ -658,20 +667,22 @@ class APK:
 
         A main activity is typically one that has an intent filter with actions `MAIN` and categories `LAUNCHER` or `INFO`.
 
-        .. activity: https://developer.android.com/guide/topics/manifest/activity-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/activity-element" target="_blank">https://developer.android.com/guide/topics/manifest/activity-element</a>
 
-        .. resolve logic based on this: https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310
+        Resolve logic: <a href="https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310" target="_blank">https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310</a>
 
         Examples
         --------
 
-        >>> apk.get_main_activity()
+        ```python
+        print(apk.get_main_activity())
         "com.example.app.MainActivity"
+        ```
 
         Returns
         -------
-            str | None
-                A main activity class name
+        str | None
+            A main activity class name
         """
         ...
 
@@ -681,14 +692,14 @@ class APK:
 
         A main activity is typically one that has an intent filter with actions `MAIN` and categories `LAUNCHER` or `INFO`.
 
-        .. activity: https://developer.android.com/guide/topics/manifest/activity-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/activity-element" target="_blank">https://developer.android.com/guide/topics/manifest/activity-element</a>
 
-        .. resolve logic based on this: https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310
+        Resolve logic: <a href="https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310" target="_blank">https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310</a>
 
         Returns
         -------
-            list[str]
-                A list of main activity class names
+        list[str]
+            A list of main activity class names
         """
         ...
 
@@ -696,12 +707,12 @@ class APK:
         """
         Retrieves all `<activity>` components declared in the manifest.
 
-        .. activity: https://developer.android.com/guide/topics/manifest/activity-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/activity-element" target="_blank">https://developer.android.com/guide/topics/manifest/activity-element</a>
 
         Returns
         -------
-            list[Activity]
-                A list of found activites
+        list[Activity]
+            A list of found activites
         """
         ...
 
@@ -709,12 +720,12 @@ class APK:
         """
         Retrieves all `<service>` components declared in the manifest.
 
-        .. service: https://developer.android.com/guide/topics/manifest/service-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/service-element" target="_blank">https://developer.android.com/guide/topics/manifest/service-element</a>
 
         Returns
         -------
-            list[Service]
-                A list of found services
+        list[Service]
+            A list of found services
         """
         ...
 
@@ -722,12 +733,12 @@ class APK:
         """
         Retrieves all `<receiver>` components declared in the manifest.
 
-        .. receiver: https://developer.android.com/guide/topics/manifest/receiver-element
+        See: <a href="https://developer.android.com/guide/topics/manifest/receiver-element" target="_blank">https://developer.android.com/guide/topics/manifest/receiver-element</a>
 
         Returns
         -------
-            list[Receiver]
-                A list of broadcast receivers
+        list[Receiver]
+            A list of broadcast receivers
         """
         ...
 
@@ -737,8 +748,8 @@ class APK:
 
         Returns
         -------
-            list[Provider]
-                A list of content providers
+        list[Provider]
+            A list of content providers
         """
         ...
 
@@ -750,8 +761,8 @@ class APK:
 
         Returns
         -------
-            list[SignatureType]
-                A list of certificate signatures
+        list[SignatureType]
+            A list of certificate signatures
         """
         ...
 
@@ -804,7 +815,7 @@ class Signature:
         """
         Default signature scheme based on JAR signing
 
-        See: <https://source.android.com/docs/security/features/apksigning/v2#v1-verification>
+        See: <a href="https://source.android.com/docs/security/features/apksigning/v2#v1-verification" target="_blank">https://source.android.com/docs/security/features/apksigning/v2#v1-verification</a>
         """
 
         certificates: list[CertificateInfo]
@@ -814,7 +825,7 @@ class Signature:
         """
         APK signature scheme v2
 
-        See: <https://source.android.com/docs/security/features/apksigning/v2>
+        See: <a href="https://source.android.com/docs/security/features/apksigning/v2" target="_blank">https://source.android.com/docs/security/features/apksigning/v2</a>
         """
 
         certificates: list[CertificateInfo]
@@ -824,7 +835,7 @@ class Signature:
         """
         APK signature scheme v3
 
-        See: <https://source.android.com/docs/security/features/apksigning/v3>
+        See: <a href="https://source.android.com/docs/security/features/apksigning/v3" target="_blank">https://source.android.com/docs/security/features/apksigning/v3</a>
         """
 
         certificates: list[CertificateInfo]
@@ -834,7 +845,7 @@ class Signature:
         """
         APK signature scheme v3.1
 
-        See: <https://source.android.com/docs/security/features/apksigning/v3-1>
+        See: <a href="https://source.android.com/docs/security/features/apksigning/v3-1" target="_blank">https://source.android.com/docs/security/features/apksigning/v3-1</a>
         """
 
         certificates: list[CertificateInfo]
@@ -854,24 +865,23 @@ class Signature:
 
         The stamp is part of the APK that is protected by the signing block
 
-        See: <https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75>
+        See: <a href="https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75" target="_blank">https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75</a>
         """
 
         certificate: CertificateInfo
 
     @dataclass(frozen=True)
     class StampBlockV2:
-        """
-        SourceStamp improves traceability of apps with respect to unauthorized distribution
+        """SourceStamp improves traceability of apps with respect to unauthorized distribution
 
         The stamp is part of the APK that is protected by the signing block
 
-        See: <https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75>
+        See: <a href="https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75" target="_blank">https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/util/apk/SourceStampVerifier.java#75</a>
         """
 
         certificate: CertificateInfo
 
-SignatureType = (
+type SignatureType = (
     Signature.V1
     | Signature.V2
     | Signature.V3
@@ -890,7 +900,7 @@ class Activity:
     Represents an Android activity defined in an app's manifest.
 
     More information:
-    https://developer.android.com/guide/topics/manifest/activity-element
+    <a href="https://developer.android.com/guide/topics/manifest/activity-element" target="_blank">https://developer.android.com/guide/topics/manifest/activity-element</a>
     """
 
     enabled: str | None
@@ -955,7 +965,8 @@ class Permission:
     """
     Represents an Android permission defined in an app's manifest.
 
-    More information: https://developer.android.com/guide/topics/manifest/permission-element
+    More information:
+    <a href="https://developer.android.com/guide/topics/manifest/permission-element" target="_blank">https://developer.android.com/guide/topics/manifest/permission-element</a>
     """
 
     description: str | None
@@ -1008,7 +1019,8 @@ class Provider:
     """
     Represents an Android content provider defined in an app's manifest.
 
-    More information: https://developer.android.com/guide/topics/manifest/provider-element
+    More information:
+    <a href="https://developer.android.com/guide/topics/manifest/provider-element" target="_blank">https://developer.android.com/guide/topics/manifest/provider-element</a>
     """
 
     authorities: str | None
@@ -1121,7 +1133,8 @@ class Service:
     """
     Represents an Android service defined in an app's manifest.
 
-    More information: https://developer.android.com/guide/topics/manifest/service-element
+    More information:
+    <a href="https://developer.android.com/guide/topics/manifest/service-element" target="_blank">https://developer.android.com/guide/topics/manifest/service-element</a>
     """
 
     description: str | None
@@ -1213,7 +1226,8 @@ class Receiver:
     """
     Represents an Android broadcast receiver defined in an app's manifest.
 
-    More information: https://developer.android.com/guide/topics/manifest/receiver-element
+    More information:
+    <a href="https://developer.android.com/guide/topics/manifest/receiver-element" target="_blank">https://developer.android.com/guide/topics/manifest/receiver-element</a>
     """
 
     direct_boot_aware: str | None

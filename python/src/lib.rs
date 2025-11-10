@@ -14,7 +14,7 @@ use pyo3::{Bound, PyAny, PyResult, create_exception, pyclass, pymethods};
 
 create_exception!(m, APKError, PyException, "Got error while parsing apk");
 
-#[pyclass(eq, frozen)]
+#[pyclass(eq, frozen, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct CertificateInfo {
     #[pyo3(get)]
@@ -74,7 +74,7 @@ impl CertificateInfo {
     }
 }
 
-#[pyclass(eq, frozen)]
+#[pyclass(eq, frozen, module = "apk_info._apk_info")]
 #[derive(PartialEq, Eq, Hash)]
 enum Signature {
     V1 { certificates: Vec<CertificateInfo> },
@@ -156,7 +156,7 @@ impl Signature {
     }
 }
 
-#[pyclass(frozen)]
+#[pyclass(frozen, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Activity {
     #[pyo3(get)]
@@ -215,7 +215,7 @@ impl Activity {
     }
 }
 
-#[pyclass(frozen)]
+#[pyclass(frozen, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Permission {
     #[pyo3(get)]
@@ -267,8 +267,7 @@ impl Permission {
     }
 }
 
-/// PyO3 wrapper for ApkProvider
-#[pyclass(frozen)]
+#[pyclass(frozen, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Provider {
     #[pyo3(get)]
@@ -357,7 +356,7 @@ impl Provider {
     }
 }
 
-#[pyclass(frozen)]
+#[pyclass(frozen, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Service {
     #[pyo3(get)]
@@ -431,7 +430,7 @@ impl Service {
     }
 }
 
-#[pyclass(frozen)]
+#[pyclass(frozen, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Receiver {
     #[pyo3(get)]
@@ -498,7 +497,7 @@ impl Receiver {
     }
 }
 
-#[pyclass(name = "APK", unsendable)]
+#[pyclass(name = "APK", unsendable, module = "apk_info._apk_info")]
 struct Apk {
     apkrs: ApkRust,
 }

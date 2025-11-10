@@ -1,0 +1,55 @@
+site_name: "apk-info"
+theme:
+  name: material
+  features:
+    - search.suggest
+    - search.highlight
+    - content.tabs.link
+    - content.code.annotate
+  language: en
+
+repo_url: https://github.com/delvinru/apk-info
+repo_name: apk-info
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [python]
+          inventories:
+            - https://docs.python.org/3/objects.inv
+          options:
+            inventories:
+              - https://docs.python.org/3/objects.inv
+            docstring_section_style: table
+            docstring_style: numpy
+            line_length: 88
+            merge_init_into_class: true
+            separate_signature: true
+            show_attribute_values: true
+            show_docstring_raises: true
+            show_heading: true
+            show_labels: false
+            show_signature_annotations: true
+            show_signature_type_parameters: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            filters:
+              - "!^_"
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - def_list
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+nav:
+  - Introduction: index.md
+  - Python: python.md

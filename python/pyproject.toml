@@ -19,3 +19,11 @@ strip = true
 [build-system]
 requires = ["maturin>=1.9,<2.0"]
 build-backend = "maturin"
+
+[dependency-groups]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.6.23",
+    "mkdocstrings-python>=1.18.2",
+    "mkdocstrings[python]>=0.30.1",
+]
