@@ -4,6 +4,7 @@ description = "A library for correctly unpacking APK files that use the BadPack 
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
+keywords.workspace = true
 license.workspace = true
 version.workspace = true
 

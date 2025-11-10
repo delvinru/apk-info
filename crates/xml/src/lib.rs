@@ -71,9 +71,10 @@ impl std::fmt::Display for Attribute {
 /// ```
 /// use apk_info_xml::Element;
 ///
-/// let root = Element::new("root")
-///     .set_attribute("version", "1.0")
-///     .set_attribute_with_prefix(Some("xml"), "lang", "en");
+/// let mut root = Element::new("root");
+///
+/// root.set_attribute("version", "1.0");
+/// root.set_attribute_with_prefix(Some("xml"), "lang", "en");
 ///
 /// let mut child = Element::new("child");
 /// child.append_child(Element::new("grandchild"));
@@ -144,8 +145,8 @@ impl Element {
     /// ```
     /// use apk_info_xml::Element;
     ///
-    /// let e = Element::new("svg")
-    ///     .set_attribute_with_prefix(Some("xlink"), "href", "image.png");
+    /// let mut e = Element::new("svg");
+    /// e.set_attribute_with_prefix(Some("xlink"), "href", "image.png");
     ///
     /// assert!(e.attributes().collect::<Vec<_>>().len() > 0)
     /// ```
@@ -217,7 +218,8 @@ impl Element {
     /// ```
     /// use apk_info_xml::Element;
     ///
-    /// let e = Element::new("node").set_attribute("id", "42");
+    /// let mut e = Element::new("node");
+    /// e.set_attribute("id", "42");
     /// assert_eq!(e.attributes().count(), 1);
     /// ```
     #[inline]
@@ -237,7 +239,8 @@ impl Element {
     /// ```
     /// use apk_info_xml::Element;
     ///
-    /// let e = Element::new("node").set_attribute("id", "42");
+    /// let mut e = Element::new("node");
+    /// e.set_attribute("id", "42");
     /// assert_eq!(e.attr("id"), Some("42"));
     /// assert_eq!(e.attr("missing"), None);
     /// ```

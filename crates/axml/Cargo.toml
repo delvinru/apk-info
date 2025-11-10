@@ -4,6 +4,7 @@ description = "Library for working with AXML and ARSC in APK files"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
+keywords.workspace = true
 license.workspace = true
 version.workspace = true
 exclude = ["src/assets/*.xml"]
