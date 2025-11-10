@@ -3,8 +3,10 @@ name = "apk-info-cli"
 description = "A command-line tool to inspect and extract APK files "
 authors.workspace = true
 edition.workspace = true
+homepage.workspace = true
 license.workspace = true
 version.workspace = true
+publish = false
 
 [dependencies]
 anyhow.workspace = true

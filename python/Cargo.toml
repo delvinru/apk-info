@@ -2,9 +2,11 @@
 name = "apk-info-python"
 description.workspace = true
 edition.workspace = true
+homepage.workspace = true
 license.workspace = true
 readme.workspace = true
 version.workspace = true
+publish = false
 
 [lib]
 name = "apk_info"

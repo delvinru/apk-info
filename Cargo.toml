@@ -17,7 +17,8 @@ edition = "2024"
 homepage = "https://github.com/delvinru/apk-info"
 license = "Apache License 2.0"
 readme = "README.md"
-version = "0.1.0"
+repository = "https://github.com/delvinru/apk-info"
+version = "1.0.0"
 
 [workspace.dependencies]
 # internal
@@ -37,7 +38,7 @@ flate2 = "1.1.5"
 log = "0.4.28"
 memchr = "2.7.6"
 once_cell = "1.21.3"
-openssl = { version = "0.10.74", features = ["vendored"] }
+openssl = { version = "0.10.75", features = ["vendored"] }
 phf = { version = "0.13.1", default-features = false }
 phf_codegen = "0.13.1"
 pyo3 = "0.27.1"

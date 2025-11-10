@@ -7,7 +7,7 @@ pub struct XAPKManifest {
     pub package_name: String,
 }
 
-/// Represents <meta-data> in manifest
+/// Represents `<meta-data>` in manifest
 ///
 /// See: <https://developer.android.com/guide/topics/manifest/meta-data-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -28,7 +28,7 @@ pub struct MetaData<'a> {
     pub value: Option<&'a str>,
 }
 
-/// Represents <activity> in manifest
+/// Represents `<activity>` in manifest
 ///
 /// More information: <https://developer.android.com/guide/topics/manifest/activity-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -74,7 +74,7 @@ pub struct Activity<'a> {
     pub process: Option<&'a str>,
 }
 
-/// Represents <permission> in manifest
+/// Represents `<permission>` in manifest
 ///
 /// More information: <https://developer.android.com/guide/topics/manifest/permission-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -94,14 +94,14 @@ pub struct Permission<'a> {
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element#label>
     pub label: Option<&'a str>,
 
-    /// The name to be used in code to refer to the permission, such as in a <uses-permission> element
+    /// The name to be used in code to refer to the permission, such as in a `<uses-permission>` element
     /// or the permission attributes of application components.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element#nm>
     pub name: Option<&'a str>,
 
     /// Assigns this permission to a group. The value of this attribute is the name of the group,
-    /// which is declared with the <permission-group> element in this or another application.
+    /// which is declared with the `<permission-group>` element in this or another application.
     /// If this attribute isn't set, the permission doesn't belong to a group.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element#pgroup>
@@ -196,7 +196,7 @@ pub struct Provider<'a> {
     pub write_permission: Option<&'a str>,
 }
 
-/// Represents <service> in manifest
+/// Represents `<service>` in manifest
 ///
 /// More information: <https://developer.android.com/guide/topics/manifest/service-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
@@ -262,7 +262,7 @@ pub struct Service<'a> {
     pub stop_with_task: Option<&'a str>,
 }
 
-/// Represents <receiver> in manifest
+/// Represents `<receiver>` in manifest
 ///
 /// More information: <https://developer.android.com/guide/topics/manifest/receiver-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]

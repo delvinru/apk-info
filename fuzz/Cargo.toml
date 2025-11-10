@@ -1,8 +1,12 @@
 [package]
 name = "apk-info-fuzz"
-publish = false
+description = "fuzz internal structures"
+authors.workspace = true
 edition.workspace = true
+homepage.workspace = true
+license.workspace = true
 version.workspace = true
+publish = false
 
 [package.metadata]
 cargo-fuzz = true

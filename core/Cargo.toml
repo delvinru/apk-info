@@ -1,7 +1,11 @@
 [package]
 name = "apk-info"
-version.workspace = true
+authors.workspace = true
+description.workspace = true
 edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+version.workspace = true
 
 [dependencies]
 apk-info-axml.workspace = true
