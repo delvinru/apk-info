@@ -1,6 +1,7 @@
 [project]
 name = "apk-info"
 requires-python = ">=3.10"
+readme = "README.md"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
