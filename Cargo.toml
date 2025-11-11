@@ -1,3 +1,15 @@
+[workspace.package]
+version = "1.0.6"
+authors = ["Alexey <delvinru@gmail.com>"]
+categories = ["Parsing tools"]
+description = "APK full-featured parser"
+edition = "2024"
+homepage = "https://github.com/delvinru/apk-info"
+keywords = ["android", "apk", "arsc", "axml", "malware"]
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/delvinru/apk-info"
+
 [workspace]
 resolver = "2"
 members = [
@@ -10,32 +22,12 @@ members = [
     "python",
 ]
 
-[workspace.package]
-authors = ["Alexey <delvinru@gmail.com>"]
-description = "APK full featured parser"
-edition = "2024"
-homepage = "https://github.com/delvinru/apk-info"
-license = "Apache License 2.0"
-readme = "README.md"
-repository = "https://github.com/delvinru/apk-info"
-version = "1.0.0"
-keywords = [
-    "AndroidManifest",
-    "android",
-    "apk",
-    "arsc",
-    "axml",
-    "badpack",
-    "malware",
-]
-categories = ["Parsing tools"]
-
 [workspace.dependencies]
 # internal
-apk-info = { path = "core" }
-apk-info-axml = { path = "crates/axml" }
-apk-info-xml = { path = "crates/xml" }
-apk-info-zip = { path = "crates/zip" }
+apk-info = { path = "core", version = "1.0.6" }
+apk-info-axml = { path = "crates/axml", version = "1.0.6" }
+apk-info-xml = { path = "crates/xml", version = "1.0.6" }
+apk-info-zip = { path = "crates/zip", version = "1.0.6" }
 
 # external
 anyhow = "1.0.100"
@@ -52,7 +44,7 @@ openssl = { version = "0.10.75", features = ["vendored"] }
 phf = { version = "0.13.1", default-features = false }
 phf_codegen = "0.13.1"
 pyo3 = "0.27.1"
-quick-xml = "0.38.3"
+quick-xml = "0.38.4"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 smallvec = "1.15.1"
@@ -63,3 +55,13 @@ winnow = { version = "0.7.13", features = ["simd"] }
 [profile.release]
 codegen-units = 1
 panic = "abort"
+
+# longer build, but smaller binary and better optimized
+[profile.release-lto]
+inherits = "release"
+lto = true
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

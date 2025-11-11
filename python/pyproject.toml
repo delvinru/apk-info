@@ -1,12 +1,13 @@
 [project]
 name = "apk-info"
 requires-python = ">=3.10"
+readme = "README.md"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dynamic = ["version"]
+dynamic = ["version", "license", "keywords", "description"]
 
 [project.optional-dependencies]
 tests = ["pytest"]

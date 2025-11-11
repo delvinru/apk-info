@@ -1,12 +1,11 @@
 [package]
 name = "apk-info-xml"
 description = "A small custom library for easy working with xml dom"
-publish = false
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
+keywords.workspace = true
 license.workspace = true
+readme = "README.md"
+repository.workspace = true
 version.workspace = true
-
-[dependencies]
-smallvec.workspace = true

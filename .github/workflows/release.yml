@@ -1,0 +1,263 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+permissions:
+  contents: write
+
+jobs:
+  build-cli:
+    name: cli - (${{ matrix.platform.os }})
+    runs-on: ${{ matrix.platform.runs-on }}
+    strategy:
+      matrix:
+        platform:
+          - os: linux-x86_64
+            runs-on: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+          - os: windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-x86_64
+            runs-on: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-arm
+            runs-on: macos-15
+            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Check version matches tag
+        shell: bash
+        run: |
+          set -ex
+          version=$(cargo pkgid --manifest-path core/Cargo.toml | cut -d "@" -f2)
+          if [ "${{ github.ref_name }}" != "v$version" ]; then
+            echo "Tag version does not match crate version"
+            exit 1
+          fi
+
+      - name: Install musl tools
+        if: matrix.platform.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Install perl deps
+        if: contains(matrix.platform.runs-on, 'ubuntu')
+        run: |
+          sudo apt-get update && sudo apt-get install -y libmodule-build-perl libtime-piece-perl
+
+      - run: rustup target add ${{ matrix.platform.target }}
+
+      - name: Build CLI
+        run: cargo build --profile release-lto --bin apk-info --target ${{ matrix.platform.target }}
+
+      - name: Create archive
+        shell: bash
+        run: |
+          set -ex
+          name=apk-info-${{ github.ref_name }}-${{ matrix.platform.target }}
+          if [ "${{ matrix.platform.os }}" == "windows-x86_64" ]; then
+            7z a $name.zip ./target/${{ matrix.platform.target }}/release-lto/apk-info.exe
+          else
+            tar czf $name.tar.gz -C target/${{ matrix.platform.target }}/release-lto apk-info
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-info-${{ matrix.platform.target }}
+          path: apk-info-*
+
+  linux-py:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target:
+          - x86_64
+          - x86
+          - aarch64
+          - armv7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: auto
+          before-script-linux: |
+            if command -v yum &> /dev/null; then
+              yum install -y perl-IPC-Cmd perl-Time-Piece
+            elif command -v dnf &> /dev/null; then
+              dnf install -y perl-IPC-Cmd perl-Time-Piece
+            elif command -v apt-get &> /dev/null; then
+              apt-get update && apt-get install -y libmodule-build-perl libtime-piece-perl
+            fi
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist
+
+  musllinux-py:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        target:
+          - x86_64
+          - x86
+          - aarch64
+          - armv7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: musllinux_1_2
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-musllinux-${{ matrix.target }}
+          path: dist
+
+  windows-py:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+          architecture: ${{ matrix.target }}
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.target }}
+          path: dist
+
+  macos-py:
+    runs-on: macos-15
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist --manifest-path ./python/Cargo.toml
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  build-all:
+    runs-on: ubuntu-latest
+    needs: [build-cli, linux-py, musllinux-py, windows-py, macos-py, sdist]
+    steps:
+      - run: echo "All builds completed successfully"
+
+  publish-pypi:
+    name: Release (pypi)
+    runs-on: ubuntu-latest
+    needs: [build-all]
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+    environment:
+      name: pypi
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "wheels-*/*"
+
+      - name: Publish to PyPI
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: PyO3/maturin-action@v1
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        with:
+          command: upload
+          args: --non-interactive --skip-existing wheels-*/*
+
+  publish-crate:
+    name: Release (crates.io)
+    needs: [build-all]
+    runs-on: ubuntu-latest
+    environment:
+      name: crates
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Publish crate
+        run: |
+          cargo login ${{ secrets.CRATES_API_TOKEN }}
+          cargo publish -p apk-info-zip
+          cargo publish -p apk-info-xml
+          cargo publish -p apk-info-axml
+          cargo publish -p apk-info
+          cargo publish -p apk-info-cli
+
+  publish-github:
+    name: Release (github)
+    needs: [build-all]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apk-info*
+
+      - name: Generating release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: apk-info*/apk-info*
