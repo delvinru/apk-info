@@ -1,3 +1,5 @@
+//! A small library that allows you to build an XML DOM tree.
+
 /// Represents a single XML attribute, including an optional namespace prefix.
 ///
 /// This struct models attributes like `id="123"` or `android:name="..."`.

@@ -6,23 +6,35 @@ use winnow::error::{ContextError, ErrMode};
 use winnow::prelude::*;
 use winnow::token::take;
 
+use crate::ARSC;
+use crate::errors::AXMLError;
 use crate::structs::{
     ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
     XmlEndElement, XmlNamespace, XmlParse, XmlStartElement, attrs_manifest,
 };
-use crate::{ARSC, AXMLError};
 
 /// Default android namespace
-const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
+pub const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
 
+/// Represents an Android Binary XML (AXML) file.
+///
+/// This struct holds the root element of the parsed XML structure.
+///
+/// You can use this struct to traverse the XML tree, extract attributes,
+/// or get a string representation of the XML.
 #[derive(Debug)]
 pub struct AXML {
-    pub is_tampered: bool,
-
     pub root: Element,
 }
 
 impl AXML {
+    /// Parses a byte slice into an `AXML` structure.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let axml = AXML::new(&mut input_bytes, Some(&arsc))?;
+    /// ```
     pub fn new(input: &mut &[u8], arsc: Option<&ARSC>) -> Result<AXML, AXMLError> {
         // basic sanity check
         if input.len() < 8 {
@@ -31,14 +43,6 @@ impl AXML {
 
         // parse header
         let header = ResChunkHeader::parse(input).map_err(|_| AXMLError::HeaderError)?;
-
-        let mut is_tampered = false;
-
-        // some malware tamper this parameter
-        // 25cd28cbf4886ea29e6c378dbcdc3b077c2b33a8c58053bbaefb368f4df11529
-        if header.type_ != ResourceHeaderType::Xml {
-            is_tampered = true;
-        }
 
         // header size must be 8 bytes, otherwise is non valid axml
         if header.header_size != 8 {
@@ -55,7 +59,7 @@ impl AXML {
         let root = Self::get_xml_tree(input, arsc, &string_pool, &xml_resource)
             .ok_or(AXMLError::MissingRoot)?;
 
-        Ok(AXML { is_tampered, root })
+        Ok(AXML { root })
     }
 
     fn get_xml_tree<'a>(
@@ -180,12 +184,20 @@ impl AXML {
         (!stack.is_empty()).then(|| stack.remove(0))
     }
 
-    /// Get pretty printed xml tree
+    /// Returns the pretty-printed XML as a string.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let xml_string = axml.get_xml_string();
+    /// println!("{}", xml_string);
+    /// ```
     #[inline]
     pub fn get_xml_string(&self) -> String {
         self.root.to_string()
     }
 
+    /// Retrieves the value of an attribute from a specific tag.
     pub fn get_attribute_value(
         &self,
         tag: &str,
@@ -220,7 +232,9 @@ impl AXML {
         }
     }
 
-    /// Same as [AXML::get_all_attribute_values] but it only allows you to go through the children (for optimization purposes)
+    /// Returns an iterator over attribute values for direct children with a specific tag.
+    ///
+    /// This is a faster version of [AXML::get_all_attribute_values] that only iterates over the root's direct children
     #[inline]
     pub fn get_root_attribute_values<'a>(
         &'a self,
@@ -237,6 +251,7 @@ impl AXML {
             })
     }
 
+    /// Returns an iterator over attribute values for all descendants with a specific tag.
     #[inline]
     pub fn get_all_attribute_values<'a>(
         &'a self,
@@ -253,11 +268,11 @@ impl AXML {
             })
     }
 
-    /// Get main activities from APK
+    /// Extracts the main launcher activities from an APK manifest.
     ///
     /// Algorithm:
-    /// - Search for all `<activity>` and `<activity-alias>` tags
-    /// - Search for `android.intent.action.MAIN` with `android.intent.category.LAUNCHER` or `android.intent.category.INFO`
+    /// 1. Search for all `<activity>` and `<activity-alias>` tags.
+    /// 2. Look for `android.intent.action.MAIN` with `android.intent.category.LAUNCHER` or `android.intent.category.INFO`.
     ///
     /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310>
     pub fn get_main_activities(&self) -> impl Iterator<Item = &str> {
@@ -274,45 +289,30 @@ impl AXML {
                     return None;
                 }
 
-                // find <intent-filter> with MAIN action + LAUNCHER/INFO category
-                let has_matching_intent = activity.childrens().any(|intent_filter| {
+                for intent_filter in activity.childrens() {
                     if intent_filter.name() != "intent-filter" {
-                        return false;
+                        continue;
                     }
 
                     let mut has_main = false;
                     let mut has_launcher = false;
 
                     for child in intent_filter.childrens() {
-                        match child.name() {
-                            "action"
-                                if child.attr("name") == Some("android.intent.action.MAIN") =>
-                            {
-                                has_main = true;
-                            }
-                            "category"
-                                if matches!(
-                                    child.attr("name"),
-                                    Some("android.intent.category.LAUNCHER")
-                                        | Some("android.intent.category.INFO")
-                                ) =>
-                            {
-                                has_launcher = true;
+                        match (child.name(), child.attr("name")) {
+                            ("action", Some("android.intent.action.MAIN")) => has_main = true,
+                            ("category", Some("android.intent.category.LAUNCHER"))
+                            | ("category", Some("android.intent.category.INFO")) => {
+                                has_launcher = true
                             }
                             _ => {}
                         }
-
-                        if has_main && has_launcher {
-                            return true;
-                        }
                     }
 
-                    false
-                });
-
-                if has_matching_intent {
-                    return activity.attr("name");
+                    if has_main && has_launcher {
+                        return activity.attr("name");
+                    }
                 }
+
                 None
             })
     }

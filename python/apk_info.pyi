@@ -97,7 +97,7 @@ class APK:
 
     def get_xml_string(self) -> str:
         """
-        Converts the internal xml representation of the tree to a human readable format
+        Converts the internal xml representation of the `AndroidManifest.xml` to a human readable format
 
         Returns
         -------
@@ -133,7 +133,7 @@ class APK:
 
     def get_attribute_value(self, tag: str, name: str) -> str | None:
         """
-        An auxiliary method that allows you to get the attribute value directly from AXML.
+        An auxiliary method that allows you to get the attribute value directly from `AndroidManifest.xml`.
 
         If the value is a link to a resource, it will be automatically resolved to the file name.
 
@@ -148,7 +148,7 @@ class APK:
                 fd.write(apk.read(security_config))
         ```
 
-        Example of how to get additional information from the <application> tag
+        Example of how to get additional information from the <application> tag:
 
         ```python
         apk = APK("./file")
@@ -159,7 +159,7 @@ class APK:
 
     def get_all_attribute_values(self, tag: str, name: str) -> list[str]:
         """
-        An auxiliary method that allows you to get the value from all attributes from AXML.
+        An auxiliary method that allows you to get the value from all attributes from `AndroidManifest.xml`.
 
         Examples
         --------
@@ -261,8 +261,30 @@ class APK:
 
         ```python
         apk = APK("./file")
-        print(apk.get_version_name()) # 1.2.3
+        print(apk.get_version_name()) # "1.2.3"
         ```
+
+        Returns
+        -------
+        str | None
+            The version name as a string if present, otherwise None
+        """
+        ...
+
+    def get_build_version_code(self) -> str | None:
+        """
+        Retrieves the `platformBuildVersionCode` from the `<manifest>` element.
+
+        Returns
+        -------
+        str | None
+            The version name as a string if present, otherwise None
+        """
+        ...
+
+    def get_build_version_name(self) -> str | None:
+        """
+        Retrieves the `platformBuildVersionName` from the `<manifest>` element.
 
         Returns
         -------
@@ -456,7 +478,6 @@ class APK:
 
         See: <a href="https://developer.android.com/guide/topics/manifest/application-element#logo" target="_blank">https://developer.android.com/guide/topics/manifest/application-element#logo</a>
 
-
         Examples
         --------
 
@@ -603,7 +624,7 @@ class APK:
             A set of native library names
         """
 
-    def get_features(self) -> list[str]:
+    def get_features(self) -> set[str]:
         """
         Retrieves all hardware or software features declared by `<uses-feature android:name="...">`
 
@@ -650,7 +671,7 @@ class APK:
 
     def get_declared_permissions(self) -> set[Permission]:
         """
-        Retrieves all user defines permissions
+        Retrieves all user defines permissions.
 
         See: <a href="https://developer.android.com/guide/topics/manifest/permission-element" target="_blank">https://developer.android.com/guide/topics/manifest/permission-element</a>
 

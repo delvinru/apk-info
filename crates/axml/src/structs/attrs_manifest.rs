@@ -1,7 +1,14 @@
+//! Wrapper around `phf` with manifest attributes.
+
 use std::borrow::Cow;
 
 include!(concat!(env!("OUT_DIR"), "/attrs_manifest_phf.rs"));
 
+/// If AndroidManifest.xml If it contains a system attribute, then it finds the value by its name.
+///
+/// Depending on the type, it will return either `enum` or `flags`.
+///
+/// See: <https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/res/res/values/attrs_manifest.xml>
 pub fn get_attr_value<'a>(name: &'a str, value: &'a u32) -> Option<Cow<'a, str>> {
     let attrs = ATTRS_MANIFEST.get(name)?;
 

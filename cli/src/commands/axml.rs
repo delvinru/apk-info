@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use apk_info::apk::Apk;
+use apk_info::Apk;
 use apk_info_axml::AXML;
 
 use crate::commands::path_helpers::contains_extensions;

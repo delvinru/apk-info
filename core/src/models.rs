@@ -1,3 +1,5 @@
+//! Abstractions over `manifest` tags.
+
 use serde::{Deserialize, Serialize};
 
 /// Represents xapk manifest.json

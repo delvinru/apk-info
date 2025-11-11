@@ -7,15 +7,14 @@ use winnow::token::take;
 use crate::structs::{ResChunkHeader, ResourceValue, system_types};
 
 #[derive(Debug)]
-pub(crate) struct XMLResourceMap {
-    #[allow(unused)]
-    pub(crate) header: ResChunkHeader,
+pub struct XMLResourceMap {
+    pub header: ResChunkHeader,
 
-    pub(crate) resource_ids: Vec<u32>,
+    pub resource_ids: Vec<u32>,
 }
 
 impl XMLResourceMap {
-    pub fn parse(input: &mut &[u8]) -> ModalResult<XMLResourceMap> {
+    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<XMLResourceMap> {
         let header = ResChunkHeader::parse(input)?;
         let resource_ids = repeat(
             (header.size.saturating_sub(header.header_size as u32) / 4) as usize,
@@ -38,22 +37,22 @@ impl XMLResourceMap {
 }
 
 /// Basic XML tree node. A single item in the XML document.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#632>
 #[derive(Debug, Default)]
-pub(crate) struct XMLHeader {
-    pub(crate) header: ResChunkHeader,
+pub struct XMLHeader {
+    pub header: ResChunkHeader,
 
     /// Line number in original source file at which this element appeared
-    #[allow(unused)]
-    pub(crate) line_number: u32,
+    pub line_number: u32,
 
     /// Optional XML comment that was associated with this element; -1 if none
-    #[allow(unused)]
-    pub(crate) comment: u32,
+    pub comment: u32,
 }
 
 impl XMLHeader {
     #[inline]
-    pub fn parse(input: &mut &[u8], header: ResChunkHeader) -> ModalResult<XMLHeader> {
+    pub(crate) fn parse(input: &mut &[u8], header: ResChunkHeader) -> ModalResult<XMLHeader> {
         let (line_number, comment) = (le_u32, le_u32).parse_next(input)?;
 
         Ok(XMLHeader {
@@ -77,19 +76,18 @@ pub trait XmlParse {
         Self: Sized;
 }
 
-/// Extended XML tree node for namespace start/end nodes
+/// Extended XML tree node for namespace start/end nodes.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#660>
 #[derive(Debug)]
-pub(crate) struct XmlNamespace {
-    #[allow(unused)]
-    pub(crate) header: XMLHeader,
+pub struct XmlNamespace {
+    pub header: XMLHeader,
 
     /// The prefix of the namespace
-    #[allow(unused)]
-    pub(crate) prefix: u32,
+    pub prefix: u32,
 
     /// The URI of the namespace
-    #[allow(unused)]
-    pub(crate) uri: u32,
+    pub uri: u32,
 }
 
 impl XmlParse for XmlNamespace {
@@ -108,26 +106,28 @@ impl XmlParse for XmlNamespace {
     }
 }
 
+/// XML Attribute
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#718>
 #[derive(Debug)]
-pub(crate) struct XmlAttributeElement {
+pub struct XmlAttributeElement {
     /// Namespace of this attribute
-    pub(crate) namespace_uri: u32,
+    pub namespace_uri: u32,
 
     /// Name of this attribute
-    pub(crate) name: u32,
+    pub name: u32,
 
     /// The original raw string value of this attribute
-    #[allow(unused)]
-    pub(crate) value: u32,
+    pub value: u32,
 
     /// Processed typed value of this attribute
-    pub(crate) typed_value: ResourceValue,
+    pub typed_value: ResourceValue,
 }
 
 impl XmlAttributeElement {
     const DEFAULT_ATTRIBUTE_SIZE: u16 = 0x14;
 
-    pub fn parse(
+    pub(crate) fn parse(
         attribute_size: u16,
     ) -> impl FnMut(&mut &[u8]) -> ModalResult<XmlAttributeElement> {
         move |input: &mut &[u8]| {
@@ -151,44 +151,39 @@ impl XmlAttributeElement {
     }
 }
 
+/// Extended XML tree node for start tags - includes attribute information.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#688>
 #[derive(Debug)]
-pub(crate) struct XmlStartElement {
-    #[allow(unused)]
-    pub(crate) header: XMLHeader,
+pub struct XmlStartElement {
+    pub header: XMLHeader,
 
     /// String of the full namespace of this element
-    #[allow(unused)]
-    pub(crate) namespace_uri: u32,
+    pub namespace_uri: u32,
 
     /// String name of this node
-    pub(crate) name: u32,
+    pub name: u32,
 
     /// Byte offset from the start of this structure where the attributes start
-    #[allow(unused)]
-    pub(crate) attribute_start: u16,
+    pub attribute_start: u16,
 
     /// Size of the ...
-    #[allow(unused)]
-    pub(crate) attribute_size: u16,
+    pub attribute_size: u16,
 
     /// Number of attributes associated with element
-    #[allow(unused)]
-    pub(crate) attribute_count: u16,
+    pub attribute_count: u16,
 
     /// Index (1-based) of the "id" attribute. 0 if none.
-    #[allow(unused)]
-    pub(crate) id_index: u16,
+    pub id_index: u16,
 
     /// Index (1-based) of the "class" attribute. 0 if none.
-    #[allow(unused)]
-    pub(crate) class_index: u16,
+    pub class_index: u16,
 
     /// Index (1-based) of the "style" attribute. 0 if none.
-    #[allow(unused)]
-    pub(crate) style_index: u16,
+    pub style_index: u16,
 
     /// List of associated attributes
-    pub(crate) attributes: Vec<XmlAttributeElement>,
+    pub attributes: Vec<XmlAttributeElement>,
 }
 
 impl XmlParse for XmlStartElement {
@@ -261,16 +256,20 @@ impl XmlParse for XmlStartElement {
     }
 }
 
+/// Extended XML tree node for element start/end nodes.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#673>
 #[derive(Debug)]
-pub(crate) struct XmlEndElement {
-    #[allow(unused)]
-    pub(crate) header: XMLHeader,
+pub struct XmlEndElement {
+    pub header: XMLHeader,
 
-    #[allow(unused)]
-    pub(crate) namespace_uri: u32,
+    /// String of the full namespace of this element.
+    pub namespace_uri: u32,
 
-    #[allow(unused)]
-    pub(crate) name: u32,
+    /// String anme of this node if it as an ELEMENT;
+    ///
+    /// The raw character data if this is a CDATA node.
+    pub name: u32,
 }
 
 impl XmlParse for XmlEndElement {
@@ -290,18 +289,17 @@ impl XmlParse for XmlEndElement {
 }
 
 /// Extended XML tree node for CDATA tags - includes the CDATA string.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#647>
 #[derive(Debug)]
-pub(crate) struct XmlCData {
-    #[allow(unused)]
-    pub(crate) header: XMLHeader,
+pub struct XmlCData {
+    pub header: XMLHeader,
 
     /// The raw CDATA character data
-    #[allow(unused)]
-    pub(crate) data: u32,
+    pub data: u32,
 
     /// The typed value of the character data if this is a CDATA node
-    #[allow(unused)]
-    pub(crate) typed_data: ResourceValue,
+    pub typed_data: ResourceValue,
 }
 
 impl XmlParse for XmlCData {

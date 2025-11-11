@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use apk_info::apk::Apk;
+use apk_info::Apk;
 use apk_info_zip::{CertificateInfo, Signature};
 use colored::Colorize;
 
@@ -23,7 +23,16 @@ pub(crate) fn command_show(paths: &[PathBuf], show_signatures: &bool) -> Result<
 }
 
 fn show(path: &Path, show_signatures: &bool) -> Result<()> {
-    let apk = Apk::new(path).with_context(|| format!("got error while parsing apk: {:?}", path))?;
+    let apk = match Apk::new(path) {
+        Ok(v) => v,
+        Err(e) => {
+            println!(
+                "{}",
+                format!("{}: {:?} - {:?}", "error".red(), path, e).bold()
+            );
+            return Ok(());
+        }
+    };
 
     println!(
         "Package Name: {}",
@@ -31,7 +40,12 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
     );
     println!(
         "Main Activity: {}",
-        apk.get_main_activities().next().unwrap_or("-").green()
+        format!(
+            "{}/{}",
+            apk.get_package_name().unwrap_or("".to_string()),
+            apk.get_main_activity().unwrap_or("-")
+        )
+        .green(),
     );
     println!(
         "Min SDK Version: {}",

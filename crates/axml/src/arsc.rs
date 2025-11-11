@@ -5,36 +5,32 @@ use log::warn;
 use winnow::combinator::repeat;
 use winnow::prelude::*;
 
-use crate::ARCSError;
+use crate::errors::ARCSError;
 use crate::structs::{
-    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceHeaderType,
-    ResourceValueType, StringPool,
+    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceValueType, StringPool,
 };
 
+/// Represents an Android Resource Table (ARSC) file.
+///
+/// This struct holds the parsed global string pool and resource packages.
+/// It provides methods to query resources by ID or by name.
 #[derive(Debug)]
 pub struct ARSC {
-    pub is_tampered: bool,
-
     global_string_pool: StringPool,
     packages: HashMap<u8, ResTablePackage>,
 
-    /// Mapping for resolved reference names
+    /// Cache for resolved reference names to avoid repeated lookups.
     reference_names: RefCell<HashMap<u32, String>>,
 }
 
 impl ARSC {
+    /// Parses raw ARSC bytes into an `ARSC` structure.
     pub fn new(input: &mut &[u8]) -> Result<ARSC, ARCSError> {
         if input.len() < 12 {
             return Err(ARCSError::TooSmallError);
         }
 
         let header = ResTableHeader::parse(input).map_err(|_| ARCSError::HeaderError)?;
-
-        let mut is_tampered = false;
-        // don't drop error, maybe another shit malware technique
-        if header.header.type_ != ResourceHeaderType::Table {
-            is_tampered = true;
-        }
 
         if header.package_count < 1 {
             warn!(
@@ -80,7 +76,6 @@ impl ARSC {
         };
 
         Ok(ARSC {
-            is_tampered,
             global_string_pool,
             packages,
             // preallocate some space
@@ -88,6 +83,9 @@ impl ARSC {
         })
     }
 
+    /// Retrieves a resource value by its numeric ID.
+    ///
+    /// Recursively resolves references if the value is a reference type.
     pub fn get_resource_value(&self, id: u32) -> Option<String> {
         // TODO: need somehow option for dynamic config, not hardcoded
         let config = ResTableConfig::default();
@@ -120,6 +118,7 @@ impl ARSC {
         }
     }
 
+    /// Retrieves a resource value by its resolved name.
     pub fn get_resource_value_by_name(&self, name: &str) -> Option<String> {
         let (&id, _) = self
             .reference_names
@@ -130,6 +129,9 @@ impl ARSC {
         self.get_resource_value(id)
     }
 
+    /// Returns the full resource name for a given resource ID.
+    ///
+    /// Uses a cache to speed up repeated lookups.
     pub fn get_resource_name(&self, id: u32) -> Option<String> {
         // fast path: if we've already have this name in cache
         if let Some(name) = self.reference_names.borrow().get(&id) {
@@ -158,6 +160,7 @@ impl ARSC {
         Some(name)
     }
 
+    /// Splits a 32-bit resource ID into its package ID, type ID, and entry ID.
     #[inline(always)]
     fn split_resource_id(&self, id: u32) -> (u8, u8, u16) {
         (

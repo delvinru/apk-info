@@ -1,3 +1,7 @@
+//! Errors returned by this crate.
+//!
+//! This module contains the definitions for all error types returned by this crate.
+
 use openssl::error::ErrorStack;
 use thiserror::Error;
 
@@ -27,22 +31,6 @@ pub enum ZipError {
     /// A general error occurred while parsing the ZIP archive.
     #[error("got error while parsing zip archive")]
     ParseError,
-}
-
-/// Represents the type of compression used for a file in a ZIP archive.
-#[derive(Debug)]
-pub enum FileCompressionType {
-    /// The file is stored without compression.
-    Stored,
-
-    /// The file is compressed using the Deflate algorithm.
-    Deflated,
-
-    /// The file appears tampered but is actually stored without compression.
-    StoredTampered,
-
-    /// The file appears tampered but is actually compressed with Deflate.
-    DeflatedTampered,
 }
 
 /// Represents all errors that can occur while handling certificates.

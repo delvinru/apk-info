@@ -1,13 +1,15 @@
-pub(crate) mod attrs_manifest;
-pub(crate) mod common;
-pub(crate) mod res_string_pool;
-pub mod res_table_config;
-pub(crate) mod resource_table;
-pub(crate) mod system_types;
-pub(crate) mod xml_elements;
+//! Describes all the structures that are necessary for `AXML` and `ARSC` parsing.
 
-pub(crate) use common::*;
-pub(crate) use res_string_pool::*;
+pub mod attrs_manifest;
+mod common;
+mod res_string_pool;
+mod res_table_config;
+mod resource_table;
+pub mod system_types;
+mod xml_elements;
+
+pub use common::*;
+pub use res_string_pool::*;
 pub use res_table_config::*;
-pub(crate) use resource_table::*;
-pub(crate) use xml_elements::*;
+pub use resource_table::*;
+pub use xml_elements::*;

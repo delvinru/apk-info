@@ -1,5 +1,5 @@
 use bitflags::bitflags;
-use log::warn;
+use log::{info, warn};
 use winnow::binary::{le_u8, le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed};
@@ -16,21 +16,31 @@ bitflags! {
     }
 }
 
+/// Definition for a pool of strings.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#472>
 #[derive(Debug)]
-pub(crate) struct ResStringPoolHeader {
-    pub(crate) header: ResChunkHeader,
-    pub(crate) string_count: u32,
-    pub(crate) style_count: u32,
-    pub(crate) flags: u32,
-    pub(crate) strings_start: u32,
+pub struct ResStringPoolHeader {
+    pub header: ResChunkHeader,
 
-    // currently not using, but maybe?
-    #[allow(unused)]
-    pub(crate) styles_start: u32,
+    /// Number of strings in this pool.
+    pub string_count: u32,
+
+    /// Number of style span arrays in the pool.
+    pub style_count: u32,
+
+    /// Possible flags
+    pub flags: u32,
+
+    // Index from header of the string data.
+    pub strings_start: u32,
+
+    /// Index from header of the style data.
+    pub styles_start: u32,
 }
 
 impl ResStringPoolHeader {
-    pub fn parse(input: &mut &[u8]) -> ModalResult<ResStringPoolHeader> {
+    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResStringPoolHeader> {
         let mut header = ResChunkHeader::parse(input)?;
 
         // TODO: research all APKEditor shenanigans with confuser stuff and highlight it
@@ -41,7 +51,7 @@ impl ResStringPoolHeader {
         if header.type_ != ResourceHeaderType::StringPool {
             let garbage_bytes = header.size.saturating_sub(ResChunkHeader::size_of() as u32);
             let _ = take(garbage_bytes as usize).parse_next(input)?;
-            warn!("malformed string pool, skipped {} bytes", garbage_bytes);
+            info!("malformed string pool, skipped {} bytes", garbage_bytes);
 
             header = ResChunkHeader::parse(input)?;
         }
@@ -61,7 +71,6 @@ impl ResStringPoolHeader {
 
     // currently not using, but maybe in the future
     #[inline]
-    #[allow(unused)]
     pub fn is_sorted(&self) -> bool {
         StringType::from_bits_truncate(self.flags).contains(StringType::Sorted)
     }
@@ -72,26 +81,24 @@ impl ResStringPoolHeader {
     }
 }
 
+/// Convience struct for accessing strings
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#524>
 #[derive(Debug)]
-pub(crate) struct StringPool {
-    #[allow(unused)]
-    pub(crate) header: ResStringPoolHeader,
+pub struct StringPool {
+    pub header: ResStringPoolHeader,
 
     // The raw values of the offests are useless, so we don't save them
     // pub(crate) string_offsets: Vec<u32>,
     // pub(crate) style_offsets: Vec<u32>,
-    pub(crate) strings: Vec<String>,
-
-    // emit additional properties
-    #[allow(unused)]
-    pub(crate) invalid_string_count: bool,
+    /// List of parsed strings
+    pub strings: Vec<String>,
 }
 
 impl StringPool {
-    pub fn parse(input: &mut &[u8]) -> ModalResult<StringPool> {
+    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<StringPool> {
         let mut string_header = ResStringPoolHeader::parse(input)?;
 
-        let mut invalid_string_count = false;
         let calculated_string_count = string_header.strings_start.saturating_sub(
             string_header
                 .style_count
@@ -100,13 +107,12 @@ impl StringPool {
         ) / 4;
 
         if calculated_string_count != string_header.string_count {
-            warn!(
+            info!(
                 "malformed string pool, expected {} strings, actually {} strings",
                 string_header.string_count, calculated_string_count
             );
 
             string_header.string_count = calculated_string_count;
-            invalid_string_count = true;
         }
 
         let string_offsets =
@@ -122,7 +128,6 @@ impl StringPool {
         Ok(StringPool {
             header: string_header,
             strings,
-            invalid_string_count,
         })
     }
 
@@ -170,6 +175,7 @@ impl StringPool {
         Ok(strings)
     }
 
+    // some shitty implementation, maybe we can do better?
     fn parse_string(input: &mut &[u8], is_utf8: bool) -> ModalResult<String> {
         if !is_utf8 {
             // utf-16

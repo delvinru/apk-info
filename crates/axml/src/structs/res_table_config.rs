@@ -11,9 +11,9 @@ use winnow::token::take;
 bitflags! {
     /// Bitmask for configuration changes and qualifiers from Android's AConfiguration.
     ///
-    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/native/include/android/configuration.h;l=57;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1)
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1306>
     #[derive(Debug)]
-    pub(crate) struct ResTableConfigFlags: u32 {
+    pub struct ResTableConfigFlags: u32 {
         /// Bit mask for Mobile Country Code (MCC) configuration.
         /// See: <https://developer.android.com/guide/topics/resources/providing-resources#mcc>
         const CONFIG_MCC = 0x0001;
@@ -98,10 +98,10 @@ bitflags! {
 
 /// Grammatical gender configuration flags
 ///
-/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/native/include/android/configuration.h;l=489)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#489>
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum GrammaticalGender {
+pub enum GrammaticalGender {
     /// Neuter grammatical gender
     Neuter = 0b01,
 
@@ -139,11 +139,10 @@ impl Display for GrammaticalGender {
 
 /// Screen layout configuration
 ///
-/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1161;drc=61197364367c9e404c7da6900658f1b16c42d0da)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#372>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-#[allow(unused)]
-pub(crate) enum LayoutDir {
+pub enum LayoutDir {
     /// Layout direction: value that corresponds to `ldltr` resource qualifier specified
     Ltr = 0x01 << 6,
 
@@ -176,20 +175,20 @@ impl Display for LayoutDir {
 
 /// Scren size configuration
 ///
-/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1142;drc=61197364367c9e404c7da6900658f1b16c42d0da)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#226>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum ScreenSize {
-    /// Screen size: value indicating the screen is at least approximately 320x426 dp units
+pub enum ScreenSize {
+    /// Value indicating the screen is at least approximately 320x426 dp units
     Small = 0x01,
 
-    /// Screen size: value indicating the screen is at least approximately 320x470 dp units
+    /// Value indicating the screen is at least approximately 320x470 dp units
     Normal = 0x02,
 
-    /// Screen size: value indicating the screen is at least approximately 480x640 dp units
+    /// Value indicating the screen is at least approximately 480x640 dp units
     Large = 0x03,
 
-    /// Screen size: value indicating the screen is at least approximately 720x960 dp units
+    /// Value indicating the screen is at least approximately 720x960 dp units
     XLarge = 0x04,
 
     /// Screen size not specified
@@ -222,14 +221,14 @@ impl Display for ScreenSize {
 
 /// Screen variation wide/long
 ///
-/// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1151;drc=61197364367c9e404c7da6900658f1b16c42d0da)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#257>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum ScreenLong {
-    /// Screen layout: value that corresponds to the `notlong` resource qualifier
+pub enum ScreenLong {
+    /// Value that corresponds to the `notlong` resource qualifier
     No = 0x1 << 4,
 
-    /// Screen layout: value that corresponds to the `long` resource qualifier
+    /// Value that corresponds to the `long` resource qualifier
     Yes = 0x2 << 4,
 
     /// Not specified
@@ -256,11 +255,19 @@ impl Display for ScreenLong {
     }
 }
 
+/// Screen variation round/no
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#272>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum ScreenRound {
+pub enum ScreenRound {
+    /// Not round screen
     No = 0x1,
+
+    /// Round screen
     Yes = 0x2,
+
+    /// Not specified
     Any(u8),
 }
 
@@ -284,9 +291,12 @@ impl Display for ScreenRound {
     }
 }
 
+/// Wide color variantions
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#276>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum WideColorGamut {
+pub enum WideColorGamut {
     No = 0x1,
     Yes = 0x2,
     Any(u8),
@@ -312,9 +322,12 @@ impl Display for WideColorGamut {
     }
 }
 
+/// HDR configuration
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#291>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum Hdr {
+pub enum Hdr {
     No = 0x1 << 2,
     Yes = 0x2 << 2,
     Any(u8),
@@ -340,9 +353,12 @@ impl Display for Hdr {
     }
 }
 
+/// Orientation configuration
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#59>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum Orientation {
+pub enum Orientation {
     Any = 0x00,
     Port = 0x01,
     Land = 0x02,
@@ -375,9 +391,12 @@ impl Display for Orientation {
     }
 }
 
+/// UI Mode
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#306>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum UIModeType {
+pub enum UIMode {
     Any = 0x00,
     Normal = 0x01,
     Desk = 0x02,
@@ -390,7 +409,7 @@ pub(crate) enum UIModeType {
     Unknown(u8),
 }
 
-impl From<u8> for UIModeType {
+impl From<u8> for UIMode {
     fn from(value: u8) -> Self {
         match value & 0x0f {
             0x00 => Self::Any,
@@ -406,7 +425,7 @@ impl From<u8> for UIModeType {
     }
 }
 
-impl Display for UIModeType {
+impl Display for UIMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             // original code don't handle Normal case, so as we
@@ -422,9 +441,12 @@ impl Display for UIModeType {
     }
 }
 
+/// UI night mode
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#345>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum UIModeNight {
+pub enum UIModeNight {
     Any = 0x00 << 4,
     No = 0x01 << 4,
     Yes = 0x02 << 4,
@@ -454,6 +476,9 @@ impl Display for UIModeNight {
     }
 }
 
+/// Density value
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#93>
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[repr(u32)]
 pub enum Density {
@@ -524,9 +549,12 @@ impl Display for Density {
     }
 }
 
+/// Touchscreen configuration
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#76>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum Touchscreen {
+pub enum Touchscreen {
     Any = 0x00,
     NoTouch = 0x01,
     Stylus = 0x02,
@@ -558,9 +586,12 @@ impl Display for Touchscreen {
     }
 }
 
+/// Keyboard availability
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#190>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum KeysHidden {
+pub enum KeysHidden {
     Any = 0x00,
     No = 0x01,
     Yes = 0x02,
@@ -591,9 +622,12 @@ impl Display for KeysHidden {
     }
 }
 
+/// Keyboard type
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#142>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum Keyboard {
+pub enum Keyboard {
     Any = 0x00,
     NoKeys = 0x01,
     Qwerty = 0x02,
@@ -625,9 +659,12 @@ impl Display for Keyboard {
     }
 }
 
+/// Navigation availability
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#211>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum NavHidden {
+pub enum NavHidden {
     Any = 0x00 << 2,
     No = 0x01 << 2,
     Yes = 0x02 << 2,
@@ -656,9 +693,12 @@ impl Display for NavHidden {
     }
 }
 
+/// Navigation type
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#163>
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
-pub(crate) enum Navigation {
+pub enum Navigation {
     Any = 0x00,
     NoNav = 0x01,
     Dpad = 0x02,
@@ -695,9 +735,9 @@ impl Display for Navigation {
 
 /// Describes a particular resource configuration
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=967)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#967>
 ///
-/// [Default values (maybe)](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/java/android/content/res/Configuration.java;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1;l=1572)
+/// Default values (maybe): <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/content/res/Configuration.java#1572>
 #[repr(C)]
 #[derive(Debug, Default, Eq, Clone, Copy)]
 pub struct ResTableConfig {
@@ -985,6 +1025,7 @@ impl ResTableConfig {
         (orientation, touchscreen, density)
     }
 
+    /// Set config density
     #[inline]
     pub fn set_density(&mut self, density: Density) {
         self.screen_type =
@@ -1172,8 +1213,9 @@ impl ResTableConfig {
 
     /// Represent resource config as readable string
     ///
-    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/ResourceTypes.cpp;l=3368)
-    /// [App resource overview. Table 2](https://developer.android.com/guide/topics/resources/providing-resources#AlternativeResources)
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/ResourceTypes.cpp#3358>
+    ///
+    /// App resource overview [Table 2]: <https://developer.android.com/guide/topics/resources/providing-resources#AlternativeResources>
     pub fn as_string(&self) -> String {
         // preallocate some buffer just in case, maybe bad idea
         let mut result = String::with_capacity(self.size as usize);
@@ -1284,8 +1326,8 @@ impl ResTableConfig {
             result.push_str(&orientation.to_string());
         }
 
-        let ui_mode_type = UIModeType::from(ui_mode);
-        if !matches!(ui_mode_type, UIModeType::Any) {
+        let ui_mode_type = UIMode::from(ui_mode);
+        if !matches!(ui_mode_type, UIMode::Any) {
             if !result.is_empty() {
                 result.push('-');
             }

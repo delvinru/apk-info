@@ -1,10 +1,14 @@
+//! Errors returned by this crate.
+//!
+//! This module contains the definitions for all error types returned by this crate.
+
 use std::io;
 
-use apk_info_axml::{ARCSError, AXMLError};
+use apk_info_axml::errors::{ARCSError, AXMLError};
 use apk_info_zip::{CertificateError, ZipError};
 use thiserror::Error;
 
-/// Just some different APK errors
+/// Possible `APK` errors
 #[derive(Error, Debug)]
 pub enum APKError {
     /// Generic I/O error while trying to read or write data

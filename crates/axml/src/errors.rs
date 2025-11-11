@@ -1,3 +1,7 @@
+//! Errors returned by this crate.
+//!
+//! This module contains the definitions for all error types returned by this crate.
+
 use thiserror::Error;
 
 /// Errors that may occur while parsing an Android XML (AXML) manifest.

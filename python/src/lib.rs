@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use ::apk_info::apk::Apk as ApkRust;
+use ::apk_info::Apk as ApkRust;
 use ::apk_info::models::{
     Activity as ApkActivity, Permission as ApkPermission, Provider as ApkProvider,
     Receiver as ApkReceiver, Service as ApkService,
@@ -586,6 +586,14 @@ impl Apk {
 
     pub fn get_version_name(&self) -> Option<String> {
         self.apkrs.get_version_name()
+    }
+
+    pub fn get_build_version_code(&self) -> Option<String> {
+        self.apkrs.get_build_version_code()
+    }
+
+    pub fn get_build_version_name(&self) -> Option<String> {
+        self.apkrs.get_build_version_name()
     }
 
     pub fn get_install_location(&self) -> Option<String> {

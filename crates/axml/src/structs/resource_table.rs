@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::hash::Hash;
 
-use log::{debug, warn};
+use log::{debug, info, warn};
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed, StrContext, StrContextValue};
@@ -17,13 +17,13 @@ use crate::structs::{
 
 /// Header for a resource table
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=906?q=ResourceTypes.h&ss=android)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#906>
 #[derive(Debug)]
-pub(crate) struct ResTableHeader {
-    pub(crate) header: ResChunkHeader,
+pub struct ResTableHeader {
+    pub header: ResChunkHeader,
 
     /// The number of [ResTablePackage] structures
-    pub(crate) package_count: u32,
+    pub package_count: u32,
 }
 
 impl ResTableHeader {
@@ -42,39 +42,39 @@ impl ResTableHeader {
 ///
 /// Followed by one or more [ResTableType] and [ResTableTypeSpec] structures containing the entry values for each resource type
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=919?q=ResourceTypes.h&ss=android)
-pub(crate) struct ResTablePackageHeader {
-    pub(crate) header: ResChunkHeader,
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#919>
+pub struct ResTablePackageHeader {
+    pub header: ResChunkHeader,
 
     /// If this is a base package, its ID.
     ///
     /// Package IDs start at 1(corresponding to the value of the package bits in a resource identifier)
     /// 0 meands this is not a base package
-    pub(crate) id: u32,
+    pub id: u32,
 
     /// Actual name of this package, \0-terminated
-    pub(crate) name: [u8; 256],
+    pub name: [u8; 256],
 
     /// Offset to [StringPool] defining the resource type symbol table
     /// If zero, this package is inheriting from another base package (overriding specific values in it)
-    pub(crate) type_strings: u32,
+    pub type_strings: u32,
 
     /// Last index into `type_strings` that is for public use by others
-    pub(crate) last_public_type: u32,
+    pub last_public_type: u32,
 
     /// Offset to [StringPool] defining the resource key symbol table
     /// If zero, this package is inheriting from another base package (overriding specific values in it)
-    pub(crate) key_strings: u32,
+    pub key_strings: u32,
 
     /// Last index into `key_strings` that is for public use by other
-    pub(crate) last_public_key: u32,
+    pub last_public_key: u32,
 
     /// The source code does not describe the purpose of this field
     ///
-    /// In old versions this field doesn't exists - https://xrefandroid.com/android-4.4.4_r1/xref/frameworks/base/include/androidfw/ResourceTypes.h#782
+    /// In old versions this field doesn't exists - <https://xrefandroid.com/android-4.4.4_r1/xref/frameworks/base/include/androidfw/ResourceTypes.h#782>
     ///
     /// Example sample: `d6c670c7a27105f082108d89c6d6b983bdeba6cef36d357b2c4c2bfbc4189aab`
-    pub(crate) type_id_offset: u32,
+    pub type_id_offset: u32,
 }
 
 impl ResTablePackageHeader {
@@ -110,7 +110,7 @@ impl ResTablePackageHeader {
 
                 let skipped = header_size.saturating_sub(expected_size);
                 let _ = take(skipped as usize).parse_next(input)?;
-                warn!(
+                info!(
                     "malformed resource table package, skipped {} bytes",
                     skipped
                 );
@@ -130,7 +130,7 @@ impl ResTablePackageHeader {
     }
 
     /// Get a real package name from `name` slice
-    pub(crate) fn name(&self) -> String {
+    pub fn name(&self) -> String {
         let utf16_str: Vec<u16> = self
             .name
             .chunks_exact(2)
@@ -143,7 +143,7 @@ impl ResTablePackageHeader {
 
     /// Get size in bytes of this structure
     #[inline(always)]
-    pub(crate) const fn size_of() -> usize {
+    pub const fn size_of() -> usize {
         // header - ResChunkHeader
         // 4 bytes - string_count
         // 256 bytes - name
@@ -171,41 +171,35 @@ impl fmt::Debug for ResTablePackageHeader {
     }
 }
 
-/// A specification of the resources defined by a particular type
+/// A specification of the resources defined by a particular type.
 ///
-/// There should be one of these chunks for each resource type
+/// There should be one of these chunks for each resource type.
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1448?q=ResourceTypes.h&ss=android)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1448>
 #[derive(Debug)]
-pub(crate) struct ResTableTypeSpec {
-    #[allow(unused)]
-    pub(crate) header: ResChunkHeader,
+pub struct ResTableTypeSpec {
+    pub header: ResChunkHeader,
 
     /// The type identifier this chunk is holding.
     /// Type IDs start at 1 (corresponding to the value of the type bits in a resource identifier).
     /// 0 is invalid.
-    #[allow(unused)]
-    pub(crate) id: u8,
+    pub id: u8,
 
     /// Must be 0 (in documentation)
     ///
     /// Ideally, need to check this value, but this is not done on purpose
     ///
     /// Malware can intentionally change the value to break parsers
-    #[allow(unused)]
-    pub(crate) res0: u8,
+    pub res0: u8,
 
     /// Used to be reserved, if >0 specifies the number of [ResTableType] entries for this spec
-    #[allow(unused)]
-    pub(crate) types_count: u16,
+    pub types_count: u16,
 
     /// Number of uint32_t entry configuration masks that follow
-    #[allow(unused)]
-    pub(crate) entry_count: u32,
+    pub entry_count: u32,
 
     /// Configuration mask
-    #[allow(unused)]
-    pub(crate) type_spec_flags: Vec<ResTableConfigFlags>,
+    pub type_spec_flags: Vec<ResTableConfigFlags>,
 }
 
 impl ResTableTypeSpec {
@@ -245,7 +239,7 @@ impl ResTableTypeSpec {
 
 bitflags::bitflags! {
     #[derive(Debug)]
-    pub(crate) struct ResTableFlag: u16 {
+    pub struct ResTableFlag: u16 {
         /// If set, this is a complex entry, holding a set of name/value mappings.
         const FLAG_COMPLEX = 0x0001;
 
@@ -263,18 +257,20 @@ bitflags::bitflags! {
     }
 }
 
+/// A single name/value mapping that is part of a complex resource.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1696>
 #[derive(Debug)]
-pub(crate) struct ResTableMap {
+pub struct ResTableMap {
     /// The resource identifier defining this mapping's name.
     /// For attribute resources, 'name' can be one of the following special resource types
     /// to supply meta-data about the attribute; for all other resource types it must be an attribute resource.
     ///
     /// NOTE: This is actually `ResTable_ref`, but for simplicity don't use that
-    #[allow(unused)]
-    pub(crate) name: u32,
+    pub name: u32,
 
-    #[allow(unused)]
-    pub(crate) value: ResourceValue,
+    /// this mapping's value
+    pub value: ResourceValue,
 }
 
 impl ResTableMap {
@@ -286,32 +282,30 @@ impl ResTableMap {
     }
 }
 
-/// Defining a parent map resource from which to inherit values
+/// Defining a parent map resource from which to inherit values.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1683>
 #[derive(Debug)]
-pub(crate) struct ResTableMapEntry {
+pub struct ResTableMapEntry {
     /// Number of bytes in this structure
-    #[allow(unused)]
-    pub(crate) size: u16,
+    pub size: u16,
 
     /// Flags describes in [`ResTableFlag`]
-    #[allow(unused)]
-    pub(crate) flags: u16,
+    pub flags: u16,
 
-    /// Reference to [`ResTablePackage::key_strings`]
-    pub(crate) index: u32,
+    /// Reference to [ResTablePackage::key_strings]
+    pub index: u32,
 
     /// Resource identifier of the parent mapping, or 0 if there is none.
+    ///
     /// This is always treated as a TYPE_DYNAMIC_REFERENCE.
-    #[allow(unused)]
-    pub(crate) parent: u32,
+    pub parent: u32,
 
-    /// Number of name/value pairs that follow for [`ResTableFlag::FLAG_COMPLEX`]
-    #[allow(unused)]
-    pub(crate) count: u32,
+    /// Number of name/value pairs that follow for [ResTableFlag::FLAG_COMPLEX]
+    pub count: u32,
 
     /// Actual values of this entry
-    #[allow(unused)]
-    pub(crate) values: Vec<ResTableMap>,
+    pub values: Vec<ResTableMap>,
 }
 
 impl ResTableMapEntry {
@@ -336,44 +330,45 @@ impl ResTableMapEntry {
     }
 }
 
-/// A compact entry is indicated by [`ResTableFlag::FLAG_COMPACT`] with falgs at the same offset as normal entry
+/// A compact entry is indicated by [ResTableFlag::FLAG_COMPACT] with falgs at the same offset as normal entry.
 ///
-/// This is only for simple data values
+/// This is only for simple data values.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1621>
 #[derive(Debug)]
-pub(crate) struct ResTableEntryCompact {
-    /// key index is encoded in 16-bit
-    #[allow(unused)]
-    pub(crate) key: u16,
+pub struct ResTableEntryCompact {
+    /// key index is encoded in 16-bit.
+    pub key: u16,
 
-    /// Flags describes in [`ResTableFlag`]
-    #[allow(unused)]
-    pub(crate) flags: u16,
+    /// Flags describes in [`ResTableFlag`].
+    pub flags: u16,
 
-    /// data is encoded directly in this entry
-    pub(crate) data: u32,
+    /// data is encoded directly in this entry.
+    pub data: u32,
 }
 
+/// Default table entry
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1603>
 #[derive(Debug)]
-pub(crate) struct ResTableEntryDefault {
+pub struct ResTableEntryDefault {
     /// Number of bytes in this structure
-    #[allow(unused)]
-    pub(crate) size: u16,
+    pub size: u16,
 
     /// Flags describes in [`ResTableFlag`]
-    #[allow(unused)]
-    pub(crate) flags: u16,
+    pub flags: u16,
 
-    /// Reference to [`ResTablePackage::key_strings`]
-    pub(crate) index: u32,
+    /// Reference to [ResTablePackage::key_strings]
+    pub index: u32,
 
-    pub(crate) value: ResourceValue,
+    pub value: ResourceValue,
 }
 
 /// This is the beginning of information about an entry in the resource table
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1583?q=ResTable_config&ss=android)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1583>
 #[derive(Debug)]
-pub(crate) enum ResTableEntry {
+pub enum ResTableEntry {
     NoEntry,
     Complex(ResTableMapEntry),
     Compact(ResTableEntryCompact),
@@ -405,39 +400,36 @@ impl ResTableEntry {
     }
 
     #[inline(always)]
-    pub(crate) fn is_complex(flags: u16) -> bool {
+    pub fn is_complex(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_COMPLEX)
     }
 
     #[inline(always)]
-    #[allow(unused)]
-    pub(crate) fn is_public(flags: u16) -> bool {
+    pub fn is_public(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_PUBLIC)
     }
 
     #[inline(always)]
-    #[allow(unused)]
-    // don't know how to handle this flag for now
-    pub(crate) fn is_weak(flags: u16) -> bool {
+    // TODO: don't know how to handle this flag for now
+    pub fn is_weak(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_WEAK)
     }
 
     #[inline(always)]
-    pub(crate) fn is_compact(flags: u16) -> bool {
+    pub fn is_compact(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_COMPACT)
     }
 
     #[inline(always)]
-    #[allow(unused)]
-    // don't know how to handle this flag for now
-    pub(crate) fn uses_feature_flags(flags: u16) -> bool {
+    // TODO: don't know how to handle this flag for now
+    pub fn uses_feature_flags(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_USES_FEATURE_FLAGS)
     }
 }
 
 bitflags::bitflags! {
     #[derive(Debug)]
-    pub(crate) struct ResTableTypeFlags: u8 {
+    pub struct ResTableTypeFlags: u8 {
         /// If set, the entry is sparse, and encodes both the entry ID and offset into each entry,
         /// and a binary search is used to find the key. Only available on platforms >= O.
         /// Mark any types that use this with a v26 qualifier to prevent runtime issues on older
@@ -452,65 +444,41 @@ bitflags::bitflags! {
 
 /// A collection of resource entries for a specific resource data type.
 ///
-/// If the [`ResTableTypeFlags::SPARCE`] flag is **not** set in [`flags`], this structure
-/// is followed by an array of `u32` values corresponding to the array of
-/// type strings in the [`ResTable_package::typeStrings`] string block.
-/// Each element holds an index from `entriesStart`; a value of [`NO_ENTRY`]
-/// indicates that the entry is not defined.
-///
-/// If the [`ResTableTypeFlags::SPARCE`] flag **is** set in [`flags`], this structure
-/// is followed by an array of [`ResTable_sparseTypeEntry`] elements defining
-/// only the entries that have values for this type. Each entry is sorted by
-/// its entry ID so that a binary search can be performed. The ID and offset
-/// are encoded in a single `u32`. See [`ResTable_sparseTypeEntry`] for details.
-///
-/// Multiple chunks of this type may exist for a particular resource type,
-/// each providing different configuration variations for that resource’s values.
-///
-/// Ideally, there would be an additional ordered index of entries to enable
-/// binary search by string name.
-///
-/// [Source code](https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1500?q=ResTable_config&ss=android)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1500>
 #[derive(Debug)]
-pub(crate) struct ResTableType {
-    #[allow(unused)]
-    pub(crate) header: ResChunkHeader,
+pub struct ResTableType {
+    pub header: ResChunkHeader,
 
     /// The type identifier this chunk is holding
     ///
     /// Type IDs start at 1 (corresponding to the value of the type bits in a resource identifier)
     /// 0 is invalid
-    pub(crate) id: u8,
+    pub id: u8,
 
     /// Declares type of this resource
-    #[allow(unused)]
-    pub(crate) flags: u8,
+    pub flags: u8,
 
     /// The documentation says that this field should always be 0.
     ///
-    /// NOTE: the value is intentionally not checked, because malware can break parsers
-    #[allow(unused)]
-    pub(crate) reserved: u16,
+    /// <div class="warning">
+    ///     The value is intentionally not checked, because malware can break parsers.
+    /// </div>
+    pub reserved: u16,
 
     /// Number of uint32_t entry indices that follow
-    #[allow(unused)]
-    pub(crate) entry_count: u32,
+    pub entry_count: u32,
 
-    /// Offset from header where ... data starts
-    /// TODO: add link to structure
-    #[allow(unused)]
-    pub(crate) entries_start: u32,
+    /// Offset from header where [ResTableEntry] data starts
+    pub entries_start: u32,
 
     /// Configuration this collection of entries is designed for
-    /// This always must be last
-    #[allow(unused)]
-    pub(crate) config: ResTableConfig,
+    /// This always must be last.
+    pub config: ResTableConfig,
 
-    #[allow(unused)]
-    pub(crate) entry_offsets: Vec<u32>,
+    pub entry_offsets: Vec<u32>,
 
     /// Defined entries in this type
-    pub(crate) entries: Vec<ResTableEntry>,
+    pub entries: Vec<ResTableEntry>,
 }
 
 impl ResTableType {
@@ -598,29 +566,28 @@ impl ResTableType {
         })
     }
 
-    // don't know how to handle this flag for now
-    #[allow(unused)]
     #[inline(always)]
-    pub(crate) fn is_sparse(flags: u8) -> bool {
+    pub fn is_sparse(flags: u8) -> bool {
         ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::SPARCE)
     }
 
     #[inline(always)]
-    #[allow(unused)]
-    pub(crate) fn is_offset16(flags: u8) -> bool {
+    pub fn is_offset16(flags: u8) -> bool {
         ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::OFFSET16)
     }
 }
 
-/// A shared library package-id to package name entry
-pub(crate) struct ResTableLibraryEntry {
+/// A shared library package-id to package name entry.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1798>
+pub struct ResTableLibraryEntry {
     /// The package-i this shared library was assigned at build time
     ///
     /// We use a uint32 to keep the structure aligned on a uint32 boundary
-    pub(crate) package_id: u32,
+    pub package_id: u32,
 
     /// The package name of the shared library. \0 terminated
-    pub(crate) package_name: [u8; 256],
+    pub package_name: [u8; 256],
 }
 
 impl ResTableLibraryEntry {
@@ -638,8 +605,8 @@ impl ResTableLibraryEntry {
             .parse_next(input)
     }
 
-    /// Get a real package name from `package_name` slice
-    pub(crate) fn package_name(&self) -> String {
+    /// Get a real package name from `package_name` slice.
+    pub fn package_name(&self) -> String {
         let utf16_str: Vec<u16> = self
             .package_name
             .chunks_exact(2)
@@ -664,18 +631,15 @@ impl fmt::Debug for ResTableLibraryEntry {
 /// The package-ids' encoded in this resource table may be different than the id's assigned at runtime
 /// We must be able to translate the package-id's based on the package name
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1735;drc=61197364367c9e404c7da6900658f1b16c42d0da)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1787>
 #[derive(Debug)]
-pub(crate) struct ResTableLibrary {
-    #[allow(unused)]
-    pub(crate) header: ResChunkHeader,
+pub struct ResTableLibrary {
+    pub header: ResChunkHeader,
 
     /// The number of shared libraries linked in this resource table
-    #[allow(unused)]
-    pub(crate) count: u32,
+    pub count: u32,
 
-    #[allow(unused)]
-    pub(crate) entries: Vec<ResTableLibraryEntry>,
+    pub entries: Vec<ResTableLibraryEntry>,
 }
 
 impl ResTableLibrary {
@@ -693,15 +657,16 @@ impl ResTableLibrary {
 }
 
 /// Specifies the set of resourcers that are explicitly allowd to be overlaid by RPOs
-pub(crate) struct ResTableOverlayble {
-    #[allow(unused)]
-    pub(crate) header: ResChunkHeader,
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1834>
+pub struct ResTableOverlayble {
+    pub header: ResChunkHeader,
 
-    /// The name of the overlaybalbe set of resources that overlays target
-    pub(crate) name: [u8; 512],
+    /// The name of the overlaybalbe set of resources that overlays target.
+    pub name: [u8; 512],
 
-    /// The component responsible for enabling and disabling overlays targeting this chunk
-    pub(crate) actor: [u8; 512],
+    /// The component responsible for enabling and disabling overlays targeting this chunk.
+    pub actor: [u8; 512],
 }
 
 impl ResTableOverlayble {
@@ -723,8 +688,8 @@ impl ResTableOverlayble {
         })
     }
 
-    /// Get a real package name from `name` slice
-    pub(crate) fn name(&self) -> String {
+    /// Get a real package name from `name` slice.
+    pub fn name(&self) -> String {
         let utf16_str: Vec<u16> = self
             .name
             .chunks_exact(2)
@@ -735,8 +700,8 @@ impl ResTableOverlayble {
         String::from_utf16(&utf16_str).unwrap_or_default()
     }
 
-    /// Get a real actor from `actor` slice
-    pub(crate) fn actor(&self) -> String {
+    /// Get a real actor from `actor` slice.
+    pub fn actor(&self) -> String {
         let utf16_str: Vec<u16> = self
             .actor
             .chunks_exact(2)
@@ -759,11 +724,8 @@ impl fmt::Debug for ResTableOverlayble {
 
 bitflags::bitflags! {
     /// Flags for all possible overlayable policy options.
-    ///
-    /// Any changes to this set should also update
-    /// `aidl/android/os/OverlayablePolicy.aidl`.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub(crate) struct PolicyFlags: u32 {
+    pub struct PolicyFlags: u32 {
         /// No flags set.
         const NONE              = 0x0000_0000;
         /// Any overlay can overlay these resources.
@@ -787,20 +749,19 @@ bitflags::bitflags! {
     }
 }
 
+/// Holds a list of resource ids that are protected from being overlaid by as set of policies.
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1850>
 #[derive(Debug)]
-pub(crate) struct ResTableOverlayblePolicy {
-    #[allow(unused)]
-    pub(crate) header: ResChunkHeader,
+pub struct ResTableOverlayblePolicy {
+    pub header: ResChunkHeader,
 
-    #[allow(unused)]
-    pub(crate) policy_flags: PolicyFlags,
+    pub policy_flags: PolicyFlags,
 
     /// The number of ResTable_ref that follow this header
-    #[allow(unused)]
-    pub(crate) entry_count: u32,
+    pub entry_count: u32,
 
-    #[allow(unused)]
-    pub(crate) entries: Vec<u32>,
+    pub entries: Vec<u32>,
 }
 
 impl ResTableOverlayblePolicy {
@@ -824,16 +785,14 @@ impl ResTableOverlayblePolicy {
 
 /// Maps the staged (non-finalized) resource id to its finalized resource id
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1770;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1822>
 #[derive(Debug)]
-pub(crate) struct ResTableStagedAliasEntry {
+pub struct ResTableStagedAliasEntry {
     /// The compile-time staged resource id to rewrite
-    #[allow(unused)]
-    pub(crate) staged_res_id: u32,
+    pub staged_res_id: u32,
 
     /// The compile-time finalized resource id to which the staged resource id should be rewritten
-    #[allow(unused)]
-    pub(crate) finalized_res_id: u32,
+    pub finalized_res_id: u32,
 }
 
 impl ResTableStagedAliasEntry {
@@ -852,18 +811,15 @@ impl ResTableStagedAliasEntry {
 
 /// A map that allows rewriting staged (non-finalized) resource ids to therir finalized counterparts
 ///
-/// [Source code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=1759;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1)
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1811>
 #[derive(Debug)]
-pub(crate) struct ResTableStagedAlias {
-    #[allow(unused)]
-    pub(crate) header: ResChunkHeader,
+pub struct ResTableStagedAlias {
+    pub header: ResChunkHeader,
 
     /// The number of [ResTableStagedAliasEntry] that follow this header
-    #[allow(unused)]
-    pub(crate) count: u32,
+    pub count: u32,
 
-    #[allow(unused)]
-    pub(crate) entries: Vec<ResTableStagedAliasEntry>,
+    pub entries: Vec<ResTableStagedAliasEntry>,
 }
 
 impl ResTableStagedAlias {
@@ -884,14 +840,14 @@ impl ResTableStagedAlias {
 }
 
 #[derive(Debug)]
-pub(crate) struct ResTablePackage {
-    pub(crate) header: ResTablePackageHeader,
-    pub(crate) type_strings: StringPool,
-    pub(crate) key_strings: StringPool,
+pub struct ResTablePackage {
+    pub header: ResTablePackageHeader,
+    pub type_strings: StringPool,
+    pub key_strings: StringPool,
 
     // requires fastloop by resource id => resource
     // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
-    pub(crate) resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
+    pub resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
 }
 
 impl ResTablePackage {
@@ -961,18 +917,8 @@ impl ResTablePackage {
         })
     }
 
-    /// Generate Resource Id based on algorithm from AOSP
-    ///
-    /// [Source Code](https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/tools/aapt/ResourceTable.h;l=224;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=1;bpt=1)
-    #[inline(always)]
-    #[allow(unused)]
-    fn generate_res_id(package_id: u32, type_id: u32, name_id: u32) -> u32 {
-        // NOTE: don't remove this function, this is usefull mention
-        name_id | (type_id << 16) | (package_id << 24)
-    }
-
-    // interesting sample - 197f49dec3aacc2855d08ee5ee2ae5635885b0163ecb50d2e21b68de59eb336a - need somehow fallback config or something
-    pub(crate) fn find_entry(
+    /// Searches for the specified resource in the current package
+    pub fn find_entry(
         &self,
         config: &ResTableConfig,
         type_id: u8,
@@ -1005,8 +951,9 @@ impl ResTablePackage {
         None
     }
 
+    /// Constructs the full name of the resource with the type
     #[inline]
-    pub(crate) fn get_entry_full_name(&self, entry: &ResTableEntry, type_id: u8) -> Option<String> {
+    pub fn get_entry_full_name(&self, entry: &ResTableEntry, type_id: u8) -> Option<String> {
         Some(format!(
             "{}/{}",
             self.type_strings.get(type_id.saturating_sub(1) as u32)?,
@@ -1014,6 +961,7 @@ impl ResTablePackage {
         ))
     }
 
+    /// Allows you to get the name of a resource depending on its type.
     #[inline]
     fn get_entry_key(&self, entry: &ResTableEntry) -> Option<&String> {
         match entry {

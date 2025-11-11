@@ -1,3 +1,5 @@
+//! Describes signatures contained in the `APK Signature Block`.
+
 /// Describe used signature scheme in APK
 ///
 /// Basic overview: <https://source.android.com/docs/security/features/apksigning>
@@ -27,16 +29,28 @@ pub enum Signature {
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v4>
     ///
-    /// NOTE: not yet implemented and will never?
+    /// <div class="warning">
+    ///
+    /// Right now it's just a stub.
+    /// Need help/a hint on how to correctly implement the parsing of this signature.
+    ///
+    /// </div>
     V4,
 
     /// Some usefull information from apk channel block
     ApkChannelBlock(String),
 
+    /// Stamp Signing Block v1
+    ///
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#23>
     StampBlockV1(CertificateInfo),
+
+    /// Stamp Signing Block v2
+    ///
+    /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#24>
     StampBlockV2(CertificateInfo),
 
-    /// Got something that we don't know
+    /// Got something that we don't know yet
     Unknown,
 }
 
@@ -82,32 +96,4 @@ pub struct CertificateInfo {
 
     /// SHA-256 fingerprint of the certificate.
     pub sha256_fingerprint: String,
-}
-
-/// Representation of signature algorithm
-///
-/// More info: <https://source.android.com/docs/security/features/apksigning/v2#signature-algorithm-ids>
-#[repr(u16)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SignatureAlgorithm {
-    /// RSASSA-PSS with SHA2-256 digest, SHA2-256 MGF1, 32 bytes of salt, trailer: 0xbc
-    RsassaPssSha256 = 0x0101,
-
-    /// RSASSA-PSS with SHA2-512 digest, SHA2-512 MGF1, 64 bytes of salt, trailer: 0xbc
-    RsassaPssSha512 = 0x0102,
-
-    /// RSASSA-PKCS1-v1_5 with SHA2-256 digest (deterministic signatures)
-    RsassaPkcs1v15Sha256 = 0x0103,
-
-    /// RSASSA-PKCS1-v1_5 with SHA2-512 digest (deterministic signatures)
-    RsassaPkcs1v15Sha512 = 0x0104,
-
-    /// ECDSA with SHA2-256 digest
-    EcdsaSha256 = 0x0201,
-
-    /// ECDSA with SHA2-512 digest
-    EcdsaSha512 = 0x0202,
-
-    /// DSA with SHA2-256 digest
-    DsaSha256 = 0x0301,
 }

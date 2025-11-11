@@ -1,3 +1,5 @@
+//! Describes a `zip` archive
+
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -13,11 +15,12 @@ use winnow::error::ContextError;
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::errors::{CertificateError, FileCompressionType, ZipError};
 use crate::signature::{CertificateInfo, Signature};
 use crate::structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader};
+use crate::{CertificateError, FileCompressionType, ZipError};
 
 /// Represents a parsed ZIP archive.
+#[derive(Debug)]
 pub struct ZipEntry {
     /// Owned zip data
     input: Vec<u8>,
@@ -32,16 +35,16 @@ pub struct ZipEntry {
     local_headers: HashMap<Arc<str>, LocalFileHeader>,
 }
 
-/// Implementation of common methods
+/// Implementation of basic methods
 impl ZipEntry {
     /// Creates a new `ZipEntry` from raw ZIP data.
     ///
     /// # Errors
     ///
-    /// Returns a [`ZipError`] if:
-    /// - The input does not start with a valid ZIP signature (`InvalidHeader`).
-    /// - The End of Central Directory cannot be found (`NotFoundEOCD`).
-    /// - Parsing of the EOCD or central directory fails (`ParseError`).
+    /// Returns a [ZipError] if:
+    /// - The input does not start with a valid ZIP signature [ZipError::InvalidHeader];
+    /// - The End of Central Directory cannot be found [ZipError::NotFoundEOCD];
+    /// - Parsing of the EOCD or central directory fails [ZipError::ParseError].
     ///
     /// # Examples
     ///
@@ -104,23 +107,6 @@ impl ZipEntry {
     /// This method handles both normally compressed files and tampered files
     /// where the compression metadata may be inconsistent. It returns the
     /// uncompressed file contents along with the detected compression type.
-    ///
-    /// # Parameters
-    ///
-    /// - `filename`: The name of the file to read from the archive.
-    ///
-    /// # Returns
-    ///
-    /// Returns a tuple `(Vec<u8>, FileCompressionType)` containing:
-    /// - The uncompressed file data.
-    /// - The compression type that was used or inferred.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`ZipError`] in the following cases:
-    /// - `FileNotFound`: The specified file does not exist in the archive.
-    /// - `EOF`: The file slice is out of bounds or the archive is truncated.
-    /// - `DecompressionError`: Decompression failed for deflated files.
     ///
     /// # Notes
     ///
@@ -232,7 +218,7 @@ impl ZipEntry {
 
 /// Implementation for certificate parsing
 ///
-/// Very cool research about this: <https://goa2023.nullcon.net/doc/goa-2023/Android-SigMorph-Covert-Communication-Exploiting-Android-Signing-Schemes.pdf>
+/// Very cool research about signature blocks: <https://goa2023.nullcon.net/doc/goa-2023/Android-SigMorph-Covert-Communication-Exploiting-Android-Signing-Schemes.pdf>
 impl ZipEntry {
     /// Magic of APK signing block
     ///
@@ -358,19 +344,6 @@ impl ZipEntry {
     /// with extensions `.DSA`, `.EC`, or `.RSA`, reads the PKCS#7 data,
     /// and returns the associated certificates.
     ///
-    /// # Returns
-    ///
-    /// Returns a [`Signature`] enum:
-    /// - [Signature::V1] with extracted certificate info.
-    /// - [Signature::Unknown] if no signature file is found.
-    ///
-    /// # Errors
-    ///
-    /// Returns a [`CertificateError`] in the following cases:
-    /// - [CertificateError::ZipError]: Failed to read the signature file from the archive.
-    /// - [CertificateError::StackError]: Failed to parse PKCS#7 DER data or create OpenSSL structures.
-    /// - [CertificateError::SignerError]: Failed to extract signer certificates from PKCS#7.
-    ///
     /// # Example
     ///
     /// ```
@@ -415,21 +388,13 @@ impl ZipEntry {
     /// at the end of the ZIP archive and attempts to parse all contained
     /// signatures (v2, v3, etc.).
     ///
-    /// # Returns
+    /// <div class="warning">
     ///
-    /// Returns a `Vec<Signature>` containing all successfully parsed signatures.
-    /// - Signatures that could not be parsed or are unknown are filtered out.
-    /// - Returns an empty vector if no APK signature block is found.
+    /// This method handles only v2+ signature blocks.
     ///
-    /// # Errors
+    /// v1 signatures are handled separately - [ZipEntry::get_signature_v1].
     ///
-    /// Returns a [`CertificateError`] in the following cases:
-    /// - [CertificateError::ParseError]: Failed to parse the APK signature block or its contents.
-    /// - [CertificateError::InvalidFormat]: The size of the signature block does not match the expected format.
-    ///
-    /// # Notes
-    ///
-    /// - This method handles v2+ signature blocks; v1 signatures are handled separately.
+    /// </div>
     pub fn get_signatures_other(&self) -> Result<Vec<Signature>, CertificateError> {
         let offset = self.eocd.central_dir_offset as usize;
         let mut slice = match self.input.get(offset.saturating_sub(24)..offset) {

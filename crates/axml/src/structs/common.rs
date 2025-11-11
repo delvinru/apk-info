@@ -6,10 +6,12 @@ use winnow::prelude::*;
 use crate::ARSC;
 use crate::structs::{StringPool, system_types};
 
-/// See: https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=237
+/// Possible blocks that may occur in `AndroidManifest.xml`
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#239>
 #[derive(Debug, PartialEq, Default, Eq, PartialOrd, Ord)]
 #[repr(u16)]
-pub(crate) enum ResourceHeaderType {
+pub enum ResourceHeaderType {
     #[default]
     Null = 0x0000,
     StringPool = 0x0001,
@@ -67,28 +69,28 @@ impl From<u16> for ResourceHeaderType {
 
 /// Header that appears at the front of every data chunk in a resource
 ///
-/// See: https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h;l=220?q=ResourceTypes.h&ss=android
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#220>
 #[derive(Debug, Default)]
-pub(crate) struct ResChunkHeader {
+pub struct ResChunkHeader {
     /// Type identifier for this chunk. The meaning of this value depends on the containing chunk.
-    pub(crate) type_: ResourceHeaderType,
+    pub type_: ResourceHeaderType,
 
     /// Size of the chunk header (in bytes).  Adding this value to
     /// the address of the chunk allows you to find its associated data
     /// (if any).
-    pub(crate) header_size: u16,
+    pub header_size: u16,
 
     /// Total size of this chunk (in bytes).  This is the chunkSize plus
     /// the size of any data associated with the chunk.  Adding this value
     /// to the chunk allows you to completely skip its contents (including
     /// any child chunks).  If this value is the same as chunkSize, there is
     /// no data associated with the chunk.
-    pub(crate) size: u32,
+    pub size: u32,
 }
 
 impl ResChunkHeader {
     #[inline]
-    pub fn parse(input: &mut &[u8]) -> ModalResult<ResChunkHeader> {
+    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResChunkHeader> {
         (le_u16, le_u16, le_u32)
             .map(|(type_, header_size, size)| ResChunkHeader {
                 type_: ResourceHeaderType::from(type_),
@@ -118,7 +120,7 @@ impl ResChunkHeader {
 /// Type of the data value
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub(crate) enum ResourceValueType {
+pub enum ResourceValueType {
     /// The `data` is either 0 or 1, specifying this resource is either undefined or empty, respectively.
     Null = 0x00,
 
@@ -189,18 +191,18 @@ impl From<u8> for ResourceValueType {
 
 /// Representation of a value in a resource, supplying type information
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct ResourceValue {
+pub struct ResourceValue {
     /// Number of bytes in this structure
-    pub(crate) size: u16,
+    pub size: u16,
 
     /// Always set to 0
-    pub(crate) res: u8,
+    pub res: u8,
 
     /// Type of the data value
-    pub(crate) data_type: ResourceValueType,
+    pub data_type: ResourceValueType,
 
     /// Data itself
-    pub(crate) data: u32,
+    pub data: u32,
 }
 
 impl ResourceValue {
@@ -210,7 +212,7 @@ impl ResourceValue {
     const FRACTION_UNITS: [&str; 2] = ["%", "%p"];
 
     #[inline]
-    pub fn parse(input: &mut &[u8]) -> ModalResult<ResourceValue> {
+    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResourceValue> {
         (le_u16, le_u8, le_u8, le_u32)
             .map(|(size, res, data_type, data)| ResourceValue {
                 size,
