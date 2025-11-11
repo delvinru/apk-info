@@ -1,0 +1,103 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Release - ${{ matrix.platform.os }}
+    runs-on: ${{ matrix.platform.runs-on }}
+    strategy:
+      matrix:
+        platform:
+          - os: linux-x86_64
+            runs-on: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+
+          - os: linux-aarch64
+            runs-on: ubuntu-latest-arm
+            target: aarch64-unknown-linux-musl
+
+          - os: windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+
+          - os: macos-x86_64
+            runs-on: macos-15-intel
+            target: x86_64-apple-darwin
+
+          - os: macos-arm
+            runs-on: macos-15
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: Check version
+        shell: bash
+        run: |
+          set -ex
+          version=`cargo pkgid --manifest-path core/Cargo.toml | cut -d "@" -f2`
+          if [ "${{ github.ref_name }}" != "v$version" ]; then
+            exit 1
+          fi
+      - run: rustup target add ${{ matrix.platform.target }}
+      - name: Build cli
+        run: cargo build --profile release-lto --bin apk-info --target ${{ matrix.platform.target }}
+      - name: Build archive
+        shell: bash
+        run: |
+          set -ex
+          name=apk-info-${{ github.ref_name }}-${{ matrix.platform.target }}
+          if [ "${{ matrix.platform.os }}" == "windows-x86_64" ]; then
+            7z a $name.zip ./target/${{ matrix.platform.target }}/release-lto/apk-info.exe
+          else
+            tar czvf $name.gz -C target/${{ matrix.platform.target }}/release-lto/apk-info
+          fi
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-info-${{ matrix.platform.target }}
+          path: apk-info-*
+
+  publish-crate:
+    name: publish to crates.io
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment:
+      name: crates
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      - name: Publish crate
+        run: |
+          cargo login ${{ secrets.CRATES_API_TOKEN }}
+          cargo publish -p apk-info-zip
+          cargo publish -p apk-info-axml
+          cargo publish -p apk-info
+          cargo publish -p apk-info-cli
+
+  publish-github:
+    name: publish to github release page
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apk-info*
+      - name: Generating release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: apk-info*
