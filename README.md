@@ -1,6 +1,6 @@
 # apk-info
 
-A full-featuared `apk` parser.
+A full-featured `apk` parser.
 
 ## Features
 
