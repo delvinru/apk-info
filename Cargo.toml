@@ -31,7 +31,10 @@ apk-info-zip = { path = "crates/zip", version = "1.0.7" }
 
 # external
 anyhow = "1.0.100"
-bat = "0.26.0"
+bat = { version = "0.26.0", default-features = false, features = [
+    "build-assets",
+    "regex-fancy",
+] }
 bitflags = "2.10.0"
 clap = { version = "4.5.51", features = ["derive"] }
 clap_complete = "4.5.60"

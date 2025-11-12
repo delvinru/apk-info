@@ -15,7 +15,6 @@ exclude = ["src/assets/*.xml"]
 apk-info-xml.workspace = true
 bitflags.workspace = true
 log.workspace = true
-once_cell.workspace = true
 phf = { workspace = true, features = ["macros"] }
 phf_codegen = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }

@@ -15,10 +15,12 @@
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
+        pname = "apk-info";
+
         pkgs = import nixpkgs {
           inherit system;
         };
-        manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
+        manifest = (pkgs.lib.importTOML ./Cargo.toml).workspace.package;
         fenix-pkgs = fenix.packages.${system};
         toolchain = with fenix-pkgs;
           combine [
@@ -44,13 +46,33 @@
           ];
         };
 
-        packages = {
-          default = pkgs.rustPlatform.buildRustPackage {
-            pname = manifest.name;
-            version = manifest.version;
-            cargoLock.lockFile = ./Cargo.lock;
-            src = pkgs.lib.cleanSource ./.;
+        packages.default = pkgs.rustPlatform.buildRustPackage {
+          pname = pname;
+          version = manifest.version;
+          src = pkgs.lib.cleanSource ./.;
+          cargoBuildFlags = "--package apk-info-cli";
+          cargoLock = {
+            lockFile = ./Cargo.lock;
           };
+
+          doCheck = false;
+
+          nativeBuildInputs = with pkgs; [
+            openssl
+            perl
+            pkg-config
+            installShellFiles
+          ];
+
+          postInstall = ''
+            installShellCompletion --cmd apk-info \
+              --bash <($out/bin/apk-info completion bash) \
+              --fish <($out/bin/apk-info completion fish) \
+              --zsh <($out/bin/apk-info completion zsh)
+          '';
+
+          CARGO_PROFILE = "release-lto";
+          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
         };
       }
     );
