@@ -1,5 +1,9 @@
 # apk-info
 
+![Crates.io Version](https://img.shields.io/crates/v/apk-info?style=flat)
+![docs.rs](https://img.shields.io/docsrs/apk-info?style=flat)
+![PyPI - Version](https://img.shields.io/pypi/v/apk-info?style=flat)
+
 A full-featured `apk` parser.
 
 ## Features

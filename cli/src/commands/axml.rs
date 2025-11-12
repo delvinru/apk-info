@@ -25,10 +25,8 @@ pub(crate) fn command_axml(path: &Path) -> Result<()> {
     printer.input_from_bytes(xml.as_bytes()).language("xml");
 
     if stdout_is_tty {
-        // Терминал — можно включать подсветку
         printer.print().unwrap();
     } else {
-        // Вывод редиректится — plain text
         print!("{}", xml);
     }
 
