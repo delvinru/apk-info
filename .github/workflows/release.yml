@@ -241,6 +241,7 @@ jobs:
         run: |
           cargo login ${{ secrets.CRATES_API_TOKEN }}
           cargo publish -p apk-info-zip
+          cargo publish -p apk-info-xml
           cargo publish -p apk-info-axml
           cargo publish -p apk-info
           cargo publish -p apk-info-cli
