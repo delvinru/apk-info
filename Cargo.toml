@@ -24,10 +24,10 @@ version = "1.0.5"
 
 [workspace.dependencies]
 # internal
-apk-info = { path = "core" }
-apk-info-axml = { path = "crates/axml" }
-apk-info-xml = { path = "crates/xml" }
-apk-info-zip = { path = "crates/zip" }
+apk-info = { path = "core", version = "1.0.5" }
+apk-info-axml = { path = "crates/axml", version = "1.0.5" }
+apk-info-xml = { path = "crates/xml", version = "1.0.5" }
+apk-info-zip = { path = "crates/zip", version = "1.0.5" }
 
 # external
 anyhow = "1.0.100"
