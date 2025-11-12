@@ -20,7 +20,7 @@ keywords = ["android", "apk", "arsc", "axml", "malware"]
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/delvinru/apk-info"
-version = "1.0.4"
+version = "1.0.5"
 
 [workspace.dependencies]
 # internal
@@ -44,7 +44,7 @@ openssl = { version = "0.10.75", features = ["vendored"] }
 phf = { version = "0.13.1", default-features = false }
 phf_codegen = "0.13.1"
 pyo3 = "0.27.1"
-quick-xml = "0.38.3"
+quick-xml = "0.38.4"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 smallvec = "1.15.1"
