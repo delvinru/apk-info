@@ -27,10 +27,8 @@ A full-featured `apk` parser.
 
 #### Installation
 
-<!-- TODO: need actually check before release -->
-
 ```bash
-cargo install apk-info
+cargo install apk-info-cli
 ```
 
 #### Help
@@ -41,10 +39,11 @@ A command-line tool to inspect and extract APK files
 Usage: apk-info [COMMAND]
 
 Commands:
-  show     Show basic information about apk file
-  extract  Unpack apk files as zip archive [aliases: x]
-  axml     Read and pretty-print binary AndroidManifest.xml
-  help     Print this message or the help of the given subcommand(s)
+  show        Show basic information about apk file
+  extract     Unpack apk files as zip archive [aliases: x]
+  axml        Read and pretty-print binary AndroidManifest.xml
+  completion  Generate shell completion
+  help        Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help
@@ -110,10 +109,10 @@ for signature in signatures:
 
 Environment:
 
-- OS: macOS Tahoe 26.0.1 (25A362) arm64
+- OS: macOS Tahoe 26.0.1 arm64
 - CPU: Apple M3 Pro (12) @ 4.06 GHz
 
-The script:
+The [script](examples/bench.py):
 
 1. Extract all available signatures from a file;
 2. Extract the package name;
@@ -128,7 +127,7 @@ apk-info library:
 
 ---
 
-Test case:
+test case (clean collection):
 
 - 152 apk files;
 - Total size - 20GB;
@@ -136,16 +135,16 @@ Test case:
 
 | #   | **apk-info**                                | **androguard**                                 |
 | --- | ------------------------------------------- | ---------------------------------------------- |
-| 1   | 1.22s user 4.26s system 81% cpu 6.760 total | 57.39s user 4.88s system 97% cpu 1:03.85 total |
-| 2   | 1.21s user 4.22s system 81% cpu 6.657 total | 57.98s user 5.04s system 97% cpu 1:04.80 total |
-| 3   | 1.22s user 4.25s system 81% cpu 6.688 total | 55.56s user 4.48s system 97% cpu 1:01.55 total |
+| 1   | 1.22s user 4.38s system 79% cpu 7.021 total | 57.39s user 4.88s system 97% cpu 1:03.85 total |
+| 2   | 1.24s user 4.34s system 82% cpu 6.813 total | 57.98s user 5.04s system 97% cpu 1:04.80 total |
+| 3   | 1.21s user 4.35s system 78% cpu 7.092 total | 55.56s user 4.48s system 97% cpu 1:01.55 total |
 
 ---
 
-Test case:
+test case (malware collection):
 
-- 3010 apk files;
-- Total size - 22GB;
+- 3084 apk files;
+- Total size - 23GB;
 - Logging mode - warning;
 
 > [!IMPORTANT]
@@ -153,24 +152,15 @@ Test case:
 
 | #   | **apk-info**                                 | **androguard**                                  |
 | --- | -------------------------------------------- | ----------------------------------------------- |
-| 1   | 3.06s user 4.73s system 80% cpu 9.654 total  | 128.32s user 6.11s system 98% cpu 2:16.93 total |
-| 2   | 3.27s user 5.25s system 84% cpu 10.126 total | 131.12s user 6.60s system 98% cpu 2:20.23 total |
-| 3   | 3.10s user 4.75s system 81% cpu 9.674 total  | 130.82s user 6.51s system 98% cpu 2:19.88 total |
+| 1   | 3.05s user 4.90s system 75% cpu 10.510 total | 141.29s user 6.86s system 98% cpu 2:31.09 total |
+| 2   | 3.13s user 4.99s system 76% cpu 10.638 total | 138.04s user 6.32s system 97% cpu 2:27.33 total |
+| 3   | 3.18s user 5.10s system 78% cpu 10.616 total | 139.33s user 6.65s system 98% cpu 2:28.87 total |
 
 ---
 
 On average, the speed gain is about x10.
 
 The main advantage is that `apk-info` can parse many more malicious files than `androguard`.
-
-For example, a list of hashes:
-
-- a045d8b62bbf4cdcfbd449a994958c1e051d06c0d888e0936838fff4be47aefc
-- 3f972448cf4fdf8938b56c0627a2e274e3c9968b0212975eadda8e4de7ab782e
-- d5fe92a103f643735d42e6070dc3fcc28f15e2cef488dae42ca235a061bc836a
-
-> [!NOTE]
-> There are many more such samples in everyday malware analysis.
 
 ## FAQ
 
