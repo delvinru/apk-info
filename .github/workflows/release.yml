@@ -259,4 +259,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: apk-info*
+          files: apk-info*/apk-info*
