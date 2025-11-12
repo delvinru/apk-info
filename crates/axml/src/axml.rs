@@ -90,7 +90,7 @@ impl AXML {
 
             // another malware technique
             if chunk_header.header_size != 0x10 {
-                warn!("xml resource chunk header size is not 0x10: {chunk_header:?}");
+                warn!("xml resource chunk header size is not 0x10: {chunk_header:?}, skipped");
 
                 let _ =
                     take::<u32, &[u8], ContextError>(chunk_header.content_size()).parse_next(input);

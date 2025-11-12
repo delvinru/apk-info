@@ -309,3 +309,18 @@ pub struct Receiver<'a> {
     /// See: <https://developer.android.com/guide/topics/manifest/receiver-element#proc>
     pub process: Option<&'a str>,
 }
+
+/// This helps trace data access back to logical parts of application code.
+///
+/// See: <https://developer.android.com/guide/topics/manifest/attribution-element>
+pub struct Attribution<'a> {
+    /// A literal string that serves as a label for a particular capability.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/attribution-element#tag>
+    pub tag: Option<&'a str>,
+
+    /// A string resource that describes a particular capability.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/attribution-element#label>
+    pub label: Option<&'a str>,
+}

@@ -518,6 +518,19 @@ class APK:
         """
         ...
 
+    def get_attributions(self) -> set[Attribution]:
+        """
+        Extracts the `<attribution` tag from `<manifest>`
+
+        See: <a href="https://developer.android.com/guide/topics/manifest/attribution-element" target="_blank">https://developer.android.com/guide/topics/manifest/attribution-element</a>
+
+        Returns
+        -------
+        set[Attribution]
+            All found attribution tags
+        """
+        ...
+
     def get_permissions(self) -> set[str]:
         """
         Retrieves all permissions names from `<uses-permission>`
@@ -1305,4 +1318,25 @@ class Receiver:
     The name of the process in which the broadcast receiver should run.
 
     See: https://developer.android.com/guide/topics/manifest/receiver-element#proc
+    """
+
+class Attribution:
+    """
+    This helps trace data access back to logical parts of application code.
+
+    More information: <a href="https://developer.android.com/guide/topics/manifest/attribution-element">https://developer.android.com/guide/topics/manifest/attribution-element</a>
+    """
+
+    tag: str | None
+    """
+    A literal string that serves as a label for a particular capability.
+
+    See: https://developer.android.com/guide/topics/manifest/attribution-element#tag
+    """
+
+    label: str | None
+    """
+    A string resource that describes a particular capability.
+
+    See: https://developer.android.com/guide/topics/manifest/attribution-element#label
     """

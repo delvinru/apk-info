@@ -8,7 +8,7 @@ use apk_info_axml::{ARSC, AXML};
 use apk_info_zip::{FileCompressionType, Signature, ZipEntry, ZipError};
 
 use crate::errors::APKError;
-use crate::models::{Activity, Permission, Provider, Receiver, Service, XAPKManifest};
+use crate::models::{Activity, Attribution, Permission, Provider, Receiver, Service, XAPKManifest};
 
 /// The name of the manifest to be searched for in the zip archive.
 const ANDROID_MANIFEST_PATH: &str = "AndroidManifest.xml";
@@ -414,6 +414,18 @@ impl Apk {
             .get_attribute_value("application", "name", self.arsc.as_ref())
     }
 
+    #[inline]
+    pub fn get_attributions(&self) -> impl Iterator<Item = Attribution<'_>> {
+        self.axml
+            .root
+            .childrens()
+            .filter(|el| el.name() == "attribution")
+            .map(|el| Attribution {
+                tag: el.attr("tag"),
+                label: el.attr("label"),
+            })
+    }
+
     /// Retrieves all declared permissions from `<uses-permission android:name="...">`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-permission-element>
@@ -531,7 +543,7 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element>
     #[inline]
-    pub fn get_declared_permissions<'a>(&'a self) -> impl Iterator<Item = Permission<'a>> {
+    pub fn get_declared_permissions(&self) -> impl Iterator<Item = Permission<'_>> {
         // iterates only on childrens, since this tag lives only as a child of the <manifest> tag
         self.axml
             .root
@@ -575,7 +587,7 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/activity-element>
     #[inline]
-    pub fn get_activities<'a>(&'a self) -> impl Iterator<Item = Activity<'a>> {
+    pub fn get_activities(&self) -> impl Iterator<Item = Activity<'_>> {
         // iterates only on childrens, since this tag lives only as a child of the <manifest> tag
         self.axml
             .root
@@ -597,7 +609,7 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/service-element>
     #[inline]
-    pub fn get_services<'a>(&'a self) -> impl Iterator<Item = Service<'a>> {
+    pub fn get_services(&self) -> impl Iterator<Item = Service<'_>> {
         self.axml
             .root
             .descendants()
@@ -622,7 +634,7 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/receiver-element>
     #[inline]
-    pub fn get_receivers<'a>(&'a self) -> impl Iterator<Item = Receiver<'a>> {
+    pub fn get_receivers(&self) -> impl Iterator<Item = Receiver<'_>> {
         self.axml
             .root
             .descendants()
@@ -643,7 +655,7 @@ impl Apk {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/provider-element>
     #[inline]
-    pub fn get_providers<'a>(&'a self) -> impl Iterator<Item = Provider<'a>> {
+    pub fn get_providers(&self) -> impl Iterator<Item = Provider<'_>> {
         self.axml
             .root
             .descendants()

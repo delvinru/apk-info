@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use ::apk_info::Apk as ApkRust;
 use ::apk_info::models::{
-    Activity as ApkActivity, Permission as ApkPermission, Provider as ApkProvider,
-    Receiver as ApkReceiver, Service as ApkService,
+    Activity as ApkActivity, Attribution as ApkAttribution, Permission as ApkPermission,
+    Provider as ApkProvider, Receiver as ApkReceiver, Service as ApkService,
 };
 use ::apk_info_zip::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
@@ -497,6 +497,43 @@ impl Receiver {
     }
 }
 
+#[pyclass(frozen, module = "apk_info._apk_info")]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct Attribution {
+    #[pyo3(get)]
+    pub tag: Option<String>,
+
+    #[pyo3(get)]
+    pub label: Option<String>,
+}
+
+impl<'a> From<ApkAttribution<'a>> for Attribution {
+    fn from(attribution: ApkAttribution<'a>) -> Self {
+        Attribution {
+            tag: attribution.tag.map(String::from),
+            label: attribution.label.map(String::from),
+        }
+    }
+}
+
+#[pymethods]
+impl Attribution {
+    fn __repr__(&self) -> String {
+        let mut parts = Vec::with_capacity(16);
+        macro_rules! push_field {
+            ($field:ident) => {
+                if let Some(ref v) = self.$field {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), v));
+                }
+            };
+        }
+        push_field!(tag);
+        push_field!(label);
+
+        format!("Attribution({})", parts.join(", "))
+    }
+}
+
 #[pyclass(name = "APK", unsendable, module = "apk_info._apk_info")]
 struct Apk {
     apkrs: ApkRust,
@@ -638,6 +675,13 @@ impl Apk {
 
     pub fn get_application_name(&self) -> Option<String> {
         self.apkrs.get_application_name()
+    }
+
+    pub fn get_attributions(&self) -> HashSet<Attribution> {
+        self.apkrs
+            .get_attributions()
+            .map(Attribution::from)
+            .collect()
     }
 
     pub fn get_permissions(&self) -> HashSet<&str> {
