@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 
 use crate::commands::{command_axml, command_extract, command_show};
 
@@ -47,6 +48,12 @@ enum Commands {
         #[arg(required = true)]
         path: PathBuf,
     },
+    /// Generate shell completion
+    Completion {
+        /// The shell to generate completion for
+        #[arg(value_enum)]
+        shell: Shell,
+    },
 }
 
 fn main() {
@@ -58,6 +65,12 @@ fn main() {
         Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
         Some(Commands::Extract { paths, output }) => command_extract(paths, output),
         Some(Commands::Axml { path }) => command_axml(path),
+        Some(Commands::Completion { shell }) => {
+            let mut cmd = Cli::command();
+            let name = cmd.get_name().to_string();
+            generate(*shell, &mut cmd, name, &mut std::io::stdout());
+            Ok(())
+        }
         None => Ok(()),
     };
 

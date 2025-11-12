@@ -1,22 +1,35 @@
+use std::io::IsTerminal;
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use apk_info::Apk;
 use apk_info_axml::AXML;
-
-use crate::commands::path_helpers::contains_extensions;
+use bat::PrettyPrinter;
 
 pub(crate) fn command_axml(path: &Path) -> Result<()> {
-    if contains_extensions(path, &["apk", "zip", "jar"]) {
-        let apk = Apk::new(path).with_context(|| format!("can't open apk file: {:?}", path))?;
+    let stdout_is_tty = std::io::stdout().is_terminal();
 
-        print!("{}", apk.get_xml_string());
+    let xml = match Apk::new(path) {
+        Ok(apk) => apk.get_xml_string(),
+        Err(_) => {
+            // raw axml?
+            let file = std::fs::read(path)
+                .with_context(|| format!("can't open and read file: {:?}", path))?;
+            let axml = AXML::new(&mut &file[..], None)?;
+
+            axml.get_xml_string()
+        }
+    };
+
+    let mut printer = PrettyPrinter::new();
+    printer.input_from_bytes(xml.as_bytes()).language("xml");
+
+    if stdout_is_tty {
+        // Терминал — можно включать подсветку
+        printer.print().unwrap();
     } else {
-        let file =
-            std::fs::read(path).with_context(|| format!("can't open and read file: {:?}", path))?;
-        let axml = AXML::new(&mut &file[..], None)?;
-
-        print!("{}", axml.get_xml_string());
+        // Вывод редиректится — plain text
+        print!("{}", xml);
     }
 
     Ok(())

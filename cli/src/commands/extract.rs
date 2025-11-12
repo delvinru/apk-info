@@ -9,7 +9,7 @@ use log::warn;
 use crate::commands::path_helpers::get_all_files;
 
 pub(crate) fn command_extract(paths: &[PathBuf], output: &Option<PathBuf>) -> Result<()> {
-    let all_files: Vec<PathBuf> = get_all_files(paths, &["apk", "zip", "jar"]).collect();
+    let all_files = get_all_files(paths);
 
     let multiple_files = all_files.len() > 1;
 

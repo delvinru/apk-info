@@ -1,43 +1,29 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use walkdir::WalkDir;
 
-/// Returns an iterator over all files in `paths` that have one of the allowed extensions.
-pub(crate) fn get_all_files(
-    paths: &[PathBuf],
-    allowed_exts: &[&str],
-) -> impl Iterator<Item = PathBuf> {
-    paths.iter().flat_map(move |path| {
-        if path.is_dir() {
-            WalkDir::new(path)
-                .into_iter()
-                .filter_map(Result::ok)
-                .filter(|e| e.path().is_file())
-                .filter(move |e| contains_extensions(e.path(), allowed_exts))
-                .map(|e| e.path().to_path_buf())
-                .collect::<Vec<_>>() // intermediate vec because of closure capture
-                .into_iter()
-        } else if path.is_file() {
-            if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                if allowed_exts.iter().any(|a| a == &ext.to_lowercase()) {
-                    std::iter::once(path.clone())
-                        .collect::<Vec<_>>()
-                        .into_iter()
-                } else {
-                    Vec::new().into_iter()
-                }
+pub(crate) fn get_all_files(paths: &[PathBuf]) -> Vec<PathBuf> {
+    paths
+        .iter()
+        .flat_map(move |path| {
+            if path.is_dir() {
+                WalkDir::new(path)
+                    .into_iter()
+                    .filter_entry(|e| {
+                        e.file_name()
+                            .to_str()
+                            .map(|s| !s.starts_with("."))
+                            .unwrap_or(false)
+                    })
+                    .filter_map(Result::ok)
+                    .filter(|e| e.path().is_file())
+                    .map(|e| e.path().to_path_buf())
+                    .collect::<Vec<_>>()
+            } else if path.is_file() {
+                vec![path.clone()]
             } else {
-                Vec::new().into_iter()
+                Vec::new()
             }
-        } else {
-            Vec::new().into_iter()
-        }
-    })
-}
-
-pub(crate) fn contains_extensions(path: &Path, allowed_exts: &[&str]) -> bool {
-    path.extension()
-        .and_then(|x| x.to_str())
-        .map(|ext| allowed_exts.iter().any(|a| a == &ext.to_lowercase()))
-        .unwrap_or(false)
+        })
+        .collect()
 }

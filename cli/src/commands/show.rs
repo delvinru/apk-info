@@ -8,7 +8,7 @@ use colored::Colorize;
 use crate::commands::path_helpers::get_all_files;
 
 pub(crate) fn command_show(paths: &[PathBuf], show_signatures: &bool) -> Result<()> {
-    let files: Vec<PathBuf> = get_all_files(paths, &["apk", "zip", "jar"]).collect();
+    let files = get_all_files(paths);
 
     for (i, path) in files.iter().enumerate() {
         show(path, show_signatures)?;
