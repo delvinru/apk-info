@@ -454,6 +454,7 @@ impl ZipEntry {
         Ok(signatures)
     }
 
+    #[allow(unused)]
     fn parse_digest<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             // digest_block_length, signature_algorith_id, digest_length, digest
@@ -473,7 +474,7 @@ impl ZipEntry {
     }
 
     #[allow(unused)]
-    fn parse_attribute<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
+    fn parse_attribute_v2<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
             let value = take(attribute_length.saturating_sub(4)).parse_next(input)?;
@@ -482,16 +483,19 @@ impl ZipEntry {
         }
     }
 
-    fn parse_attributes_v3<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
+    #[allow(unused)]
+    fn parse_attribute_v3<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
             let value = take(attribute_length.saturating_sub(4)).parse_next(input)?;
             let _const_id = le_u32.parse_next(input)?;
+            // also should be somekind of Proof-of-rotation struct, but skip for now
 
             Ok((id, value))
         }
     }
 
+    #[allow(unused)]
     fn parse_signature<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             // signature_block_length, signature_algorithm_id, signature_length, signature
@@ -502,83 +506,83 @@ impl ZipEntry {
         }
     }
 
-    fn parse_signature_v3_like(
-        &self,
-        input: &mut &[u8],
-    ) -> Result<Vec<CertificateInfo>, ContextError> {
-        let _signers_length = le_u32.parse_next(input)?;
-
-        // TODO: parse several signers
-        let _signer_length = le_u32.parse_next(input)?;
-        let _signed_data_length = le_u32.parse_next(input)?;
-
-        // parse digest
-        let mut digest_bytes = length_take(le_u32).parse_next(input)?;
-        let _digests: Vec<(u32, &[u8])> =
-            repeat(0.., Self::parse_digest()).parse_next(&mut digest_bytes)?;
-
-        // parse certificates
-        let mut certificates_bytes = length_take(le_u32).parse_next(input)?;
-        let certificates: Vec<X509> =
-            repeat(0.., Self::parse_certificate()).parse_next(&mut certificates_bytes)?;
-
-        let (_min_sdk, _max_sdk) = (le_u32, le_u32).parse_next(input)?;
-
-        // attributes
-        let mut attributes_bytes = length_take(le_u32).parse_next(input)?;
-
-        let _attributes: Vec<(u32, &[u8])> =
-            repeat(0.., Self::parse_attributes_v3()).parse_next(&mut attributes_bytes)?;
-
-        // duplicate min/max sdk
-        let (_duplicate_min_sdk, _duplicate_max_sdk) = (le_u32, le_u32).parse_next(input)?;
-
-        // signatures
-        let mut signatures_bytes = length_take(le_u32).parse_next(input)?;
-        let _signatures: Vec<(u32, &[u8])> =
-            repeat(0.., Self::parse_signature()).parse_next(&mut signatures_bytes)?;
-
-        let _public_key = length_take(le_u32).parse_next(input)?;
-
-        // filter certificates
-        Ok(certificates
-            .iter()
-            .filter_map(|cert| self.get_certificate_info(cert).ok())
-            .collect())
-    }
-
-    fn parse_signer<'a>() -> impl Parser<&'a [u8], Vec<X509>, ContextError> {
+    fn parse_signer_v2<'a>() -> impl Parser<&'a [u8], Vec<X509>, ContextError> {
         move |input: &mut &'a [u8]| {
-            // parse signer
+            // 1 - parse signer
             let mut signer_data = length_take(le_u32).parse_next(input)?;
 
-            // parse signed data
+            // 1.1 - parse signed data
             let mut signed_data = length_take(le_u32).parse_next(&mut signer_data)?;
 
-            // parse digests
+            // 1.1.1 - parse digests
             let mut _digests_data = length_take(le_u32).parse_next(&mut signed_data)?;
             // uncomment this block if actually need parse digests
-            // let _digests: Vec<(u32, &[u8])> =
+            // let digests: Vec<(u32, &[u8])> =
             //     repeat(0.., Self::parse_digest()).parse_next(&mut digests_data)?;
 
-            // parse certificates
+            // 1.1.2 - parse certificates
             let mut certificates_data = length_take(le_u32).parse_next(&mut signed_data)?;
             let certificates: Vec<X509> =
                 repeat(0.., Self::parse_certificate()).parse_next(&mut certificates_data)?;
 
-            // parse attributes
+            // 1.1.3 - parse attributes
             let mut _attributes_data = length_take(le_u32).parse_next(&mut signed_data)?;
             // uncomment this block if actually need parse attributes
             // let attributes: Vec<(u32, &[u8])> =
-            //     repeat(0.., Self::parse_attribute()).parse_next(&mut attributes_data)?;
+            //     repeat(0.., Self::parse_attribute_v2()).parse_next(&mut attributes_data)?;
 
-            // parse signatures
+            // 1.2 - parse signatures
             let mut _signatures_data = length_take(le_u32).parse_next(&mut signer_data)?;
             // uncomment this block if actually need parse signatures
             // let signatures: Vec<(u32, &[u8])> =
             //     repeat(0.., Self::parse_signature()).parse_next(&mut signatures_data)?;
 
-            // parse public key
+            // 1.3 - parse public key
+            let _public_key = length_take(le_u32).parse_next(&mut signer_data)?;
+
+            Ok(certificates)
+        }
+    }
+
+    fn parse_signer_v3<'a>() -> impl Parser<&'a [u8], Vec<X509>, ContextError> {
+        move |input: &mut &'a [u8]| {
+            // 1 - parse signer
+            let mut signer_data = length_take(le_u32).parse_next(input)?;
+
+            // 1.1 - parse signed data
+            let mut signed_data = length_take(le_u32).parse_next(&mut signer_data)?;
+
+            // 1.1.1 - parse digests
+            let mut _digests_data = length_take(le_u32).parse_next(&mut signed_data)?;
+            // uncomment this block if actually need parse digests
+            // let digets: Vec<(u32, &[u8])> =
+            //     repeat(0.., Self::parse_digest()).parse_next(&mut digests_data)?;
+
+            // 1.1.2 - parse certificates
+            let mut certificates_data = length_take(le_u32).parse_next(&mut signed_data)?;
+            let certificates: Vec<X509> =
+                repeat(0.., Self::parse_certificate()).parse_next(&mut certificates_data)?;
+
+            // 1.1.3 - parse sdk's
+            let (_min_sdk, _max_sdk) = (le_u32, le_u32).parse_next(&mut signed_data)?;
+
+            // 1.1.4 - parse attributes
+            let mut _attributes_data = length_take(le_u32).parse_next(&mut signed_data)?;
+            // uncomment this block if actually need parse attributes
+            // let attributes: Vec<(u32, &[u8])> =
+            //     repeat(0.., Self::parse_attribute_v3()).parse_next(&mut attributes_data)?;
+
+            // 1.2 - parse duplicates sdk
+            let (_duplicate_min_sdk, _duplicate_max_sdk) =
+                (le_u32, le_u32).parse_next(&mut signer_data)?;
+
+            // 1.3 - parse signatures
+            let mut _signatures_data = length_take(le_u32).parse_next(&mut signer_data)?;
+            // uncomment this block if actually need parse signatures
+            // let signatures: Vec<(u32, &[u8])> =
+            //     repeat(0.., Self::parse_signature()).parse_next(&mut signatures_data)?;
+
+            // 1.4 - parse public key
             let _public_key = length_take(le_u32).parse_next(&mut signer_data)?;
 
             Ok(certificates)
@@ -594,7 +598,7 @@ impl ZipEntry {
                     let mut signers_data = length_take(le_u32).parse_next(input)?;
 
                     let certificates =
-                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer())
+                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer_v2())
                             .parse_next(&mut signers_data)?
                             .into_iter()
                             .flatten()
@@ -604,12 +608,28 @@ impl ZipEntry {
                     Ok(Signature::V2(certificates))
                 }
                 Self::SIGNATURE_SCHEME_V3_BLOCK_ID => {
-                    let certificates = self.parse_signature_v3_like(input)?;
+                    let mut signers_data = length_take(le_u32).parse_next(input)?;
+
+                    let certificates =
+                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer_v3())
+                            .parse_next(&mut signers_data)?
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|cert| self.get_certificate_info(&cert).ok())
+                            .collect();
 
                     Ok(Signature::V3(certificates))
                 }
                 Self::SIGNATURE_SCHEME_V31_BLOCK_ID => {
-                    let certificates = self.parse_signature_v3_like(input)?;
+                    let mut signers_data = length_take(le_u32).parse_next(input)?;
+
+                    let certificates =
+                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer_v3())
+                            .parse_next(&mut signers_data)?
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|cert| self.get_certificate_info(&cert).ok())
+                            .collect();
 
                     Ok(Signature::V31(certificates))
                 }
