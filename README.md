@@ -17,9 +17,9 @@ A full-featured `apk` parser.
   - [APK Signature scheme v2](https://source.android.com/docs/security/features/apksigning/v2);
   - [APK Signature scheme v3](https://source.android.com/docs/security/features/apksigning/v3);
   - [APK Signature scheme v3.1](https://source.android.com/docs/security/features/apksigning/v3-1);
-  - Stamp Block v1;
-  - Stamp Block v2;
+  - Stamp Block v1 & v2;
   - Apk Channel Block;
+  - [Packer NG v2](https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20);
   - Google Play Frosting (there are plans, but there is critically little information about it);
 - Correct extraction of the MainActivity based on how the Android OS [does it](https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310);
 - Bindings for python 3.10+ with typings - no more `# type: ignore`;
@@ -126,7 +126,7 @@ The [script](examples/bench.py):
 
 apk-info library:
 
-- Release build;
+- Build - `release-lto`;
 - Python bindings (honest comparison);
 
 ---
@@ -139,9 +139,9 @@ test case (clean collection):
 
 | #   | **apk-info**                                | **androguard**                                 |
 | --- | ------------------------------------------- | ---------------------------------------------- |
-| 1   | 1.22s user 4.38s system 79% cpu 7.021 total | 57.39s user 4.88s system 97% cpu 1:03.85 total |
-| 2   | 1.24s user 4.34s system 82% cpu 6.813 total | 57.98s user 5.04s system 97% cpu 1:04.80 total |
-| 3   | 1.21s user 4.35s system 78% cpu 7.092 total | 55.56s user 4.48s system 97% cpu 1:01.55 total |
+| 1   | 0.98s user 4.32s system 80% cpu 6.584 total | 57.39s user 4.88s system 97% cpu 1:03.85 total |
+| 2   | 0.96s user 4.23s system 79% cpu 6.486 total | 57.98s user 5.04s system 97% cpu 1:04.80 total |
+| 3   | 0.95s user 4.15s system 79% cpu 6.422 total | 55.56s user 4.48s system 97% cpu 1:01.55 total |
 
 ---
 
@@ -154,11 +154,11 @@ test case (malware collection):
 > [!IMPORTANT]
 > There are a lot of malicious samples in this set that androguard simply cannot parse.
 
-| #   | **apk-info**                                 | **androguard**                                  |
-| --- | -------------------------------------------- | ----------------------------------------------- |
-| 1   | 3.05s user 4.90s system 75% cpu 10.510 total | 141.29s user 6.86s system 98% cpu 2:31.09 total |
-| 2   | 3.13s user 4.99s system 76% cpu 10.638 total | 138.04s user 6.32s system 97% cpu 2:27.33 total |
-| 3   | 3.18s user 5.10s system 78% cpu 10.616 total | 139.33s user 6.65s system 98% cpu 2:28.87 total |
+| #   | **apk-info**                                | **androguard**                                  |
+| --- | ------------------------------------------- | ----------------------------------------------- |
+| 1   | 2.49s user 4.74s system 73% cpu 9.840 total | 141.29s user 6.86s system 98% cpu 2:31.09 total |
+| 2   | 2.50s user 4.77s system 75% cpu 9.641 total | 138.04s user 6.32s system 97% cpu 2:27.33 total |
+| 3   | 2.49s user 4.78s system 75% cpu 9.650 total | 139.33s user 6.65s system 98% cpu 2:28.87 total |
 
 ---
 
