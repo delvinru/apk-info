@@ -488,6 +488,32 @@ impl ResTableType {
         let (id, flags, reserved, entry_count, entries_start, config) =
             (u8, u8, le_u16, le_u32, le_u32, ResTableConfig::parse).parse_next(input)?;
 
+        // Another malicious technique that goes beyond the boundaries of the specified header
+        // ff93324321b245d0dd678f1e5fbf59a64dbc5f4493a71c9630cab6ecf28b71e0
+        // https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/TypeWrappers.cpp#79
+        let offset_size = if Self::is_offset16(flags) { 2u32 } else { 4u32 };
+        if offset_size.saturating_mul(entry_count) > header.content_size() {
+            warn!("type's entry indices extend beyound its boundaries");
+
+            // consume input until next chunk
+            let already_read = (start_chunk - input.len()) as u32;
+            let remaining = header.content_size().saturating_sub(already_read) as usize;
+
+            let _ = take(remaining).parse_next(input)?;
+
+            return Ok(ResTableType {
+                header,
+                id,
+                flags,
+                reserved,
+                entry_count,
+                entries_start,
+                config,
+                entry_offsets: Vec::new(),
+                entries: Vec::new(),
+            });
+        }
+
         // handle sparse flag based on jadx code
         // https://github.com/skylot/jadx/blob/master/jadx-core/src/main/java/jadx/core/xmlgen/ResTableBinaryParser.java#L276
         let entry_offsets: Vec<u32> = if Self::is_sparse(flags) {
