@@ -451,6 +451,7 @@ impl ZipEntry {
 
     fn parse_digest<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
+            // digest_block_length, signature_algorith_id, digest_length, digest
             let (_, signature_algorithm_id, digest) =
                 (le_u32, le_u32, length_take(le_u32)).parse_next(input)?;
 
@@ -458,7 +459,7 @@ impl ZipEntry {
         }
     }
 
-    fn parse_certificates<'a>() -> impl Parser<&'a [u8], X509, ContextError> {
+    fn parse_certificate<'a>() -> impl Parser<&'a [u8], X509, ContextError> {
         move |input: &mut &'a [u8]| {
             let certificate = length_take(le_u32).parse_next(input)?;
 
@@ -467,7 +468,8 @@ impl ZipEntry {
         }
     }
 
-    fn parse_attributes<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
+    #[allow(unused)]
+    fn parse_attribute<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
             let value = take(attribute_length.saturating_sub(4)).parse_next(input)?;
@@ -486,9 +488,10 @@ impl ZipEntry {
         }
     }
 
-    fn parse_signatures<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
+    fn parse_signature<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
-            let (_signature_length, signature_algorithm_id, signature) =
+            // signature_block_length, signature_algorithm_id, signature_length, signature
+            let (_, signature_algorithm_id, signature) =
                 (le_u32, le_u32, length_take(le_u32)).parse_next(input)?;
 
             Ok((signature_algorithm_id, signature))
@@ -513,7 +516,7 @@ impl ZipEntry {
         // parse certificates
         let mut certificates_bytes = length_take(le_u32).parse_next(input)?;
         let certificates: Vec<X509> =
-            repeat(0.., Self::parse_certificates()).parse_next(&mut certificates_bytes)?;
+            repeat(0.., Self::parse_certificate()).parse_next(&mut certificates_bytes)?;
 
         let (_min_sdk, _max_sdk) = (le_u32, le_u32).parse_next(input)?;
 
@@ -529,7 +532,7 @@ impl ZipEntry {
         // signatures
         let mut signatures_bytes = length_take(le_u32).parse_next(input)?;
         let _signatures: Vec<(u32, &[u8])> =
-            repeat(0.., Self::parse_signatures()).parse_next(&mut signatures_bytes)?;
+            repeat(0.., Self::parse_signature()).parse_next(&mut signatures_bytes)?;
 
         let _public_key = length_take(le_u32).parse_next(input)?;
 
@@ -540,50 +543,59 @@ impl ZipEntry {
             .collect())
     }
 
+    fn parse_signer<'a>() -> impl Parser<&'a [u8], Vec<X509>, ContextError> {
+        move |input: &mut &'a [u8]| {
+            // parse signer
+            let mut signer_data = length_take(le_u32).parse_next(input)?;
+
+            // parse signed data
+            let mut signed_data = length_take(le_u32).parse_next(&mut signer_data)?;
+
+            // parse digests
+            let mut _digests_data = length_take(le_u32).parse_next(&mut signed_data)?;
+            // uncomment this block if actually need parse digests
+            // let _digests: Vec<(u32, &[u8])> =
+            //     repeat(0.., Self::parse_digest()).parse_next(&mut digests_data)?;
+
+            // parse certificates
+            let mut certificates_data = length_take(le_u32).parse_next(&mut signed_data)?;
+            let certificates: Vec<X509> =
+                repeat(0.., Self::parse_certificate()).parse_next(&mut certificates_data)?;
+
+            // parse attributes
+            let mut _attributes_data = length_take(le_u32).parse_next(&mut signed_data)?;
+            // uncomment this block if actually need parse attributes
+            // let attributes: Vec<(u32, &[u8])> =
+            //     repeat(0.., Self::parse_attribute()).parse_next(&mut attributes_data)?;
+
+            // parse signatures
+            let mut _signatures_data = length_take(le_u32).parse_next(&mut signer_data)?;
+            // uncomment this block if actually need parse signatures
+            // let signatures: Vec<(u32, &[u8])> =
+            //     repeat(0.., Self::parse_signature()).parse_next(&mut signatures_data)?;
+
+            // parse public key
+            let _public_key = length_take(le_u32).parse_next(&mut signer_data)?;
+
+            Ok(certificates)
+        }
+    }
+
     fn parse_apk_signatures<'a>(&self) -> impl Parser<&'a [u8], Signature, ContextError> {
         move |input: &mut &'a [u8]| {
             let (size, id) = (le_u64, le_u32).parse_next(input)?;
 
             match id {
                 Self::SIGNATURE_SCHEME_V2_BLOCK_ID => {
-                    // TODO: need parse several signers
+                    let mut signers_data = length_take(le_u32).parse_next(input)?;
 
-                    let _signers_length = le_u32.parse_next(input)?;
-
-                    // parse signer
-                    let _signer_length = le_u32.parse_next(input)?;
-
-                    // parse signed data
-                    let _signed_data_length = le_u32.parse_next(input)?;
-
-                    // parse digests
-                    let mut digest_bytes = length_take(le_u32).parse_next(input)?;
-                    let _digests: Vec<(u32, &[u8])> =
-                        repeat(0.., Self::parse_digest()).parse_next(&mut digest_bytes)?;
-
-                    let mut certificates_bytes = length_take(le_u32).parse_next(input)?;
-                    let certificates: Vec<X509> = repeat(0.., Self::parse_certificates())
-                        .parse_next(&mut certificates_bytes)?;
-
-                    let mut attributes_bytes = length_take(le_u32).parse_next(input)?;
-                    // often attributes is zero size
-                    let _attributes: Vec<(u32, &[u8])> =
-                        repeat(0.., Self::parse_attributes()).parse_next(&mut attributes_bytes)?;
-
-                    // i honestly don't know i need consume another 4 zero bytes, but this is happens in apk
-                    // not documented stuff, i can't figure out this from source code
-                    let _ = le_u32.parse_next(input)?;
-
-                    let mut signatures_bytes = length_take(le_u32).parse_next(input)?;
-                    let _signatures: Vec<(u32, &[u8])> =
-                        repeat(0.., Self::parse_signatures()).parse_next(&mut signatures_bytes)?;
-
-                    let _public_key = length_take(le_u32).parse_next(input)?;
-
-                    let certificates = certificates
-                        .iter()
-                        .filter_map(|cert| self.get_certificate_info(cert).ok())
-                        .collect();
+                    let certificates =
+                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer())
+                            .parse_next(&mut signers_data)?
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|cert| self.get_certificate_info(&cert).ok())
+                            .collect();
 
                     Ok(Signature::V2(certificates))
                 }
@@ -608,7 +620,7 @@ impl ZipEntry {
                     // https://cs.android.com/android/platform/superproject/main/+/main:tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/V1SourceStampSigner.java;l=86;bpv=0;bpt=1
                     let _stamp_block_prefix = le_u32.parse_next(input)?;
 
-                    let certificate = Self::parse_certificates().parse_next(input)?;
+                    let certificate = Self::parse_certificate().parse_next(input)?;
 
                     // i don't think that it is usefull information
                     let _signed_data = length_take(le_u32).parse_next(input)?;
@@ -624,7 +636,7 @@ impl ZipEntry {
                     // https://cs.android.com/android/platform/superproject/main/+/main:tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/V2SourceStampSigner.java;l=124;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1
 
                     let _stamp_block_prefix = le_u32.parse_next(input)?;
-                    let certificate = Self::parse_certificates().parse_next(input)?;
+                    let certificate = Self::parse_certificate().parse_next(input)?;
 
                     // i don't think that it is usefull information
                     let _signed_digests_data = length_take(le_u32).parse_next(input)?;
@@ -663,11 +675,13 @@ impl ZipEntry {
                 _ => {
                     // highlight new interesting blocks
                     warn!(
-                        "got unknown id block - 0x{:08x} (0x{:08x}), please open issue on github",
+                        "got unknown id block - 0x{:08x} (size=0x{:08x}), please open issue on github, try to figure out",
                         id, size
                     );
 
-                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
+                    let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
+
+                    std::fs::write(format!("{:08x}.bin", id), data).unwrap();
                     Ok(Signature::Unknown)
                 }
             }

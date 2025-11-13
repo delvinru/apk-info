@@ -164,8 +164,11 @@ impl StringPool {
 
             match Self::parse_string(&mut string_data, is_utf8) {
                 Ok(s) => strings.push(s),
-                Err(e) => {
-                    warn!("failed to parse string at offset 0x{:08x}: {:?}", offset, e);
+                Err(_) => {
+                    warn!(
+                        "failed to parse string at offset 0x{:08x}, pushing empty",
+                        offset
+                    );
                     // push empty string to preserve index order
                     strings.push(String::new());
                 }
