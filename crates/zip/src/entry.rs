@@ -275,6 +275,11 @@ impl ZipEntry {
     /// Zero block ID
     pub const ZERO_BLOCK_ID: u32 = 0xff3b5998;
 
+    /// The signature of some Chinese packer
+    ///
+    /// See: <https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L29>
+    pub const PACKER_NG_SIG_V2: u32 = 0x7a786b21;
+
     /// Converts an OpenSSL [`X509Ref`] into a [`CertificateInfo`] struct.
     ///
     /// Extracts common certificate metadata such as serial number, subject,
@@ -463,8 +468,7 @@ impl ZipEntry {
         move |input: &mut &'a [u8]| {
             let certificate = length_take(le_u32).parse_next(input)?;
 
-            // TODO: remove unwrap block
-            Ok(X509::from_der(certificate).unwrap())
+            Ok(X509::from_der(certificate).expect("why openssl can't decode this certificate?"))
         }
     }
 
@@ -654,14 +658,11 @@ impl ZipEntry {
 
                     Ok(Signature::StampBlockV2(certificate))
                 }
-                Self::VERITY_PADDING_BLOCK_ID
-                | Self::DEPENDENCY_INFO_BLOCK_ID
-                | Self::ZERO_BLOCK_ID => {
-                    // not interesting blocks
-                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
-                    Ok(Signature::Unknown)
+                Self::PACKER_NG_SIG_V2 => {
+                    let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
+
+                    Ok(Signature::PackerNextGenV2(data.to_vec()))
                 }
-                // some maybe usefull block that we don't parse yet
                 Self::GOOGLE_PLAY_FROSTING_ID => {
                     // maybe even remove this message, idk for now
                     debug!(
@@ -672,16 +673,21 @@ impl ZipEntry {
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::Unknown)
                 }
+                Self::VERITY_PADDING_BLOCK_ID
+                | Self::DEPENDENCY_INFO_BLOCK_ID
+                | Self::ZERO_BLOCK_ID => {
+                    // not interesting blocks
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
+                    Ok(Signature::Unknown)
+                }
                 _ => {
                     // highlight new interesting blocks
                     warn!(
-                        "got unknown id block - 0x{:08x} (size=0x{:08x}), please open issue on github, try to figure out",
+                        "got unknown id block - 0x{:08x} (size=0x{:08x}), please open issue on github, let's try to figure out",
                         id, size
                     );
 
-                    let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
-
-                    std::fs::write(format!("{:08x}.bin", id), data).unwrap();
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::Unknown)
                 }
             }

@@ -84,6 +84,7 @@ enum Signature {
     StampBlockV1 { certificate: CertificateInfo },
     StampBlockV2 { certificate: CertificateInfo },
     ApkChannelBlock { value: String },
+    PackerNextGenV2 { value: Vec<u8> },
 }
 
 impl Signature {
@@ -122,6 +123,9 @@ impl Signature {
             ZipSignature::ApkChannelBlock(v) => Signature::ApkChannelBlock { value: v }
                 .into_pyobject(py)
                 .ok(),
+            ZipSignature::PackerNextGenV2(v) => Signature::PackerNextGenV2 { value: v }
+                .into_pyobject(py)
+                .ok(),
             _ => None,
         }
     }
@@ -151,6 +155,14 @@ impl Signature {
             }
             Signature::ApkChannelBlock { value } => {
                 format!("Signature.ApkChannelBlock(channel='{}')", value)
+            }
+            Signature::PackerNextGenV2 { value } => {
+                let hex_string = value
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect::<Vec<_>>()
+                    .join("");
+                format!("Signature.PackerNextGenV2(channel='{}')", hex_string)
             }
         }
     }

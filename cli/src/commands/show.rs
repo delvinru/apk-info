@@ -96,7 +96,18 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
                     print_certificate(certificate);
                 }
                 Signature::ApkChannelBlock(channel) => {
-                    println!("  {}: {}", signature.name(), channel.green());
+                    println!("  Type: {}", signature.name().green());
+                    println!("  Channel: {}", channel.green());
+                }
+                Signature::PackerNextGenV2(data) => {
+                    let hex_string = data
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect::<Vec<_>>()
+                        .join("");
+
+                    println!("  Type: {}", signature.name().green());
+                    println!("  Value: {}", hex_string.green());
                 }
                 _ => continue,
             }

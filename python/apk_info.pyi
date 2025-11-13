@@ -906,7 +906,8 @@ class Signature:
 
     @dataclass(frozen=True)
     class StampBlockV2:
-        """SourceStamp improves traceability of apps with respect to unauthorized distribution
+        """
+        SourceStamp improves traceability of apps with respect to unauthorized distribution
 
         The stamp is part of the APK that is protected by the signing block
 
@@ -914,6 +915,16 @@ class Signature:
         """
 
         certificate: CertificateInfo
+
+    @dataclass
+    class PackerNextGenV2:
+        """
+        Some Chinese packer
+
+        See: <a href="https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20" target="_blank">https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20</a>
+        """
+
+        value: bytes
 
 type SignatureType = (
     Signature.V1
@@ -923,6 +934,7 @@ type SignatureType = (
     | Signature.ApkChannelBlock
     | Signature.StampBlockV1
     | Signature.StampBlockV2
+    | Signature.PackerNextGenV2
 )
 """
 Represents all available signatures

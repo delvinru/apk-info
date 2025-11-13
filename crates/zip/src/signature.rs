@@ -50,6 +50,13 @@ pub enum Signature {
     /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#24>
     StampBlockV2(CertificateInfo),
 
+    /// Some Chinese packer
+    ///
+    /// See: <https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20>
+    ///
+    /// Example: `75a606291d88a6c04ca9d4edfbc1b4352cf8a0aee31130f913ceee72f2dcbbbd`
+    PackerNextGenV2(Vec<u8>),
+
     /// Got something that we don't know yet
     Unknown,
 }
@@ -65,6 +72,7 @@ impl Signature {
             Signature::ApkChannelBlock(_) => "APK Channel block".to_owned(),
             Signature::StampBlockV1(_) => "Stamp Block v1".to_owned(),
             Signature::StampBlockV2(_) => "Stamp Block v2".to_owned(),
+            Signature::PackerNextGenV2(_) => "Packer NG v2".to_owned(),
             Signature::Unknown => "unknown".to_owned(),
         }
     }
