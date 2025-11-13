@@ -1,5 +1,5 @@
 [workspace.package]
-version = "1.0.7"
+version = "1.0.8"
 authors = ["Alexey <delvinru@gmail.com>"]
 categories = ["Parsing tools"]
 description = "APK full-featured parser"
@@ -24,10 +24,10 @@ members = [
 
 [workspace.dependencies]
 # internal
-apk-info = { path = "core", version = "1.0.7" }
-apk-info-axml = { path = "crates/axml", version = "1.0.7" }
-apk-info-xml = { path = "crates/xml", version = "1.0.7" }
-apk-info-zip = { path = "crates/zip", version = "1.0.7" }
+apk-info = { path = "core", version = "1.0.8" }
+apk-info-axml = { path = "crates/axml", version = "1.0.8" }
+apk-info-xml = { path = "crates/xml", version = "1.0.8" }
+apk-info-zip = { path = "crates/zip", version = "1.0.8" }
 
 # external
 anyhow = "1.0.100"
