@@ -194,7 +194,7 @@ impl StringPool {
             // skip last two bytes
             let _ = le_u16(input)?;
 
-            Ok(Self::read_utf16(content, real_len))
+            Ok(Self::get_utf16_string(content, real_len))
         } else {
             // utf-8 strings contains two lengths, as they might differ
             let (length1, length2) = (le_u8, le_u8).parse_next(input)?;
@@ -213,20 +213,28 @@ impl StringPool {
             // skip last byte
             let _ = le_u8(input)?;
 
-            Ok(String::from_utf8_lossy(content).into_owned())
+            // this is much faster than "String::from_utf8_lossy(content).into_owned()"
+            // SAFETY: the axml guarantees valid utf-8?
+            let s = unsafe { std::str::from_utf8_unchecked(content) };
+            Ok(s.to_owned())
         }
     }
 
     #[inline]
-    fn read_utf16(slice: &[u8], size: usize) -> String {
-        std::char::decode_utf16(
-            slice
-                .chunks_exact(2)
-                .take(size)
-                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]])),
-        )
-        .collect::<Result<String, _>>()
-        .unwrap_or_default()
+    fn get_utf16_string(slice: &[u8], size: usize) -> String {
+        // each utf-16 code unit is 2 bytes; ensure we don't read past the buffer
+        let len = size.min(slice.len() / 2);
+
+        // SAFETY: the axml guarantees valid utf-16?
+        unsafe {
+            // cast &[u8] → &[u16] directly
+            let u16_slice = std::slice::from_raw_parts(slice.as_ptr() as *const u16, len);
+
+            // decode utf-16
+            std::char::decode_utf16(u16_slice.iter().map(|&x| u16::from_le(x)))
+                .collect::<Result<String, _>>()
+                .unwrap_or_default()
+        }
     }
 
     #[inline]

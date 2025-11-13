@@ -1,8 +1,8 @@
 //! Describes a `zip` archive
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use flate2::{Decompress, FlushDecompress, Status};
 use log::{debug, warn};
 use openssl::hash::MessageDigest;
@@ -32,7 +32,7 @@ pub struct ZipEntry {
     central_directory: CentralDirectory,
 
     /// Information about local headers
-    local_headers: HashMap<Arc<str>, LocalFileHeader>,
+    local_headers: AHashMap<Arc<str>, LocalFileHeader>,
 }
 
 /// Implementation of basic methods

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
 use winnow::error::{ErrMode, Needed, ParserError};
@@ -144,7 +144,7 @@ impl CentralDirectoryEntry {
 
 #[derive(Debug)]
 pub(crate) struct CentralDirectory {
-    pub(crate) entries: HashMap<Arc<str>, CentralDirectoryEntry>,
+    pub(crate) entries: AHashMap<Arc<str>, CentralDirectoryEntry>,
 }
 
 impl CentralDirectory {

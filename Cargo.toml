@@ -31,6 +31,7 @@ apk-info-zip = { path = "crates/zip", version = "1.0.7" }
 
 # external
 anyhow = "1.0.100"
+ahash = "0.8.12"
 bat = { version = "0.26.0", default-features = false, features = [
     "build-assets",
     "regex-fancy",
@@ -66,7 +67,6 @@ panic = "abort"
 inherits = "release"
 lto = true
 
-# The profile that 'dist' will build with
-[profile.dist]
+[profile.profiling]
 inherits = "release"
-lto = "thin"
+debug = true
