@@ -2,7 +2,7 @@
 
 ![PyPI - Version](https://img.shields.io/pypi/v/apk-info?style=flat)
 ![PyPI - License](https://img.shields.io/pypi/l/apk-info?style=flat)
-![GitHub Repo stars](https://img.shields.io/github/stars/delvinru/apk-info?style=flat)
+[![GitHub Repo stars](https://img.shields.io/github/stars/delvinru/apk-info?style=flat)](https://github.com/delvinru/apk-info)
 
 A full-featured `apk` parser.
 
