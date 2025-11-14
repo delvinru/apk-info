@@ -72,7 +72,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         let value = parse_hex_or_dec(&value_str)?;
 
-                        // определяем тип attr
                         let kind = if name == QName(b"flag") {
                             AttrType::Flag
                         } else {

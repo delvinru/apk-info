@@ -38,9 +38,15 @@ enum Commands {
         #[arg(required = true)]
         paths: Vec<PathBuf>,
 
-        /// Output folder (default: <filename>.unp)
+        /// Output folder (default: ./<filename>.unp)
         #[arg(short, long)]
         output: Option<PathBuf>,
+
+        /// A regular expressions for extracting specific files inside zip archive
+        ///
+        /// example: -f AndroidManifest.xml -f classes\d+.dex
+        #[arg(short, long)]
+        files: Vec<String>,
     },
     /// Read and pretty-print binary AndroidManifest.xml
     Axml {
@@ -63,7 +69,11 @@ fn main() {
 
     let result = match &cli.commands {
         Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
-        Some(Commands::Extract { paths, output }) => command_extract(paths, output),
+        Some(Commands::Extract {
+            paths,
+            output,
+            files,
+        }) => command_extract(paths, output, files),
         Some(Commands::Axml { path }) => command_axml(path),
         Some(Commands::Completion { shell }) => {
             let mut cmd = Cli::command();

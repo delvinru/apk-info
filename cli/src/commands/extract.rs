@@ -5,58 +5,58 @@ use anyhow::{Context, Result};
 use apk_info_zip::ZipEntry;
 use colored::Colorize;
 use log::warn;
+use regex::Regex;
 
 use crate::commands::path_helpers::get_all_files;
 
-pub(crate) fn command_extract(paths: &[PathBuf], output: &Option<PathBuf>) -> Result<()> {
+pub(crate) fn command_extract(
+    paths: &[PathBuf],
+    output: &Option<PathBuf>,
+    files: &[String],
+) -> Result<()> {
     let all_files = get_all_files(paths);
 
-    let multiple_files = all_files.len() > 1;
-
     all_files.into_iter().try_for_each(|path| {
-        let out_dir = make_output_dir(&path, output, multiple_files);
-        extract(&path, &out_dir)
+        let out_dir = make_output_dir(&path, output);
+        extract(&path, &out_dir, files)
     })
 }
 
-fn make_output_dir(path: &Path, output: &Option<PathBuf>, multiple: bool) -> PathBuf {
+fn make_output_dir(path: &Path, output: &Option<PathBuf>) -> PathBuf {
+    let file_name = path
+        .file_name()
+        .map(|n| {
+            let mut s = n.to_os_string();
+            s.push(".unp");
+            s
+        })
+        .unwrap_or_else(|| "unknown.unp".into());
+
     match output {
-        Some(out) if multiple => {
-            let mut sub = out.clone();
-            let name = path
-                .file_name()
-                .map(|n| {
-                    let mut s = n.to_os_string();
-                    s.push(".unp");
-                    s
-                })
-                .unwrap_or_else(|| "unknown.unp".into());
-            sub.push(name);
-            sub
+        Some(out) => {
+            // ./<output>/<file_name>.unp
+            let mut p = PathBuf::from(out);
+            p.push(file_name);
+            p
         }
-        Some(out) => out.clone(),
         None => {
-            let mut d = path.to_path_buf();
-            let new_name = d
-                .file_name()
-                .map(|n| {
-                    let mut s = n.to_os_string();
-                    s.push(".unp");
-                    s
-                })
-                .unwrap_or_else(|| "output.unp".into());
-            d.set_file_name(new_name);
-            d
+            // ./<file_name>.unp
+            PathBuf::from(file_name)
         }
     }
 }
 
-fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
+fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String]) -> Result<()> {
     let buf = std::fs::read(path).with_context(|| format!("can't open file: {:?}", path))?;
     let zip = ZipEntry::new(buf)?;
 
     std::fs::create_dir_all(out_dir)
         .with_context(|| format!("can't create output directory {:?}", out_dir))?;
+
+    let regexes: Vec<Regex> = files
+        .iter()
+        .map(|file| Regex::new(file).with_context(|| format!("invalid regex: {:?}", file)))
+        .collect::<Result<Vec<_>>>()?;
 
     for file_name in zip.namelist() {
         if file_name.ends_with('/') {
@@ -65,6 +65,10 @@ fn extract(path: &PathBuf, out_dir: &PathBuf) -> Result<()> {
 
         if file_name.starts_with("..") {
             warn!("attempt to path traversal: {:?}", file_name);
+            continue;
+        }
+
+        if !regexes.is_empty() && !regexes.iter().any(|re| re.is_match(file_name)) {
             continue;
         }
 

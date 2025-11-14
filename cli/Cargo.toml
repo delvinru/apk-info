@@ -22,6 +22,7 @@ clap_complete.workspace = true
 colored.workspace = true
 env_logger.workspace = true
 log.workspace = true
+regex.workspace = true
 walkdir.workspace = true
 
 [[bin]]
