@@ -1,7 +1,7 @@
 //! Possible types of compression.
 
 /// Represents the type of compression used for a file in a ZIP archive.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FileCompressionType {
     /// The file is stored without compression.
     Stored,

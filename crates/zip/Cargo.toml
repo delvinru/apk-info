@@ -20,5 +20,8 @@ openssl.workspace = true
 thiserror.workspace = true
 winnow.workspace = true
 
+[dev-dependencies]
+zip = "0.6"
+
 [lib]
 doctest = false

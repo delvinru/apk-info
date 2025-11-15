@@ -2,12 +2,14 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use ::apk_info::Apk as ApkRust;
+use ::apk_info_zip::FileCompressionType;
 use ::apk_info::models::{
     Activity as ApkActivity, Attribution as ApkAttribution, Permission as ApkPermission,
     Provider as ApkProvider, Receiver as ApkReceiver, Service as ApkService,
 };
 use ::apk_info_zip::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
+use pyo3::conversion::IntoPyObject;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use pyo3::{Bound, PyAny, PyResult, create_exception, pyclass, pymethods};
@@ -579,16 +581,32 @@ impl Apk {
         Ok(Apk { apkrs })
     }
 
-    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<Vec<u8>> {
+    pub fn read(&self, py: Python, filename: &Bound<'_, PyString>, return_compression: Option<bool>) -> PyResult<Py<PyAny>> {
         let filename = match filename.extract::<&str>() {
             Ok(name) => name,
             Err(_) => return Err(PyValueError::new_err("bad filename")),
         };
+        let rc = return_compression.unwrap_or(false);
 
         match self.apkrs.read(filename) {
-            Ok((data, _)) => {
-                // TODO: return compression type
-                Ok(data)
+            Ok((data, compression)) => {
+                // Allows for returning either just the data, or a tuple of (data, compression); the latter is useful for clients that need to know the compression type.
+                let comp_str = match compression {
+                    FileCompressionType::Stored => "stored",
+                    FileCompressionType::Deflated => "deflated",
+                    FileCompressionType::StoredTampered => "stored_tampered",
+                    FileCompressionType::DeflatedTampered => "deflated_tampered",
+                };
+                
+                // Return either (data, comp_str) or just data based on rc choice from the caller
+                if rc {
+                    let comp_str_owned = comp_str.to_string();
+                    let py_tuple = (data, comp_str_owned).into_pyobject(py)?;
+                    Ok(py_tuple.unbind().into())
+                } else {
+                    let py_bytes = data.into_pyobject(py)?;
+                    Ok(py_bytes.unbind().into())
+                }
             }
             Err(e) => Err(APKError::new_err(e.to_string())),
         }
