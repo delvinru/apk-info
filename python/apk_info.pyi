@@ -39,7 +39,7 @@ class APK:
         """
         ...
 
-    def read(self, filename: str) -> bytes:
+    def read(self, filename: str, return_compression: bool = False) -> tuple[bytes, str]:
         """
         Read raw data for the filename in the zip archive
 
@@ -47,6 +47,8 @@ class APK:
         ----------
         filename: str
             The path to the file inside the APK archive
+        return_compression: bool, optional
+            If True, also return the compression type of the file
 
         Raises
         ------
@@ -84,7 +86,7 @@ class APK:
     def is_multidex(self) -> bool:
         """
         Checks if the APK has multiple `classes.dex` files or not
-
+            return_compression: bool = False) -> bytes | tuple[bytes, str]:
         Examples
         --------
 
