@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use ahash::AHashMap;
 use flate2::{Decompress, FlushDecompress, Status};
-use log::{debug, warn};
+use log::warn;
 use openssl::hash::MessageDigest;
 use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
 use openssl::stack::Stack;
@@ -260,6 +260,10 @@ impl ZipEntry {
     pub const VERITY_PADDING_BLOCK_ID: u32 = 0x42726577;
 
     /// Block that contains dependency metadata, which is saved by the Android Gradle plugin to identify any issues related to dependencies
+    ///
+    /// This data is compressed, encrypted by a Google Play signing key, so we can't extract it.
+    ///
+    /// Dependency information for Play Console: <https://developer.android.com/build/dependencies#dependency-info-play>
     ///
     /// See: <https://cs.android.com/android-studio/platform/tools/base/+/mirror-goog-studio-main:signflinger/src/com/android/signflinger/SignedApk.java;l=58?q=0x504b4453>
     pub const DEPENDENCY_INFO_BLOCK_ID: u32 = 0x504b4453;
@@ -684,14 +688,8 @@ impl ZipEntry {
                     Ok(Signature::PackerNextGenV2(data.to_vec()))
                 }
                 Self::GOOGLE_PLAY_FROSTING_ID => {
-                    // maybe even remove this message, idk for now
-                    debug!(
-                        "got known id block - 0x{:08x} (size - 0x{:08x}), but don't know yet how to parse it",
-                        id, size
-                    );
-
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
-                    Ok(Signature::Unknown)
+                    Ok(Signature::GooglePlayFrosting)
                 }
                 Self::VERITY_PADDING_BLOCK_ID
                 | Self::DEPENDENCY_INFO_BLOCK_ID

@@ -85,6 +85,7 @@ enum Signature {
     StampBlockV2 { certificate: CertificateInfo },
     ApkChannelBlock { value: String },
     PackerNextGenV2 { value: Vec<u8> },
+    GooglePlayFrosting {},
 }
 
 impl Signature {
@@ -126,6 +127,9 @@ impl Signature {
             ZipSignature::PackerNextGenV2(v) => Signature::PackerNextGenV2 { value: v }
                 .into_pyobject(py)
                 .ok(),
+            ZipSignature::GooglePlayFrosting => {
+                Signature::GooglePlayFrosting {}.into_pyobject(py).ok()
+            }
             _ => None,
         }
     }
@@ -164,6 +168,7 @@ impl Signature {
                     .join("");
                 format!("Signature.PackerNextGenV2(channel='{}')", hex_string)
             }
+            Signature::GooglePlayFrosting {} => "Signature.GooglePlayFrosting()".to_string(),
         }
     }
 }

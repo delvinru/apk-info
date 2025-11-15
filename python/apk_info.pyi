@@ -926,6 +926,18 @@ class Signature:
 
         value: bytes
 
+    @dataclass
+    class GooglePlayFrosting:
+        """
+        Google Play Frosting Metadata
+
+        We just highlight the presence of the block, because the full structure is unknown to anyone in public space
+
+        For more details you can inspect: <https://github.com/avast/apkverifier/blob/master/signingblock/frosting.go#L23>
+        """
+
+        value: bytes
+
 type SignatureType = (
     Signature.V1
     | Signature.V2
@@ -935,6 +947,7 @@ type SignatureType = (
     | Signature.StampBlockV1
     | Signature.StampBlockV2
     | Signature.PackerNextGenV2
+    | Signature.GooglePlayFrosting
 )
 """
 Represents all available signatures

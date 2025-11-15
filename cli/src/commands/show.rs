@@ -109,6 +109,10 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
                     println!("  Type: {}", signature.name().green());
                     println!("  Value: {}", hex_string.green());
                 }
+                Signature::GooglePlayFrosting => {
+                    println!("  Type: {}", signature.name().green());
+                    println!("  Info: {}", "Metadata exist".green());
+                }
                 _ => continue,
             }
 

@@ -57,6 +57,13 @@ pub enum Signature {
     /// Example: `75a606291d88a6c04ca9d4edfbc1b4352cf8a0aee31130f913ceee72f2dcbbbd`
     PackerNextGenV2(Vec<u8>),
 
+    /// Google Play Frosting Metadata
+    ///
+    /// We just highlight the presence of the block, because the full structure is unknown to anyone in public space
+    ///
+    /// For more details you can inspect: <https://github.com/avast/apkverifier/blob/master/signingblock/frosting.go#L23>
+    GooglePlayFrosting,
+
     /// Got something that we don't know yet
     Unknown,
 }
@@ -73,6 +80,7 @@ impl Signature {
             Signature::StampBlockV1(_) => "Stamp Block v1".to_owned(),
             Signature::StampBlockV2(_) => "Stamp Block v2".to_owned(),
             Signature::PackerNextGenV2(_) => "Packer NG v2".to_owned(),
+            Signature::GooglePlayFrosting => "Google Play Frosting".to_owned(),
             Signature::Unknown => "unknown".to_owned(),
         }
     }
