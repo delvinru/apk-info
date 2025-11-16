@@ -1,0 +1,17 @@
+[package]
+name = "apk-info-dex"
+description = "A library for analyzing dex files"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme = "README.md"
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+log.workspace = true
+simd_cesu8.workspace = true
+thiserror.workspace = true
+winnow.workspace = true

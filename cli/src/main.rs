@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
 
-use crate::commands::{command_axml, command_extract, command_show};
+use crate::commands::{command_axml, command_dex, command_extract, command_show};
 
 mod commands;
 
@@ -54,6 +54,12 @@ enum Commands {
         #[arg(required = true)]
         path: PathBuf,
     },
+    /// Parse dex file (tmp command)
+    Dex {
+        /// Path to the apk file
+        #[arg(required = true)]
+        path: PathBuf,
+    },
     /// Generate shell completion
     Completion {
         /// The shell to generate completion for
@@ -75,6 +81,7 @@ fn main() {
             files,
         }) => command_extract(paths, output, files),
         Some(Commands::Axml { path }) => command_axml(path),
+        Some(Commands::Dex { path }) => command_dex(path),
         Some(Commands::Completion { shell }) => {
             let mut cmd = Cli::command();
             let name = cmd.get_name().to_string();
