@@ -13,9 +13,27 @@ pub enum DexError {
     #[error("invalid header")]
     InvalidHeader,
 
-    #[error("got error while parsing strings")]
-    StringsError,
+    #[error("got error while parsing string_ids")]
+    StringError,
 
-    #[error("got error while parsing types")]
-    TypesError,
+    #[error("got error while parsing type_ids")]
+    TypeError,
+
+    #[error("got error while parsing proto_ids")]
+    ProtoError,
+
+    #[error("got error while parsing field_ids")]
+    FieldError,
+
+    #[error("got error while parsing method_ids")]
+    MethodError,
+
+    #[error("got error while parsing class_defs")]
+    ClassError,
+
+    #[error("got unknown type item: {0}")]
+    UnknownTypeItem(u16),
+
+    #[error("got error while parsing map_list")]
+    MapListError,
 }

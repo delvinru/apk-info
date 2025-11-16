@@ -13,9 +13,9 @@ pub(crate) fn command_dex(path: &PathBuf) -> Result<()> {
 
     std::fs::write("classes.dex", &data).unwrap();
 
-    let dex = Dex::new(&mut &data[..]).with_context(|| "can't parse dex file")?;
+    let dex = Dex::new(data).with_context(|| "can't parse dex file")?;
 
-    println!("{:#?}", dex);
+    println!("{:#?}", dex.map_list);
 
     Ok(())
 }

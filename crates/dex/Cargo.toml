@@ -11,6 +11,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
+bitflags.workspace = true
 log.workspace = true
 simd_cesu8.workspace = true
 thiserror.workspace = true

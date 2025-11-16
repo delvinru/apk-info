@@ -145,6 +145,7 @@ dependencies = [
 name = "apk-info-dex"
 version = "1.0.8"
 dependencies = [
+ "bitflags",
  "log",
  "simd_cesu8",
  "thiserror",
