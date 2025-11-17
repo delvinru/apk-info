@@ -15,7 +15,7 @@ pub(crate) fn command_dex(path: &PathBuf) -> Result<()> {
 
     let dex = Dex::new(data).with_context(|| "can't parse dex file")?;
 
-    println!("{:#?}", dex.map_list);
+    println!("{:?} - {:?}", dex.checksum(), dex.header.checksum);
 
     Ok(())
 }

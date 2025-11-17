@@ -147,6 +147,7 @@ version = "1.0.8"
 dependencies = [
  "bitflags",
  "log",
+ "simd-adler32",
  "simd_cesu8",
  "thiserror",
  "winnow",

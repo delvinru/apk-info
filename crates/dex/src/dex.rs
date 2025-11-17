@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use bitflags::bitflags;
+use simd_adler32::Adler32;
 use winnow::binary::{be_u16, be_u32, le_u16, le_u32, u8};
 use winnow::combinator::repeat;
 use winnow::error::{ContextError, ErrMode};
@@ -255,6 +256,24 @@ impl Dex {
     pub fn get_type(&self, idx: usize) -> Option<Cow<'_, str>> {
         let idx = *self.type_ids.get(idx)?;
         self.get_string(idx as usize)
+    }
+
+    /// Compute `adler32` checksum for checking file integrity.
+    ///
+    /// ```ignore
+    /// let dex = Dex::new(data).expect("can't parse dex file");
+    /// assert_eq!(dex.header.checksum, dex.checksum());
+    /// ```
+    pub fn checksum(&self) -> u32 {
+        // checksum offset: magic (8 bytes) + checksum (4 bytes)
+        let data = match self.data.get(12..) {
+            Some(v) => v,
+            None => return u32::MAX,
+        };
+
+        let mut adler = Adler32::new();
+        adler.write(data);
+        adler.finish()
     }
 }
 
