@@ -113,6 +113,10 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
                     println!("  Type: {}", signature.name().green());
                     println!("  Info: {}", "Metadata exist".green());
                 }
+                Signature::VasDollyV2(channel) => {
+                    println!("  Type: {}", signature.name().green());
+                    println!("  Channel: {}", channel.green());
+                }
                 _ => continue,
             }
 

@@ -2,6 +2,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use apk_info::FileCompressionType;
 use apk_info_zip::ZipEntry;
 use colored::Colorize;
 use log::warn;
@@ -79,7 +80,7 @@ fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String]) -> Result<()> {
                 .with_context(|| format!("can't create parent dirs for {:?}", parent))?;
         }
 
-        let (data, _) = zip
+        let (data, compression) = zip
             .read(file_name)
             .with_context(|| format!("can't read file {:?} from archive", file_name))?;
 
@@ -90,11 +91,20 @@ fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String]) -> Result<()> {
 
         // highligt interesting files
         if file_name == "AndroidManifest.xml" || file_name == "resources.arsc" {
-            println!("[*] extracted \"{}\"", file_name.green().bold());
+            print!("[*] extracted \"{}\" ", file_name.green().bold());
         } else if file_name.ends_with(".so") {
-            println!("[*] extracted \"{}\"", file_name.magenta().bold());
+            print!("[*] extracted \"{}\" ", file_name.magenta().bold());
         } else {
-            println!("[~] extracted \"{}\"", file_name);
+            print!("[~] extracted \"{}\" ", file_name);
+        }
+
+        match compression {
+            FileCompressionType::StoredTampered | FileCompressionType::DeflatedTampered => {
+                println!("({})", format!("{:?}", compression).bold().red());
+            }
+            _ => {
+                println!("({:?})", compression);
+            }
         }
     }
 

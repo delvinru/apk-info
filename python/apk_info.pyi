@@ -938,16 +938,29 @@ class Signature:
 
         value: bytes
 
+    @dataclass
+    class VasDolleyV2:
+        """
+        Some apk protector/parser, idk, seen in the wild
+
+        The channel information in the ID-Value pair
+
+        See: <a href="https://edgeone.ai/document/58005" target="_blank">https://edgeone.ai/document/58005</a>
+        """
+
+        value: str
+
 type SignatureType = (
-    Signature.V1
+    Signature.ApkChannelBlock
+    | Signature.GooglePlayFrosting
+    | Signature.PackerNextGenV2
+    | Signature.StampBlockV1
+    | Signature.StampBlockV2
+    | Signature.V1
     | Signature.V2
     | Signature.V3
     | Signature.V31
-    | Signature.ApkChannelBlock
-    | Signature.StampBlockV1
-    | Signature.StampBlockV2
-    | Signature.PackerNextGenV2
-    | Signature.GooglePlayFrosting
+    | Signature.VasDolleyV2
 )
 """
 Represents all available signatures

@@ -86,6 +86,7 @@ enum Signature {
     ApkChannelBlock { value: String },
     PackerNextGenV2 { value: Vec<u8> },
     GooglePlayFrosting {},
+    VasDollyV2 { value: String },
 }
 
 impl Signature {
@@ -121,14 +122,17 @@ impl Signature {
             }
             .into_pyobject(py)
             .ok(),
-            ZipSignature::ApkChannelBlock(v) => Signature::ApkChannelBlock { value: v }
-                .into_pyobject(py)
-                .ok(),
-            ZipSignature::PackerNextGenV2(v) => Signature::PackerNextGenV2 { value: v }
-                .into_pyobject(py)
-                .ok(),
+            ZipSignature::ApkChannelBlock(value) => {
+                Signature::ApkChannelBlock { value }.into_pyobject(py).ok()
+            }
+            ZipSignature::PackerNextGenV2(value) => {
+                Signature::PackerNextGenV2 { value }.into_pyobject(py).ok()
+            }
             ZipSignature::GooglePlayFrosting => {
                 Signature::GooglePlayFrosting {}.into_pyobject(py).ok()
+            }
+            ZipSignature::VasDollyV2(v) => {
+                Signature::VasDollyV2 { value: v }.into_pyobject(py).ok()
             }
             _ => None,
         }
@@ -158,7 +162,7 @@ impl Signature {
                 format!("Signature.StampBlockV2(certificate={:?})", certificate)
             }
             Signature::ApkChannelBlock { value } => {
-                format!("Signature.ApkChannelBlock(channel='{}')", value)
+                format!("Signature.ApkChannelBlock(value='{}')", value)
             }
             Signature::PackerNextGenV2 { value } => {
                 let hex_string = value
@@ -169,6 +173,9 @@ impl Signature {
                 format!("Signature.PackerNextGenV2(channel='{}')", hex_string)
             }
             Signature::GooglePlayFrosting {} => "Signature.GooglePlayFrosting()".to_string(),
+            Signature::VasDollyV2 { value } => {
+                format!("Signature.VasDollyV2(value='{}')", value)
+            }
         }
     }
 }

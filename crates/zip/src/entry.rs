@@ -284,6 +284,13 @@ impl ZipEntry {
     /// See: <https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L29>
     pub const PACKER_NG_SIG_V2: u32 = 0x7a786b21;
 
+    /// Some apk protector/parser, idk, seen in the wild
+    ///
+    /// The channel information in the ID-Value pair
+    ///
+    /// See: <https://edgeone.ai/document/58005>
+    pub const VASDOLLY_V2: u32 = 0x881155ff;
+
     /// Converts an OpenSSL [`X509Ref`] into a [`CertificateInfo`] struct.
     ///
     /// Extracts common certificate metadata such as serial number, subject,
@@ -691,6 +698,12 @@ impl ZipEntry {
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::GooglePlayFrosting)
                 }
+                Self::VASDOLLY_V2 => {
+                    let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
+                    Ok(Signature::VasDollyV2(
+                        String::from_utf8_lossy(data).trim().to_owned(),
+                    ))
+                }
                 Self::VERITY_PADDING_BLOCK_ID
                 | Self::DEPENDENCY_INFO_BLOCK_ID
                 | Self::ZERO_BLOCK_ID => {
@@ -706,6 +719,7 @@ impl ZipEntry {
                     );
 
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
+
                     Ok(Signature::Unknown)
                 }
             }

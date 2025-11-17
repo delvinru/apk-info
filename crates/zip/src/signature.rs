@@ -64,6 +64,13 @@ pub enum Signature {
     /// For more details you can inspect: <https://github.com/avast/apkverifier/blob/master/signingblock/frosting.go#L23>
     GooglePlayFrosting,
 
+    /// Some apk protector/parser, idk, seen in the wild
+    ///
+    /// The channel information in the ID-Value pair
+    ///
+    /// See: <https://edgeone.ai/document/58005>
+    VasDollyV2(String),
+
     /// Got something that we don't know yet
     Unknown,
 }
@@ -81,6 +88,7 @@ impl Signature {
             Signature::StampBlockV2(_) => "Stamp Block v2".to_owned(),
             Signature::PackerNextGenV2(_) => "Packer NG v2".to_owned(),
             Signature::GooglePlayFrosting => "Google Play Frosting".to_owned(),
+            Signature::VasDollyV2(_) => "v2-VasDolly".to_owned(),
             Signature::Unknown => "unknown".to_owned(),
         }
     }
