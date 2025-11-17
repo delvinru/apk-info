@@ -177,60 +177,50 @@ impl Signature {
     }
 }
 
-#[pyclass(
-    eq,
-    frozen,
-    module = "apk_info._apk_info",
-    name = "FileCompressionType"
-)]
+#[pyclass(eq, frozen, module = "apk_info._apk_info", name = "FileCompressionType")]
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-struct PyFileCompressionType {
-    kind: ZipFileCompressionType,
+enum FileCompressionType {
+    Stored,
+    Deflated,
+    StoredTampered,
+    DeflatedTampered,
 }
 
-impl PyFileCompressionType {
-    const STORED_CONST: Self = Self {
-        kind: ZipFileCompressionType::Stored,
-    };
-    const DEFLATED_CONST: Self = Self {
-        kind: ZipFileCompressionType::Deflated,
-    };
-    const STORED_TAMPERED_CONST: Self = Self {
-        kind: ZipFileCompressionType::StoredTampered,
-    };
-    const DEFLATED_TAMPERED_CONST: Self = Self {
-        kind: ZipFileCompressionType::DeflatedTampered,
-    };
-
+impl FileCompressionType {
     fn as_str(&self) -> &'static str {
-        match self.kind {
-            ZipFileCompressionType::Stored => "stored",
-            ZipFileCompressionType::Deflated => "deflated",
-            ZipFileCompressionType::StoredTampered => "stored_tampered",
-            ZipFileCompressionType::DeflatedTampered => "deflated_tampered",
+        match self {
+            FileCompressionType::Stored => "stored",
+            FileCompressionType::Deflated => "deflated",
+            FileCompressionType::StoredTampered => "stored_tampered",
+            FileCompressionType::DeflatedTampered => "deflated_tampered",
         }
     }
 }
 
-impl From<ZipFileCompressionType> for PyFileCompressionType {
+impl From<ZipFileCompressionType> for FileCompressionType {
     fn from(kind: ZipFileCompressionType) -> Self {
-        Self { kind }
+        match kind {
+            ZipFileCompressionType::Stored => FileCompressionType::Stored,
+            ZipFileCompressionType::Deflated => FileCompressionType::Deflated,
+            ZipFileCompressionType::StoredTampered => FileCompressionType::StoredTampered,
+            ZipFileCompressionType::DeflatedTampered => FileCompressionType::DeflatedTampered,
+        }
     }
 }
 
 #[pymethods]
-impl PyFileCompressionType {
+impl FileCompressionType {
     #[classattr]
-    const STORED: PyFileCompressionType = PyFileCompressionType::STORED_CONST;
+    const STORED: FileCompressionType = FileCompressionType::Stored;
 
     #[classattr]
-    const DEFLATED: PyFileCompressionType = PyFileCompressionType::DEFLATED_CONST;
+    const DEFLATED: FileCompressionType = FileCompressionType::Deflated;
 
     #[classattr]
-    const STORED_TAMPERED: PyFileCompressionType = PyFileCompressionType::STORED_TAMPERED_CONST;
+    const STORED_TAMPERED: FileCompressionType = FileCompressionType::StoredTampered;
 
     #[classattr]
-    const DEFLATED_TAMPERED: PyFileCompressionType = PyFileCompressionType::DEFLATED_TAMPERED_CONST;
+    const DEFLATED_TAMPERED: FileCompressionType = FileCompressionType::DeflatedTampered;
 
     #[getter]
     fn value(&self) -> &'static str {
@@ -652,7 +642,7 @@ impl Apk {
         Ok(Apk { apkrs })
     }
 
-    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<(Vec<u8>, PyFileCompressionType)> {
+    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<(Vec<u8>, FileCompressionType)> {
         let filename = match filename.extract::<&str>() {
             Ok(name) => name,
             Err(_) => return Err(PyValueError::new_err("bad filename")),
@@ -660,7 +650,7 @@ impl Apk {
 
         match self.apkrs.read(filename) {
             Ok((data, compression)) => {
-                Ok((data, PyFileCompressionType::from(compression)))
+                Ok((data, FileCompressionType::from(compression)))
             }
             Err(e) => Err(APKError::new_err(e.to_string())),
         }
@@ -877,7 +867,7 @@ fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Receiver>()?;
     m.add_class::<Service>()?;
     m.add_class::<Signature>()?;
-    m.add_class::<PyFileCompressionType>()?;
+    m.add_class::<FileCompressionType>()?;
 
     m.add_class::<Apk>()?;
     Ok(())
