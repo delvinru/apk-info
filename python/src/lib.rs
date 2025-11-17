@@ -2,14 +2,16 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use ::apk_info::Apk as ApkRust;
-use ::apk_info_zip::FileCompressionType;
 use ::apk_info::models::{
     Activity as ApkActivity, Attribution as ApkAttribution, Permission as ApkPermission,
     Provider as ApkProvider, Receiver as ApkReceiver, Service as ApkService,
 };
-use ::apk_info_zip::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
-use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
+use ::apk_info_zip::{
+    CertificateInfo as ZipCertificateInfo, FileCompressionType as ZipFileCompressionType,
+    Signature as ZipSignature,
+};
 use pyo3::conversion::IntoPyObject;
+use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 use pyo3::{Bound, PyAny, PyResult, create_exception, pyclass, pymethods};
@@ -172,6 +174,75 @@ impl Signature {
             }
             Signature::GooglePlayFrosting {} => "Signature.GooglePlayFrosting()".to_string(),
         }
+    }
+}
+
+#[pyclass(
+    eq,
+    frozen,
+    module = "apk_info._apk_info",
+    name = "FileCompressionType"
+)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+struct PyFileCompressionType {
+    kind: ZipFileCompressionType,
+}
+
+impl PyFileCompressionType {
+    const STORED_CONST: Self = Self {
+        kind: ZipFileCompressionType::Stored,
+    };
+    const DEFLATED_CONST: Self = Self {
+        kind: ZipFileCompressionType::Deflated,
+    };
+    const STORED_TAMPERED_CONST: Self = Self {
+        kind: ZipFileCompressionType::StoredTampered,
+    };
+    const DEFLATED_TAMPERED_CONST: Self = Self {
+        kind: ZipFileCompressionType::DeflatedTampered,
+    };
+
+    fn as_str(&self) -> &'static str {
+        match self.kind {
+            ZipFileCompressionType::Stored => "stored",
+            ZipFileCompressionType::Deflated => "deflated",
+            ZipFileCompressionType::StoredTampered => "stored_tampered",
+            ZipFileCompressionType::DeflatedTampered => "deflated_tampered",
+        }
+    }
+}
+
+impl From<ZipFileCompressionType> for PyFileCompressionType {
+    fn from(kind: ZipFileCompressionType) -> Self {
+        Self { kind }
+    }
+}
+
+#[pymethods]
+impl PyFileCompressionType {
+    #[classattr]
+    const STORED: PyFileCompressionType = PyFileCompressionType::STORED_CONST;
+
+    #[classattr]
+    const DEFLATED: PyFileCompressionType = PyFileCompressionType::DEFLATED_CONST;
+
+    #[classattr]
+    const STORED_TAMPERED: PyFileCompressionType = PyFileCompressionType::STORED_TAMPERED_CONST;
+
+    #[classattr]
+    const DEFLATED_TAMPERED: PyFileCompressionType = PyFileCompressionType::DEFLATED_TAMPERED_CONST;
+
+    #[getter]
+    fn value(&self) -> &'static str {
+        self.as_str()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("FileCompressionType({})", self.as_str())
+    }
+
+    fn __str__(&self) -> &'static str {
+        self.as_str()
     }
 }
 
@@ -581,32 +652,15 @@ impl Apk {
         Ok(Apk { apkrs })
     }
 
-    pub fn read(&self, py: Python, filename: &Bound<'_, PyString>, return_compression: Option<bool>) -> PyResult<Py<PyAny>> {
+    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<(Vec<u8>, PyFileCompressionType)> {
         let filename = match filename.extract::<&str>() {
             Ok(name) => name,
             Err(_) => return Err(PyValueError::new_err("bad filename")),
         };
-        let rc = return_compression.unwrap_or(false);
 
         match self.apkrs.read(filename) {
             Ok((data, compression)) => {
-                // Allows for returning either just the data, or a tuple of (data, compression); the latter is useful for clients that need to know the compression type.
-                let comp_str = match compression {
-                    FileCompressionType::Stored => "stored",
-                    FileCompressionType::Deflated => "deflated",
-                    FileCompressionType::StoredTampered => "stored_tampered",
-                    FileCompressionType::DeflatedTampered => "deflated_tampered",
-                };
-                
-                // Return either (data, comp_str) or just data based on rc choice from the caller
-                if rc {
-                    let comp_str_owned = comp_str.to_string();
-                    let py_tuple = (data, comp_str_owned).into_pyobject(py)?;
-                    Ok(py_tuple.unbind().into())
-                } else {
-                    let py_bytes = data.into_pyobject(py)?;
-                    Ok(py_bytes.unbind().into())
-                }
+                Ok((data, PyFileCompressionType::from(compression)))
             }
             Err(e) => Err(APKError::new_err(e.to_string())),
         }
@@ -823,6 +877,7 @@ fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Receiver>()?;
     m.add_class::<Service>()?;
     m.add_class::<Signature>()?;
+    m.add_class::<PyFileCompressionType>()?;
 
     m.add_class::<Apk>()?;
     Ok(())
