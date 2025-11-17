@@ -125,7 +125,7 @@ mod tests {
         data.extend_from_slice(&4u16.to_le_bytes()); // total_entries
         data.extend_from_slice(&1234u32.to_le_bytes()); // central_dir_size
         data.extend_from_slice(&5678u32.to_le_bytes()); // central_dir_offset
-        data.extend_from_slice(&(0xffff as u16).to_le_bytes()); // comment_length
+        data.extend_from_slice(&(0xffffu16).to_le_bytes()); // comment_length
         data.extend_from_slice(comment);
 
         data

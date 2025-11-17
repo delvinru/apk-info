@@ -1499,9 +1499,11 @@ mod test {
 
     #[test]
     fn test_mcc_mnc_1() {
-        let mut config = ResTableConfig::default();
+        let config = ResTableConfig {
+            imsi: p32("\x00\x14\x01\x4e"),
+            ..Default::default()
+        };
 
-        config.imsi = p32("\x00\x14\x01\x4e");
         let (mcc, mnc) = config.get_mcc_mnc();
 
         assert_eq!(mcc, 334);
@@ -1512,9 +1514,11 @@ mod test {
 
     #[test]
     fn test_mcc_mnc_2() {
-        let mut config = ResTableConfig::default();
+        let config = ResTableConfig {
+            imsi: p32("\x00\x01\x00\x01"),
+            ..Default::default()
+        };
 
-        config.imsi = p32("\x00\x01\x00\x01");
         let (mcc, mnc) = config.get_mcc_mnc();
 
         assert_eq!(mcc, 1);
