@@ -12,6 +12,6 @@ pub enum FileCompressionType {
     /// The file appears tampered but is actually stored without compression.
     StoredTampered,
 
-    /// The file appears tampered but is actually compressed with Deflate.
+    /// The file appears tampered but is actually compressed with `Deflate`.
     DeflatedTampered,
 }

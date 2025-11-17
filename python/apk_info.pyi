@@ -14,21 +14,6 @@ class APKError(Exception):
 
     ...
 
-class FileCompressionType:
-    """
-    Compression mode used for a zip entry read via :meth:`APK.read`.
-    """
-
-    STORED: "FileCompressionType"
-    DEFLATED: "FileCompressionType"
-    STORED_TAMPERED: "FileCompressionType"
-    DEFLATED_TAMPERED: "FileCompressionType"
-
-    value: Literal["stored", "deflated", "stored_tampered", "deflated_tampered"]
-
-    def __str__(self) -> str:
-        ...
-
 class APK:
     """
     APK class, the main entrypoint to use `apk-info` library.
@@ -1393,4 +1378,29 @@ class Attribution:
     A string resource that describes a particular capability.
 
     See: https://developer.android.com/guide/topics/manifest/attribution-element#label
+    """
+
+class FileCompressionType:
+    """
+    Compression mode used for a zip entry
+    """
+
+    STORED = "stored"
+    """
+    The file is stored without compression
+    """
+
+    DEFLATED = "deflated"
+    """
+    The file is compressed using the `Deflate` algorithm.
+    """
+
+    STORED_TAMPERED = "stored_tampered"
+    """
+    The file appears tampered but is actually stored without compression.
+    """
+
+    DEFLATED_TAMPERED = "deflated_tampered"
+    """
+    The file appears tampered but is actually compressed with `Deflate`.
     """

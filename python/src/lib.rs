@@ -184,17 +184,24 @@ impl Signature {
     }
 }
 
-#[pyclass(eq, frozen, module = "apk_info._apk_info", name = "FileCompressionType")]
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+// NOTE: currently pyo3 handle's python enum not very well
+// Maybe upgrade in the future: https://github.com/PyO3/pyo3/issues/2887
+#[pyclass(eq, eq_int, frozen, module = "apk_info._apk_info")]
+#[derive(PartialEq)]
 enum FileCompressionType {
+    #[pyo3(name = "STORED")]
     Stored,
+    #[pyo3(name = "DEFLATED")]
     Deflated,
+    #[pyo3(name = "STORED_TAMPERED")]
     StoredTampered,
+    #[pyo3(name = "DEFLATED_TAMPERED")]
     DeflatedTampered,
 }
 
+#[pymethods]
 impl FileCompressionType {
-    fn as_str(&self) -> &'static str {
+    fn __repr__(&self) -> &'static str {
         match self {
             FileCompressionType::Stored => "stored",
             FileCompressionType::Deflated => "deflated",
@@ -212,34 +219,6 @@ impl From<ZipFileCompressionType> for FileCompressionType {
             ZipFileCompressionType::StoredTampered => FileCompressionType::StoredTampered,
             ZipFileCompressionType::DeflatedTampered => FileCompressionType::DeflatedTampered,
         }
-    }
-}
-
-#[pymethods]
-impl FileCompressionType {
-    #[classattr]
-    const STORED: FileCompressionType = FileCompressionType::Stored;
-
-    #[classattr]
-    const DEFLATED: FileCompressionType = FileCompressionType::Deflated;
-
-    #[classattr]
-    const STORED_TAMPERED: FileCompressionType = FileCompressionType::StoredTampered;
-
-    #[classattr]
-    const DEFLATED_TAMPERED: FileCompressionType = FileCompressionType::DeflatedTampered;
-
-    #[getter]
-    fn value(&self) -> &'static str {
-        self.as_str()
-    }
-
-    fn __repr__(&self) -> String {
-        format!("FileCompressionType({})", self.as_str())
-    }
-
-    fn __str__(&self) -> &'static str {
-        self.as_str()
     }
 }
 
@@ -656,9 +635,7 @@ impl Apk {
         };
 
         match self.apkrs.read(filename) {
-            Ok((data, compression)) => {
-                Ok((data, FileCompressionType::from(compression)))
-            }
+            Ok((data, compression)) => Ok((data, FileCompressionType::from(compression))),
             Err(e) => Err(APKError::new_err(e.to_string())),
         }
     }
