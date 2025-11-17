@@ -14,6 +14,21 @@ class APKError(Exception):
 
     ...
 
+class FileCompressionType:
+    """
+    Compression mode used for a zip entry read via :meth:`APK.read`.
+    """
+
+    STORED: "FileCompressionType"
+    DEFLATED: "FileCompressionType"
+    STORED_TAMPERED: "FileCompressionType"
+    DEFLATED_TAMPERED: "FileCompressionType"
+
+    value: Literal["stored", "deflated", "stored_tampered", "deflated_tampered"]
+
+    def __str__(self) -> str:
+        ...
+
 class APK:
     """
     APK class, the main entrypoint to use `apk-info` library.
@@ -39,7 +54,7 @@ class APK:
         """
         ...
 
-    def read(self, filename: str) -> bytes:
+    def read(self, filename: str) -> tuple[bytes, FileCompressionType]:
         """
         Read raw data for the filename in the zip archive
 
@@ -60,8 +75,10 @@ class APK:
 
         ```python
         apk = APK("./file")
+        data, compression = apk.read("AndroidManifest.xml")
+        print(compression)
         with open("AndroidManifest.xml", "wb") as fd:
-            fd.write(apk.read("AndroidManifest.xml))
+            fd.write(data)
         ```
         """
         ...
@@ -84,7 +101,6 @@ class APK:
     def is_multidex(self) -> bool:
         """
         Checks if the APK has multiple `classes.dex` files or not
-
         Examples
         --------
 

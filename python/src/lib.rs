@@ -6,7 +6,11 @@ use ::apk_info::models::{
     Activity as ApkActivity, Attribution as ApkAttribution, Permission as ApkPermission,
     Provider as ApkProvider, Receiver as ApkReceiver, Service as ApkService,
 };
-use ::apk_info_zip::{CertificateInfo as ZipCertificateInfo, Signature as ZipSignature};
+use ::apk_info_zip::{
+    CertificateInfo as ZipCertificateInfo, FileCompressionType as ZipFileCompressionType,
+    Signature as ZipSignature,
+};
+use pyo3::conversion::IntoPyObject;
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyString;
@@ -177,6 +181,65 @@ impl Signature {
                 format!("Signature.VasDollyV2(value='{}')", value)
             }
         }
+    }
+}
+
+#[pyclass(eq, frozen, module = "apk_info._apk_info", name = "FileCompressionType")]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+enum FileCompressionType {
+    Stored,
+    Deflated,
+    StoredTampered,
+    DeflatedTampered,
+}
+
+impl FileCompressionType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            FileCompressionType::Stored => "stored",
+            FileCompressionType::Deflated => "deflated",
+            FileCompressionType::StoredTampered => "stored_tampered",
+            FileCompressionType::DeflatedTampered => "deflated_tampered",
+        }
+    }
+}
+
+impl From<ZipFileCompressionType> for FileCompressionType {
+    fn from(kind: ZipFileCompressionType) -> Self {
+        match kind {
+            ZipFileCompressionType::Stored => FileCompressionType::Stored,
+            ZipFileCompressionType::Deflated => FileCompressionType::Deflated,
+            ZipFileCompressionType::StoredTampered => FileCompressionType::StoredTampered,
+            ZipFileCompressionType::DeflatedTampered => FileCompressionType::DeflatedTampered,
+        }
+    }
+}
+
+#[pymethods]
+impl FileCompressionType {
+    #[classattr]
+    const STORED: FileCompressionType = FileCompressionType::Stored;
+
+    #[classattr]
+    const DEFLATED: FileCompressionType = FileCompressionType::Deflated;
+
+    #[classattr]
+    const STORED_TAMPERED: FileCompressionType = FileCompressionType::StoredTampered;
+
+    #[classattr]
+    const DEFLATED_TAMPERED: FileCompressionType = FileCompressionType::DeflatedTampered;
+
+    #[getter]
+    fn value(&self) -> &'static str {
+        self.as_str()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("FileCompressionType({})", self.as_str())
+    }
+
+    fn __str__(&self) -> &'static str {
+        self.as_str()
     }
 }
 
@@ -586,16 +649,15 @@ impl Apk {
         Ok(Apk { apkrs })
     }
 
-    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<Vec<u8>> {
+    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<(Vec<u8>, FileCompressionType)> {
         let filename = match filename.extract::<&str>() {
             Ok(name) => name,
             Err(_) => return Err(PyValueError::new_err("bad filename")),
         };
 
         match self.apkrs.read(filename) {
-            Ok((data, _)) => {
-                // TODO: return compression type
-                Ok(data)
+            Ok((data, compression)) => {
+                Ok((data, FileCompressionType::from(compression)))
             }
             Err(e) => Err(APKError::new_err(e.to_string())),
         }
@@ -812,6 +874,7 @@ fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Receiver>()?;
     m.add_class::<Service>()?;
     m.add_class::<Signature>()?;
+    m.add_class::<FileCompressionType>()?;
 
     m.add_class::<Apk>()?;
     Ok(())
