@@ -14,6 +14,7 @@ cargo-fuzz = true
 
 [dependencies]
 apk-info-axml.workspace = true
+apk-info-dex.workspace = true
 apk-info-zip.workspace = true
 libfuzzer-sys = "0.4"
 
@@ -26,6 +27,12 @@ doc = false
 [[bin]]
 name = "arsc-fuzzer"
 path = "fuzz_targets/arsc-fuzzer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "dex-fuzzer"
+path = "fuzz_targets/dex-fuzzer.rs"
 test = false
 doc = false
 
