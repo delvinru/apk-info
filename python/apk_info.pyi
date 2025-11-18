@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import PurePath
 from typing import Literal
 
 __version__: str
@@ -19,13 +19,13 @@ class APK:
     APK class, the main entrypoint to use `apk-info` library.
     """
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | PurePath) -> None:
         """
         Create a new APK instance
 
         Parameters
         ----------
-        path : str | Path
+        path : str | PurePath
             Path to the APK file on disk
 
         Raises
@@ -36,6 +36,8 @@ class APK:
             If got error while parsing zip entry
         PyTypeError
             If the argument is not str or Path
+        APKError
+            If the parsing failed
         """
         ...
 
@@ -711,6 +713,14 @@ class APK:
 
         ```python
         print(apk.get_main_activity())
+        ".MainActivity"
+        ```
+
+        Sometimes there may be a full name, depending on the application.
+        The library returns the value as is as in the manifest, without additional actions.
+
+        ```python
+        print(apk.get_main_activity())
         "com.example.app.MainActivity"
         ```
 
@@ -793,6 +803,11 @@ class APK:
         Retrieves all APK signing signatures (v1, v2, v3, v3.1, etc).
 
         Combines results from multiple signature blocks within the APK file.
+
+        Raises
+        ------
+        APKError
+            If the certificates could not be parsed
 
         Returns
         -------

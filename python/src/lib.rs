@@ -615,7 +615,7 @@ impl Apk {
             path.extract::<PathBuf>().ok()
         };
 
-        let path = resolved.ok_or_else(|| PyTypeError::new_err("expected str | Path"))?;
+        let path = resolved.ok_or_else(|| PyTypeError::new_err("expected str | PurePath"))?;
         if !path.exists() {
             return Err(PyFileNotFoundError::new_err(format!(
                 "file not found: {:?}",
