@@ -60,7 +60,7 @@ fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String]) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     for file_name in zip.namelist() {
-        if file_name.ends_with('/') {
+        if file_name.ends_with('/') || file_name.is_empty() {
             continue;
         }
 
@@ -84,8 +84,18 @@ fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String]) -> Result<()> {
             .read(file_name)
             .with_context(|| format!("can't read file {:?} from archive", file_name))?;
 
-        let mut f = std::fs::File::create(&file_path)
-            .with_context(|| format!("can't create file {:?}", file_path))?;
+        let mut f = match std::fs::File::create(&file_path) {
+            Ok(v) => v,
+            Err(e) => {
+                println!(
+                    "[-] can't create file - {:?} - {}",
+                    file_name,
+                    e.to_string().red()
+                );
+                continue;
+            }
+        };
+
         f.write_all(data.as_slice())
             .with_context(|| format!("can't write to {:?}", file_path))?;
 
