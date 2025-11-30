@@ -118,6 +118,8 @@ impl ResChunkHeader {
 }
 
 /// Type of the data value
+///
+/// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#298>
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ResourceValueType {
@@ -141,6 +143,14 @@ pub enum ResourceValueType {
 
     /// The `data` holds a complex number encoding a fraction of a container.
     Fraction = 0x06,
+
+    /// The `data` holds a dynamic ResTabe_ref, which needs to be resolved
+    /// before it can be used like a [ResourceValueType::Reference].
+    DynamicReference = 0x07,
+
+    /// The `data` holds an attribute resource idnetifier, which needs to be resolved
+    /// before it can be used like a [ResourceValueType::Attribute].
+    DynamicAttribute = 0x08,
 
     /// The `data` is a raw integer value of the form n..n.
     Dec = 0x10,
@@ -177,6 +187,8 @@ impl From<u8> for ResourceValueType {
             0x04 => ResourceValueType::Float,
             0x05 => ResourceValueType::Dimension,
             0x06 => ResourceValueType::Fraction,
+            0x07 => ResourceValueType::DynamicReference,
+            0x08 => ResourceValueType::DynamicAttribute,
             0x10 => ResourceValueType::Dec,
             0x11 => ResourceValueType::Hex,
             0x12 => ResourceValueType::Boolean,
@@ -227,7 +239,7 @@ impl ResourceValue {
         let mut out = String::with_capacity(32);
 
         match self.data_type {
-            ResourceValueType::Reference => {
+            ResourceValueType::Reference | ResourceValueType::DynamicReference => {
                 out.push('@');
 
                 if self.is_system_type() {
