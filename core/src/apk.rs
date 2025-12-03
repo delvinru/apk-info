@@ -405,7 +405,7 @@ impl Apk {
             .get_attribute_value("application", "logo", self.arsc.as_ref())
     }
 
-    /// Retrieves all permissions names from `<uses-permission>`.
+    /// The fully qualified name of an `Application` subclasss implemented for the application.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#nm>
     #[inline]

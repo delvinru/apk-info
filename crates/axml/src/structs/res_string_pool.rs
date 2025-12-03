@@ -216,10 +216,12 @@ impl StringPool {
             // skip last byte
             let _ = le_u8(input)?;
 
-            // this is much faster than "String::from_utf8_lossy(content).into_owned()"
-            // SAFETY: the axml guarantees valid utf-8?
-            let s = unsafe { std::str::from_utf8_unchecked(content) };
-            Ok(s.to_owned())
+            let s = match std::str::from_utf8(content) {
+                Ok(s) => s.to_owned(),
+                Err(_) => String::from_utf8_lossy(content).to_string(),
+            };
+
+            Ok(s)
         }
     }
 
