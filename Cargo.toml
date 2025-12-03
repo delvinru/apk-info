@@ -32,24 +32,24 @@ apk-info-zip = { path = "crates/zip", version = "1.0.8" }
 # external
 anyhow = "1.0.100"
 ahash = "0.8.12"
-bat = { version = "0.26.0", default-features = false, features = [
+bat = { version = "0.26.1", default-features = false, features = [
     "build-assets",
     "regex-fancy",
 ] }
 bitflags = "2.10.0"
-clap = { version = "4.5.51", features = ["derive"] }
-clap_complete = "4.5.60"
+clap = { version = "4.5.53", features = ["derive"] }
+clap_complete = "4.5.61"
 colored = "3.0.0"
 const-hex = "1.17.0"
 env_logger = { version = "0.11.8", features = ["auto-color"] }
 flate2 = "1.1.5"
-log = "0.4.28"
+log = "0.4.29"
 memchr = "2.7.6"
 once_cell = "1.21.3"
 openssl = { version = "0.10.75", features = ["vendored"] }
 phf = { version = "0.13.1", default-features = false }
 phf_codegen = "0.13.1"
-pyo3 = "0.27.1"
+pyo3 = "0.27.2"
 quick-xml = "0.38.4"
 regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -57,7 +57,7 @@ serde_json = "1.0.145"
 smallvec = "1.15.1"
 thiserror = "2"
 walkdir = "2.5.0"
-winnow = { version = "0.7.13", features = ["simd"] }
+winnow = { version = "0.7.14", features = ["simd"] }
 
 [profile.release]
 codegen-units = 1
