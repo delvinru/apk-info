@@ -103,6 +103,9 @@ pub struct CertificateInfo {
     /// The subject of the certificate (typically the entity that signed the APK).
     pub subject: String,
 
+    /// The issuer of the certificate
+    pub issuer: String,
+
     /// The date and time when the certificate becomes valid.
     pub valid_from: String,
 

@@ -28,6 +28,9 @@ pub struct CertificateInfo {
     pub subject: String,
 
     #[pyo3(get)]
+    pub issuer: String,
+
+    #[pyo3(get)]
     pub valid_from: String,
 
     #[pyo3(get)]
@@ -51,12 +54,13 @@ impl From<ZipCertificateInfo> for CertificateInfo {
         Self {
             serial_number: certificate.serial_number,
             subject: certificate.subject,
+            issuer: certificate.issuer,
             valid_from: certificate.valid_from,
             valid_until: certificate.valid_until,
             signature_type: certificate.signature_type,
             md5_fingerprint: certificate.md5_fingerprint,
             sha1_fingerprint: certificate.sha1_fingerprint,
-            sha256_fingerprint: certificate.sha256_fingerprint,
+            sha256_fingerprint: certificate.sha256_fingerprint
         }
     }
 }
@@ -65,9 +69,10 @@ impl From<ZipCertificateInfo> for CertificateInfo {
 impl CertificateInfo {
     fn __repr__(&self) -> String {
         format!(
-            "CertificateInfo(serial_number='{}', subject='{}', valid_from='{}', valid_until='{}', signature_type='{}', md5_fingerprint='{}', sha1_fingerprint='{}', sha256_fingerprint='{}')",
+            "CertificateInfo(serial_number='{}', subject='{}', issuer='{}' valid_from='{}', valid_until='{}', signature_type='{}', md5_fingerprint='{}', sha1_fingerprint='{}', sha256_fingerprint='{}')",
             self.serial_number,
             self.subject,
+            self.issuer,
             self.valid_from,
             self.valid_until,
             self.signature_type,

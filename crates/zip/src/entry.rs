@@ -293,7 +293,7 @@ impl ZipEntry {
 
     /// Converts an OpenSSL [`X509Ref`] into a [`CertificateInfo`] struct.
     ///
-    /// Extracts common certificate metadata such as serial number, subject,
+    /// Extracts common certificate metadata such as serial number, subject, issuer,
     /// validity period, signature algorithm, and cryptographic fingerprints.
     fn get_certificate_info(
         &self,
@@ -327,6 +327,20 @@ impl ZipEntry {
             }
         }
 
+        let mut issuer = String::with_capacity(128);
+
+        for entry in certificate.issuer_name().entries() {
+            if let Ok(value) = entry.data().as_utf8() {
+                if !issuer.is_empty() {
+                    issuer.push(' ');
+                }
+                let name = entry.object().nid().short_name().unwrap_or_default();
+                issuer.push_str(name);
+                issuer.push('=');
+                issuer.push_str(value.as_ref());
+            }
+        }
+
         let valid_from = certificate.not_before().to_string();
         let valid_until = certificate.not_after().to_string();
 
@@ -345,6 +359,7 @@ impl ZipEntry {
         Ok(CertificateInfo {
             serial_number,
             subject,
+            issuer,
             valid_from,
             valid_until,
             signature_type,

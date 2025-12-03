@@ -828,6 +828,11 @@ class CertificateInfo:
     The subject of the certificate
     """
 
+    issuer: str
+    """
+    The issuer of the certificate
+    """
+
     valid_from: str
     """
     The date and time when the certificate becomes valid

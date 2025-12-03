@@ -132,6 +132,7 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
 fn print_certificate(certificate: &CertificateInfo) {
     println!("  Serial Number: {}", certificate.serial_number.green());
     println!("  Subject: {}", certificate.subject.green());
+    println!("  Issuer: {}", certificate.issuer.green());
     println!("  Valid from: {}", certificate.valid_from.green());
     println!("  Valid until: {}", certificate.valid_until.green());
     println!("  Signature type: {}", certificate.signature_type.green());
