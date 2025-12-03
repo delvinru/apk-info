@@ -60,7 +60,7 @@ impl From<ZipCertificateInfo> for CertificateInfo {
             signature_type: certificate.signature_type,
             md5_fingerprint: certificate.md5_fingerprint,
             sha1_fingerprint: certificate.sha1_fingerprint,
-            sha256_fingerprint: certificate.sha256_fingerprint
+            sha256_fingerprint: certificate.sha256_fingerprint,
         }
     }
 }
