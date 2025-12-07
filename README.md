@@ -20,6 +20,7 @@ A full-featured `apk` parser.
   - Stamp Block v1 & v2;
   - Apk Channel Block;
   - [Packer NG v2](https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20);
+  - [Vasdolly v2](https://main.qcloudimg.com/raw/document/intl/product/pdf/tencent-cloud_1145_54493_en.pdf)
   - Google Play Frosting (there are plans, but there is critically little information about it);
 - Correct extraction of the MainActivity based on how the Android OS [does it](https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310);
 - Bindings for python 3.10+ with typings - no more `# type: ignore`;
