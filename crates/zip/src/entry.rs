@@ -663,7 +663,7 @@ impl ZipEntry {
                     let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
 
                     Ok(Signature::ApkChannelBlock(
-                        String::from_utf8_lossy(data).to_string(),
+                        String::from_utf8_lossy(data).trim().to_string(),
                     ))
                 }
                 Self::V1_SOURCE_STAMP_BLOCK_ID => {
