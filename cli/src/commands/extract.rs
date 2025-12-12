@@ -47,6 +47,14 @@ fn make_output_dir(path: &Path, output: &Option<PathBuf>) -> PathBuf {
     }
 }
 
+#[inline]
+fn is_bad_filename(file_name: &str) -> bool {
+    file_name.ends_with('/')
+        || file_name.is_empty()
+        || file_name.starts_with("..")
+        || file_name.starts_with("/")
+}
+
 fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String]) -> Result<()> {
     let buf = std::fs::read(path).with_context(|| format!("can't open file: {:?}", path))?;
     let zip = ZipEntry::new(buf)?;
@@ -60,12 +68,8 @@ fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String]) -> Result<()> {
         .collect::<Result<Vec<_>>>()?;
 
     for file_name in zip.namelist() {
-        if file_name.ends_with('/') || file_name.is_empty() {
-            continue;
-        }
-
-        if file_name.starts_with("..") {
-            warn!("attempt to path traversal: {:?}", file_name);
+        if is_bad_filename(file_name) {
+            warn!("got bad filename: {:?}, skipped", file_name);
             continue;
         }
 
