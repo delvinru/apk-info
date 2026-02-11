@@ -312,6 +312,20 @@ impl Apk {
             .get_attribute_value("manifest", "platformBuildVersionName", self.arsc.as_ref())
     }
 
+    /// Retrieves the `compileSdkVersion` from the `<manifest>` element.
+    #[inline]
+    pub fn get_compile_sdk_version(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "compileSdkVersion", self.arsc.as_ref())
+    }
+
+    /// Retrieves the `compileSdkVersionCodename` from the `<manifest>` element.
+    #[inline]
+    pub fn get_compile_sdk_version_codename(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "compileSdkVersionCodename", self.arsc.as_ref())
+    }
+
     /// Extracts the `android:allowTaskReparenting` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#reparent>
