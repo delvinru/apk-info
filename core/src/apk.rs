@@ -1,5 +1,6 @@
 //! The main structure that represents the `apk` file.
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::path::Path;
@@ -710,5 +711,24 @@ impl Apk {
         );
 
         Ok(signatures)
+    }
+
+    // Information about the native code (.so libraries) of the APK file
+    pub fn get_native_codes(&self) -> Vec<String> {
+        let mut native_codes_set = HashSet::new();
+        for filename in self.zip.namelist() {
+            if filename.starts_with("lib/") && filename.ends_with(".so") {
+                let parts: Vec<&str> = filename.split('/').collect();
+                // Структура обычно lib/<abi>/<libname>.so
+                if parts.len() == 3 {
+                    let abi: String = parts[1].to_string();
+                    native_codes_set.insert(abi);
+                }
+            }
+        }
+        let mut native_codes: Vec<String> = native_codes_set.into_iter().collect();
+        native_codes.sort();
+        // println!("{:#?}", native_codes);
+        native_codes
     }
 }
