@@ -247,6 +247,14 @@ impl StringPool {
         self.strings.get(idx as usize)
     }
 
+    /// Get string from string pool
+    ///
+    /// Some malware defines its own strings in the manifest in a peculiar way, therefore,
+    /// for correct unpacking, we must first look at the system attributes.
+    ///
+    /// Examples:
+    ///     - 58442d3e3a49eb41986b1099e298c78afe6726edb93b75d0b8b7b38ecd41a4a0
+    ///     - 4057a9b12248b345e5c8dccf473e3df44e3663b342d48f4a63c8694e9d07c153
     #[inline]
     pub fn get_with_resources<'a>(
         &'a self,
@@ -254,19 +262,16 @@ impl StringPool {
         xml_resource: &'a XMLResourceMap,
         is_attribute_name: bool,
     ) -> Option<&'a str> {
-        self.strings
-            .get(idx as usize)
-            .map(|x| x.as_str())
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                xml_resource.get_attr(idx).map(|x| {
-                    // need remove prefix if looked up in system attributes
-                    if is_attribute_name {
-                        x.strip_prefix("android:attr/").unwrap_or(x)
-                    } else {
-                        x
-                    }
-                })
+        xml_resource
+            .get_attr(idx)
+            .map(|x| {
+                // need remove prefix if looked up in system attributes
+                if is_attribute_name {
+                    x.strip_prefix("android:attr/").unwrap_or(x)
+                } else {
+                    x
+                }
             })
+            .or_else(|| self.strings.get(idx as usize).map(|x| x.as_str()))
     }
 }
