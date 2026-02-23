@@ -719,7 +719,7 @@ impl Apk {
         for filename in self.zip.namelist() {
             if filename.starts_with("lib/") && filename.ends_with(".so") {
                 let parts: Vec<&str> = filename.split('/').collect();
-                // Структура обычно lib/<abi>/<libname>.so
+                // The structure is usually lib/<abi>/<libname>.so
                 if parts.len() == 3 {
                     let abi: String = parts[1].to_string();
                     native_codes_set.insert(abi);
@@ -728,7 +728,6 @@ impl Apk {
         }
         let mut native_codes: Vec<String> = native_codes_set.into_iter().collect();
         native_codes.sort();
-        // println!("{:#?}", native_codes);
         native_codes
     }
 }
