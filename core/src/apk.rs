@@ -1,5 +1,6 @@
 //! The main structure that represents the `apk` file.
 
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{self, BufReader, Read};
 use std::path::Path;
@@ -310,6 +311,20 @@ impl Apk {
     pub fn get_build_version_name(&self) -> Option<String> {
         self.axml
             .get_attribute_value("manifest", "platformBuildVersionName", self.arsc.as_ref())
+    }
+
+    /// Retrieves the `compileSdkVersion` from the `<manifest>` element.
+    #[inline]
+    pub fn get_compile_sdk_version(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "compileSdkVersion", self.arsc.as_ref())
+    }
+
+    /// Retrieves the `compileSdkVersionCodename` from the `<manifest>` element.
+    #[inline]
+    pub fn get_compile_sdk_version_codename(&self) -> Option<String> {
+        self.axml
+            .get_attribute_value("manifest", "compileSdkVersionCodename", self.arsc.as_ref())
     }
 
     /// Extracts the `android:allowTaskReparenting` attribute from `<application>`.
@@ -696,5 +711,23 @@ impl Apk {
         );
 
         Ok(signatures)
+    }
+
+    // Information about the native code (.so libraries) of the APK file
+    pub fn get_native_codes(&self) -> Vec<String> {
+        let mut native_codes_set = HashSet::new();
+        for filename in self.zip.namelist() {
+            if filename.starts_with("lib/") && filename.ends_with(".so") {
+                let parts: Vec<&str> = filename.split('/').collect();
+                // The structure is usually lib/<abi>/<libname>.so
+                if parts.len() == 3 {
+                    let abi: String = parts[1].to_string();
+                    native_codes_set.insert(abi);
+                }
+            }
+        }
+        let mut native_codes: Vec<String> = native_codes_set.into_iter().collect();
+        native_codes.sort();
+        native_codes
     }
 }
