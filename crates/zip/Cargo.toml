@@ -17,6 +17,7 @@ flate2.workspace = true
 log.workspace = true
 memchr.workspace = true
 openssl.workspace = true
+serde.workspace = true
 thiserror.workspace = true
 winnow.workspace = true
 

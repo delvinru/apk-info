@@ -1,28 +1,34 @@
 //! Describes signatures contained in the `APK Signature Block`.
 
+use serde::Serialize;
+
 /// Describe used signature scheme in APK
 ///
 /// Basic overview: <https://source.android.com/docs/security/features/apksigning>
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize)]
 pub enum Signature {
     /// Default signature scheme based on JAR signing
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v2#v1-verification>
+    #[serde(rename = "v1")]
     V1(Vec<CertificateInfo>),
 
     /// APK signature scheme v2
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v2>
+    #[serde(rename = "v2")]
     V2(Vec<CertificateInfo>),
 
     /// APK signature scheme v3
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v3>
+    #[serde(rename = "v3")]
     V3(Vec<CertificateInfo>),
 
     /// APK signature scheme v3.1
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v3-1>
+    #[serde(rename = "v31")]
     V31(Vec<CertificateInfo>),
 
     /// APK signature scheme v4
@@ -35,19 +41,23 @@ pub enum Signature {
     /// Need help/a hint on how to correctly implement the parsing of this signature.
     ///
     /// </div>
+    #[serde(rename = "v4")]
     V4,
 
     /// Some usefull information from apk channel block
+    #[serde(rename = "apk_channel_block")]
     ApkChannelBlock(String),
 
     /// Stamp Signing Block v1
     ///
     /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#23>
+    #[serde(rename = "stamp_block_v1")]
     StampBlockV1(CertificateInfo),
 
     /// Stamp Signing Block v2
     ///
     /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#24>
+    #[serde(rename = "stamp_block_v2")]
     StampBlockV2(CertificateInfo),
 
     /// Some Chinese packer
@@ -55,6 +65,7 @@ pub enum Signature {
     /// See: <https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20>
     ///
     /// Example: `75a606291d88a6c04ca9d4edfbc1b4352cf8a0aee31130f913ceee72f2dcbbbd`
+    #[serde(rename = "packer_next_gen_v2")]
     PackerNextGenV2(Vec<u8>),
 
     /// Google Play Frosting Metadata
@@ -62,6 +73,7 @@ pub enum Signature {
     /// We just highlight the presence of the block, because the full structure is unknown to anyone in public space
     ///
     /// For more details you can inspect: <https://github.com/avast/apkverifier/blob/master/signingblock/frosting.go#L23>
+    #[serde(rename = "google_play_frosting")]
     GooglePlayFrosting,
 
     /// Some apk protector/parser, idk, seen in the wild
@@ -69,9 +81,11 @@ pub enum Signature {
     /// The channel information in the ID-Value pair
     ///
     /// See: <https://edgeone.ai/document/58005>
+    #[serde(rename = "vasdolly_v2")]
     VasDollyV2(String),
 
     /// Got something that we don't know yet
+    #[serde(rename = "unknown")]
     Unknown,
 }
 
@@ -95,7 +109,7 @@ impl Signature {
 }
 
 /// Represents detailed information about an APK signing certificate.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize)]
 pub struct CertificateInfo {
     /// The serial number of the certificate.
     pub serial_number: String,

@@ -1,17 +1,18 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use apk_info::Apk;
 use apk_info_zip::{CertificateInfo, Signature};
 use colored::Colorize;
+use serde::Serialize;
 
 use crate::commands::path_helpers::get_all_files;
 
-pub(crate) fn command_show(paths: &[PathBuf], show_signatures: &bool) -> Result<()> {
+pub(crate) fn command_show(paths: &[PathBuf], show_signatures: &bool, jsonl: &bool) -> Result<()> {
     let files = get_all_files(paths);
 
     for (i, path) in files.iter().enumerate() {
-        show(path, show_signatures)?;
+        show(path, show_signatures, jsonl)?;
 
         // Add a newline between APKs except after the last one
         if i != files.len() - 1 {
@@ -22,59 +23,77 @@ pub(crate) fn command_show(paths: &[PathBuf], show_signatures: &bool) -> Result<
     Ok(())
 }
 
-fn show(path: &Path, show_signatures: &bool) -> Result<()> {
-    let apk = match Apk::new(path) {
-        Ok(v) => v,
-        Err(e) => {
-            println!(
-                "{}",
-                format!("{}: {:?} - {:?}", "error".red(), path, e).bold()
-            );
-            return Ok(());
-        }
+fn show(path: &Path, show_signatures: &bool, jsonl: &bool) -> Result<()> {
+    let info = collect_apk_info(path, show_signatures)?;
+
+    if *jsonl {
+        print!("{}", serde_json::to_string(&info)?);
+    } else {
+        pretty_print(&info);
+    }
+
+    Ok(())
+}
+
+#[derive(Serialize)]
+struct ApkInfo {
+    pub package_name: String,
+    pub version_name: String,
+    pub version_code: String,
+    pub main_activity: String,
+    pub min_sdk_version: String,
+    pub max_sdk_version: String,
+    pub target_sdk_version: String,
+    pub application_label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signatures: Option<Vec<Signature>>,
+}
+
+fn collect_apk_info(path: &Path, show_signatures: &bool) -> Result<ApkInfo> {
+    let apk = Apk::new(path)?;
+
+    let signatures = if *show_signatures {
+        Some(
+            apk.get_signatures()?
+                .into_iter()
+                .filter(|s| !matches!(s, Signature::Unknown))
+                .collect::<Vec<_>>(),
+        )
+    } else {
+        None
     };
 
-    println!(
-        "Package Name: {}",
-        apk.get_package_name().unwrap_or("-".to_string()).green()
-    );
-    println!(
-        "Main Activity: {}",
-        format!(
+    Ok(ApkInfo {
+        package_name: apk.get_package_name().unwrap_or_else(|| "-".to_string()),
+        version_name: apk.get_version_name().unwrap_or_else(|| "-".to_string()),
+        version_code: apk.get_version_code().unwrap_or_else(|| "-".to_string()),
+        main_activity: format!(
             "{}/{}",
-            apk.get_package_name().unwrap_or("".to_string()),
+            apk.get_package_name().unwrap_or_default(),
             apk.get_main_activity().unwrap_or("-")
-        )
-        .green(),
-    );
-    println!(
-        "Min SDK Version: {}",
-        apk.get_min_sdk_version().unwrap_or("-".to_string()).green()
-    );
-    println!(
-        "Max SDK Version: {}",
-        apk.get_max_sdk_version().unwrap_or("-".to_string()).green()
-    );
-    println!(
-        "Target SDK Version: {}",
-        apk.get_target_sdk_version().to_string().green()
-    );
-    println!(
-        "Application Label: {}",
-        apk.get_application_label()
-            .unwrap_or("-".to_owned())
-            .green()
-    );
+        ),
+        min_sdk_version: apk.get_min_sdk_version().unwrap_or_else(|| "-".to_string()),
+        max_sdk_version: apk.get_max_sdk_version().unwrap_or_else(|| "-".to_string()),
+        target_sdk_version: apk.get_target_sdk_version().to_string(),
+        application_label: apk
+            .get_application_label()
+            .unwrap_or_else(|| "-".to_string()),
+        signatures,
+    })
+}
 
-    if *show_signatures {
+fn pretty_print(info: &ApkInfo) {
+    println!("Package Name: {}", info.package_name.green(),);
+    println!("Main Activity: {}", info.main_activity.green(),);
+    println!("Min SDK Version: {}", info.min_sdk_version.green(),);
+    println!("Max SDK Version: {}", info.max_sdk_version.green(),);
+    println!("Target SDK Version: {}", info.target_sdk_version.green(),);
+    println!("Application Label: {}", info.application_label.green(),);
+    println!("Version Name: {}", info.version_name.green(),);
+    println!("Version Code: {}", info.version_code.green(),);
+
+    if let Some(signatures) = &info.signatures {
         println!("{}:", "APK Signature block".blue().bold());
-
-        let signatures = apk.get_signatures().with_context(|| {
-            format!(
-                "got error while parsing signatures, please report this bug: {:?}",
-                path
-            )
-        })?;
 
         for (i, signature) in signatures.iter().enumerate() {
             match signature {
@@ -125,8 +144,6 @@ fn show(path: &Path, show_signatures: &bool) -> Result<()> {
             }
         }
     }
-
-    Ok(())
 }
 
 fn print_certificate(certificate: &CertificateInfo) {

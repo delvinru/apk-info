@@ -30,6 +30,9 @@ enum Commands {
             help = "Show information about signatures"
         )]
         sigs: bool,
+
+        #[arg(short, long, default_value_t = false, help = "Show output as jsonl")]
+        json: bool,
     },
     /// Unpack apk files as zip archive
     #[command(visible_alias = "x")]
@@ -68,7 +71,7 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match &cli.commands {
-        Some(Commands::Show { paths, sigs }) => command_show(paths, sigs),
+        Some(Commands::Show { paths, sigs, json }) => command_show(paths, sigs, json),
         Some(Commands::Extract {
             paths,
             output,
