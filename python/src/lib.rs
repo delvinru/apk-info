@@ -19,7 +19,7 @@ use pyo3::{Bound, PyAny, PyResult, create_exception, pyclass, pymethods};
 
 create_exception!(m, APKError, PyException, "Got error while parsing apk");
 
-#[pyclass(eq, frozen, module = "apk_info._apk_info")]
+#[pyclass(eq, frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct CertificateInfo {
     #[pyo3(get)]
@@ -228,7 +228,7 @@ impl From<ZipFileCompressionType> for FileCompressionType {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct IntentFilter {
     #[pyo3(get)]
@@ -279,7 +279,7 @@ impl IntentFilter {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Activity {
     #[pyo3(get)]
@@ -361,7 +361,7 @@ impl Activity {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct ActivityAlias {
     #[pyo3(get)]
@@ -439,7 +439,7 @@ impl ActivityAlias {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Permission {
     #[pyo3(get)]
@@ -491,7 +491,7 @@ impl Permission {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Provider {
     #[pyo3(get)]
@@ -580,7 +580,7 @@ impl Provider {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Service {
     #[pyo3(get)]
@@ -654,7 +654,7 @@ impl Service {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Receiver {
     #[pyo3(get)]
@@ -721,7 +721,7 @@ impl Receiver {
     }
 }
 
-#[pyclass(frozen, module = "apk_info._apk_info")]
+#[pyclass(frozen, from_py_object, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Attribution {
     #[pyo3(get)]
