@@ -718,12 +718,12 @@ impl Apk {
         let mut native_codes_set = HashSet::new();
 
         for filename in self.zip.namelist() {
-            if let Some(rest) = filename.strip_prefix("/lib") {
-                if let Some((abi, lib)) = rest.split_once('/') {
-                    if lib.ends_with(".so") && !abi.is_empty() {
-                        native_codes_set.insert(abi.to_owned());
-                    }
-                }
+            if let Some(rest) = filename.strip_prefix("/lib")
+                && let Some((abi, lib)) = rest.split_once('/')
+                && lib.ends_with(".so")
+                && !abi.is_empty()
+            {
+                native_codes_set.insert(abi.to_owned());
             }
         }
 

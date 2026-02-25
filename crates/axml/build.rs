@@ -76,7 +76,7 @@ fn generate_map(map: &mut Map<'_, String>, path: &str) {
             .map(|(value, name)| (name.as_str(), *value))
             .collect();
 
-        pairs.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+        pairs.sort_unstable_by_key(|b| std::cmp::Reverse(b.1));
 
         let pairs_str = pairs
             .into_iter()
