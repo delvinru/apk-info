@@ -718,7 +718,7 @@ impl Apk {
         let mut native_codes_set = HashSet::new();
 
         for filename in self.zip.namelist() {
-            if let Some(rest) = filename.strip_prefix("/lib")
+            if let Some(rest) = filename.strip_prefix("lib/")
                 && let Some((abi, lib)) = rest.split_once('/')
                 && lib.ends_with(".so")
                 && !abi.is_empty()

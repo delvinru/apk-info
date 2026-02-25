@@ -838,6 +838,17 @@ class APK:
         """
         ...
 
+    def get_native_codes(self) -> list[str]:
+        """
+        Retrieves all available native platforms: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`
+
+        Returns
+        -------
+        list[str]
+            A sorted list of supported platforms
+        """
+        ...
+
 @dataclass(frozen=True)
 class CertificateInfo:
     serial_number: str
