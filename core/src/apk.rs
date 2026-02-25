@@ -6,10 +6,14 @@ use std::io::{self, BufReader, Read};
 use std::path::Path;
 
 use apk_info_axml::{ARSC, AXML};
+use apk_info_xml::Element;
 use apk_info_zip::{FileCompressionType, Signature, ZipEntry, ZipError};
 
 use crate::errors::APKError;
-use crate::models::{Activity, Attribution, Permission, Provider, Receiver, Service, XAPKManifest};
+use crate::models::{
+    Activity, ActivityAlias, Attribution, IntentFilter, Permission, Provider, Receiver, Service,
+    XAPKManifest,
+};
 
 /// The name of the manifest to be searched for in the zip archive.
 const ANDROID_MANIFEST_PATH: &str = "AndroidManifest.xml";
@@ -598,12 +602,35 @@ impl Apk {
         self.axml.get_main_activities()
     }
 
+    #[inline]
+    fn get_intent_filters<'a>(
+        &'a self,
+        element: &'a Element,
+    ) -> impl Iterator<Item = IntentFilter<'a>> {
+        element
+            .childrens()
+            .filter(|intent| intent.name() == "intent-filter")
+            .map(|intent| {
+                let mut action = None;
+                let mut category = None;
+
+                for child in intent.childrens() {
+                    match child.name() {
+                        "action" => action = child.attr("name"),
+                        "category" => category = child.attr("name"),
+                        _ => {}
+                    }
+                }
+
+                IntentFilter { action, category }
+            })
+    }
+
     /// Retrieves all `<activity>` components declared in the manifest.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/activity-element>
     #[inline]
     pub fn get_activities(&self) -> impl Iterator<Item = Activity<'_>> {
-        // iterates only on childrens, since this tag lives only as a child of the <manifest> tag
         self.axml
             .root
             .descendants()
@@ -617,6 +644,28 @@ impl Apk {
                 parent_activity_name: el.attr("parent_activity_name"),
                 permission: el.attr("permission"),
                 process: el.attr("process"),
+                intent_filters: self.get_intent_filters(el).collect(),
+            })
+    }
+
+    /// Retrieves all `<activity-alias>` components declared in the manifest.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-element>
+    #[inline]
+    pub fn get_activity_aliases(&self) -> impl Iterator<Item = ActivityAlias<'_>> {
+        self.axml
+            .root
+            .descendants()
+            .filter(|&el| el.name() == "activity-alias")
+            .map(|el| ActivityAlias {
+                enabled: el.attr("enabled"),
+                exported: el.attr("exported"),
+                icon: el.attr("icon"),
+                label: el.attr("label"),
+                name: el.attr("name"),
+                permission: el.attr("permission"),
+                target_activity: el.attr("targetActivity"),
+                intent_filters: self.get_intent_filters(el).collect(),
             })
     }
 

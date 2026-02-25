@@ -3,8 +3,9 @@ use std::path::PathBuf;
 
 use ::apk_info::Apk as ApkRust;
 use ::apk_info::models::{
-    Activity as ApkActivity, Attribution as ApkAttribution, Permission as ApkPermission,
-    Provider as ApkProvider, Receiver as ApkReceiver, Service as ApkService,
+    Activity as ApkActivity, ActivityAlias as ApkActivityAlias, Attribution as ApkAttribution,
+    IntentFilter as ApkIntentFilter, Permission as ApkPermission, Provider as ApkProvider,
+    Receiver as ApkReceiver, Service as ApkService,
 };
 use ::apk_info_zip::{
     CertificateInfo as ZipCertificateInfo, FileCompressionType as ZipFileCompressionType,
@@ -229,6 +230,43 @@ impl From<ZipFileCompressionType> for FileCompressionType {
 
 #[pyclass(frozen, module = "apk_info._apk_info")]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct IntentFilter {
+    #[pyo3(get)]
+    action: Option<String>,
+
+    #[pyo3(get)]
+    category: Option<String>,
+}
+
+impl<'a> From<ApkIntentFilter<'a>> for IntentFilter {
+    fn from(intent: ApkIntentFilter<'a>) -> Self {
+        IntentFilter {
+            action: intent.action.map(String::from),
+            category: intent.category.map(String::from),
+        }
+    }
+}
+
+#[pymethods]
+impl IntentFilter {
+    fn __repr__(&self) -> String {
+        let mut parts = Vec::with_capacity(16);
+        macro_rules! push_field {
+            ($field:ident) => {
+                if let Some(ref v) = self.$field {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), v));
+                }
+            };
+        }
+        push_field!(action);
+        push_field!(category);
+
+        format!("IntentFilter({})", parts.join(", "))
+    }
+}
+
+#[pyclass(frozen, module = "apk_info._apk_info")]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct Activity {
     #[pyo3(get)]
     enabled: Option<String>,
@@ -246,6 +284,8 @@ struct Activity {
     permission: Option<String>,
     #[pyo3(get)]
     process: Option<String>,
+    #[pyo3(get)]
+    intent_filters: Vec<IntentFilter>,
 }
 
 impl<'a> From<ApkActivity<'a>> for Activity {
@@ -259,30 +299,129 @@ impl<'a> From<ApkActivity<'a>> for Activity {
             parent_activity_name: activity.parent_activity_name.map(String::from),
             permission: activity.permission.map(String::from),
             process: activity.process.map(String::from),
+            intent_filters: activity
+                .intent_filters
+                .into_iter()
+                .map(IntentFilter::from)
+                .collect(),
         }
     }
 }
+
 #[pymethods]
 impl Activity {
     fn __repr__(&self) -> String {
         let mut parts = Vec::with_capacity(16);
         macro_rules! push_field {
-            ($field:ident) => {
+            // Option<T>
+            (opt $field:ident) => {
                 if let Some(ref v) = self.$field {
                     parts.push(format!(concat!(stringify!($field), "={:?}"), v));
                 }
             };
+
+            // Vec<T> (skip if empty)
+            (vec $field:ident) => {
+                if !self.$field.is_empty() {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), self.$field));
+                }
+            };
+
+            // Plain field (always print)
+            ($field:ident) => {
+                parts.push(format!(concat!(stringify!($field), "={:?}"), self.$field));
+            };
         }
-        push_field!(enabled);
-        push_field!(exported);
-        push_field!(icon);
-        push_field!(label);
-        push_field!(name);
-        push_field!(parent_activity_name);
-        push_field!(permission);
-        push_field!(process);
+
+        push_field!(opt enabled);
+        push_field!(opt exported);
+        push_field!(opt icon);
+        push_field!(opt label);
+        push_field!(opt name);
+        push_field!(opt parent_activity_name);
+        push_field!(opt permission);
+        push_field!(opt process);
+        push_field!(vec intent_filters);
 
         format!("Activity({})", parts.join(", "))
+    }
+}
+
+#[pyclass(frozen, module = "apk_info._apk_info")]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct ActivityAlias {
+    #[pyo3(get)]
+    enabled: Option<String>,
+    #[pyo3(get)]
+    exported: Option<String>,
+    #[pyo3(get)]
+    icon: Option<String>,
+    #[pyo3(get)]
+    label: Option<String>,
+    #[pyo3(get)]
+    name: Option<String>,
+    #[pyo3(get)]
+    permission: Option<String>,
+    #[pyo3(get)]
+    target_activity: Option<String>,
+    #[pyo3(get)]
+    intent_filters: Vec<IntentFilter>,
+}
+
+impl<'a> From<ApkActivityAlias<'a>> for ActivityAlias {
+    fn from(activity: ApkActivityAlias<'a>) -> Self {
+        ActivityAlias {
+            enabled: activity.enabled.map(String::from),
+            exported: activity.exported.map(String::from),
+            icon: activity.icon.map(String::from),
+            label: activity.label.map(String::from),
+            name: activity.name.map(String::from),
+            permission: activity.permission.map(String::from),
+            target_activity: activity.target_activity.map(String::from),
+            intent_filters: activity
+                .intent_filters
+                .into_iter()
+                .map(IntentFilter::from)
+                .collect(),
+        }
+    }
+}
+
+#[pymethods]
+impl ActivityAlias {
+    fn __repr__(&self) -> String {
+        let mut parts = Vec::with_capacity(16);
+        macro_rules! push_field {
+            // Option<T>
+            (opt $field:ident) => {
+                if let Some(ref v) = self.$field {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), v));
+                }
+            };
+
+            // Vec<T> (skip if empty)
+            (vec $field:ident) => {
+                if !self.$field.is_empty() {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), self.$field));
+                }
+            };
+
+            // Plain field (always print)
+            ($field:ident) => {
+                parts.push(format!(concat!(stringify!($field), "={:?}"), self.$field));
+            };
+        }
+
+        push_field!(opt enabled);
+        push_field!(opt exported);
+        push_field!(opt icon);
+        push_field!(opt label);
+        push_field!(opt name);
+        push_field!(opt permission);
+        push_field!(opt target_activity);
+        push_field!(vec intent_filters);
+
+        format!("ActivityAlias({})", parts.join(", "))
     }
 }
 
@@ -827,6 +966,13 @@ impl Apk {
         self.apkrs.get_activities().map(Activity::from).collect()
     }
 
+    pub fn get_activity_aliases(&self) -> Vec<ActivityAlias> {
+        self.apkrs
+            .get_activity_aliases()
+            .map(ActivityAlias::from)
+            .collect()
+    }
+
     pub fn get_services(&self) -> Vec<Service> {
         self.apkrs.get_services().map(Service::from).collect()
     }
@@ -861,7 +1007,9 @@ fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("APKError", m.py().get_type::<APKError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add_class::<CertificateInfo>()?;
+    m.add_class::<IntentFilter>()?;
     m.add_class::<Activity>()?;
+    m.add_class::<ActivityAlias>()?;
     m.add_class::<Permission>()?;
     m.add_class::<Provider>()?;
     m.add_class::<Receiver>()?;

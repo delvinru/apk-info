@@ -100,6 +100,7 @@ name = "apk-info"
 version = "1.0.10"
 dependencies = [
  "apk-info-axml",
+ "apk-info-xml",
  "apk-info-zip",
  "serde",
  "serde_json",

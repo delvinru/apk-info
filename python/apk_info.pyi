@@ -783,6 +783,19 @@ class APK:
         """
         ...
 
+    def get_activity_aliases(self) -> list[ActivityAlias]:
+        """
+        Retrieves all `<activity-alias>` components declared in the manifest.
+
+        See: <a href="https://developer.android.com/guide/topics/manifest/activity-alias-element" target="_blank">https://developer.android.com/guide/topics/manifest/activity-alias-element</a>
+
+        Returns
+        -------
+        list[ActivityAlias]
+            A list of found aliases
+        """
+        ...
+
     def get_services(self) -> list[Service]:
         """
         Retrieves all `<service>` components declared in the manifest.
@@ -1021,6 +1034,29 @@ Represents all available signatures
 """
 
 @dataclass(frozen=True)
+class IntentFilter:
+    """
+    Represents `<intent-filter>` in manifest
+
+    More information:
+    <a href="https://developer.android.com/guide/topics/manifest/intent-filter-element" target="_blank">https://developer.android.com/guide/topics/manifest/intent-filter-element</a>
+    """
+
+    action: str | None
+    """
+    The name of the action filter
+
+    See: https://developer.android.com/guide/topics/manifest/action-element
+    """
+
+    category: str | None
+    """
+    The name of category filter
+
+    See: https://developer.android.com/guide/topics/manifest/category-element
+    """
+
+@dataclass(frozen=True)
 class Activity:
     """
     Represents an Android activity defined in an app's manifest.
@@ -1084,6 +1120,78 @@ class Activity:
     The name of the process in which the activity runs.
 
     See: https://developer.android.com/guide/topics/manifest/activity-element#proc
+    """
+
+    intent_filters: list[IntentFilter]
+    """
+    A list of all declared `<intent-filter>` for a given activity
+
+    See: https://developer.android.com/guide/topics/manifest/intent-filter-element
+    """
+
+@dataclass(frozen=True)
+class ActivityAlias:
+    """
+    Represents `<activity-alias>` in manifest
+
+    More information:
+    <a href="https://developer.android.com/guide/topics/manifest/activity-alias-element">https://developer.android.com/guide/topics/manifest/activity-alias-element</a>
+    """
+
+    enabled: str | None
+    """
+    Whether the target activity can be instantiated by the system through this alias.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-alias-element#enabled
+    """
+
+    exported: str | None
+    """
+    Whether the components of other applications can launch the target activity through this alias.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-alias-element#exported
+    """
+
+    icon: str | None
+    """
+    An icon for the target activity when presented to users through the alias.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-alias-element#icon
+    """
+
+    label: str | None
+    """
+    A user-readable label for the alias when presented to users through the alias.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-alias-element#label
+    """
+
+    name: str | None
+    """
+    A unique name for the alias.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-alias-element#nm
+    """
+
+    permission: str | None
+    """
+    The name of a permission that clients must have to launch the target activity or get it to do something using the alias.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-alias-element#prmsn
+    """
+
+    target_activity: str | None
+    """
+    The name of the activity that can be activated through the alias.
+
+    See: https://developer.android.com/guide/topics/manifest/activity-alias-element#trgt
+    """
+
+    intent_filters: list[IntentFilter]
+    """
+    A list of all declared `<intent-filter>` for a given activity
+
+    See: https://developer.android.com/guide/topics/manifest/intent-filter-element
     """
 
 @dataclass(frozen=True)

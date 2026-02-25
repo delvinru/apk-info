@@ -9,25 +9,20 @@ pub struct XAPKManifest {
     pub package_name: String,
 }
 
-/// Represents `<meta-data>` in manifest
+/// Represents `<intent-filter>` in manifest
 ///
-/// See: <https://developer.android.com/guide/topics/manifest/meta-data-element>
+/// More information: <https://developer.android.com/guide/topics/manifest/intent-filter-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-pub struct MetaData<'a> {
-    /// A unique name for the item
+pub struct IntentFilter<'a> {
+    /// The name of the action filter
     ///
-    /// See: <https://developer.android.com/guide/topics/manifest/meta-data-element#nm>
-    pub name: Option<&'a str>,
+    /// See: <https://developer.android.com/guide/topics/manifest/action-element>
+    pub action: Option<&'a str>,
 
-    /// A reference to a resource.
+    /// The name of category filter
     ///
-    /// See: <https://developer.android.com/guide/topics/manifest/meta-data-element#rsrc>
-    pub resource: Option<&'a str>,
-
-    /// The value assigned to the item.
-    ///
-    /// See: <https://developer.android.com/guide/topics/manifest/meta-data-element#val>
-    pub value: Option<&'a str>,
+    /// See: <https://developer.android.com/guide/topics/manifest/category-element>
+    pub category: Option<&'a str>,
 }
 
 /// Represents `<activity>` in manifest
@@ -74,6 +69,57 @@ pub struct Activity<'a> {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/activity-element#proc>
     pub process: Option<&'a str>,
+
+    /// A list of all declared `<intent-filter>` for a given activity
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/intent-filter-element>
+    pub intent_filters: Vec<IntentFilter<'a>>,
+}
+
+/// Represents `<activity-alias>` in manifest
+///
+/// More information: <https://developer.android.com/guide/topics/manifest/activity-alias-element>
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+pub struct ActivityAlias<'a> {
+    /// Whether the target activity can be instantiated by the system through this alias.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-alias-element#enabled>
+    pub enabled: Option<&'a str>,
+
+    /// Whether the components of other applications can launch the target activity through this alias.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-alias-element#exported>
+    pub exported: Option<&'a str>,
+
+    /// An icon for the target activity when presented to users through the alias.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-alias-element#icon>
+    pub icon: Option<&'a str>,
+
+    /// A user-readable label for the alias when presented to users through the alias.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-alias-element#label>
+    pub label: Option<&'a str>,
+
+    /// A unique name for the alias.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-alias-element#nm>
+    pub name: Option<&'a str>,
+
+    /// The name of a permission that clients must have to launch the target activity or get it to do something using the alias.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-alias-element#prmsn>
+    pub permission: Option<&'a str>,
+
+    /// The name of the activity that can be activated through the alias.
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/activity-alias-element#trgt>
+    pub target_activity: Option<&'a str>,
+
+    /// A list of all declared `<intent-filter>` for a given activity
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/intent-filter-element>
+    pub intent_filters: Vec<IntentFilter<'a>>,
 }
 
 /// Represents `<permission>` in manifest
