@@ -713,19 +713,20 @@ impl Apk {
         Ok(signatures)
     }
 
-    // Information about the native code (.so libraries) of the APK file
+    /// Information about the native code (.so libraries) of the APK file
     pub fn get_native_codes(&self) -> Vec<String> {
         let mut native_codes_set = HashSet::new();
+
         for filename in self.zip.namelist() {
-            if filename.starts_with("lib/") && filename.ends_with(".so") {
-                let parts: Vec<&str> = filename.split('/').collect();
-                // The structure is usually lib/<abi>/<libname>.so
-                if parts.len() == 3 {
-                    let abi: String = parts[1].to_string();
-                    native_codes_set.insert(abi);
+            if let Some(rest) = filename.strip_prefix("/lib") {
+                if let Some((abi, lib)) = rest.split_once('/') {
+                    if lib.ends_with(".so") && !abi.is_empty() {
+                        native_codes_set.insert(abi.to_owned());
+                    }
                 }
             }
         }
+
         let mut native_codes: Vec<String> = native_codes_set.into_iter().collect();
         native_codes.sort();
         native_codes

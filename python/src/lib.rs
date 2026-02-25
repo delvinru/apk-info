@@ -700,6 +700,13 @@ impl Apk {
     pub fn get_build_version_name(&self) -> Option<String> {
         self.apkrs.get_build_version_name()
     }
+    pub fn get_compile_sdk_version(&self) -> Option<String> {
+        self.apkrs.get_compile_sdk_version()
+    }
+
+    pub fn get_compile_sdk_version_codename(&self) -> Option<String> {
+        self.apkrs.get_compile_sdk_version_codename()
+    }
 
     pub fn get_install_location(&self) -> Option<String> {
         self.apkrs.get_install_location()
@@ -840,6 +847,10 @@ impl Apk {
             .into_iter()
             .filter_map(|x| Signature::from(py, x))
             .collect())
+    }
+
+    pub fn get_native_codes(&self) -> Vec<String> {
+        self.apkrs.get_native_codes()
     }
 }
 

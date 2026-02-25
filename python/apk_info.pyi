@@ -296,6 +296,28 @@ class APK:
         """
         ...
 
+    def get_compile_sdk_version(self) -> str | None:
+        """
+        Retrieves the `compileSdkVersion` from the `<manifest>` element.
+
+        Returns
+        -------
+        str | None
+            The sdk version as a string if present, otherwise None
+        """
+        ...
+
+    def get_comnpile_sdk_version_codename(self) -> str | None:
+        """
+        Retrieves the `compileSdkVersionCodename` from the `<manifest>` element.
+
+        Returns
+        -------
+        str | None
+            The sdk version codename as a string if present, otherwise None
+        """
+        ...
+
     def get_install_location(self) -> Literal["auto", "internalOnly", "preferExternal"] | None:
         """
         Retrieves the preferred installation location declared in the manifest.
