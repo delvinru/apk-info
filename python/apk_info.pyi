@@ -1042,16 +1042,16 @@ class IntentFilter:
     <a href="https://developer.android.com/guide/topics/manifest/intent-filter-element" target="_blank">https://developer.android.com/guide/topics/manifest/intent-filter-element</a>
     """
 
-    action: str | None
+    actions: list[str]
     """
-    The name of the action filter
+    A list of declared actions
 
     See: https://developer.android.com/guide/topics/manifest/action-element
     """
 
-    category: str | None
+    categories: list[str]
     """
-    The name of category filter
+    A list of declared categories
 
     See: https://developer.android.com/guide/topics/manifest/category-element
     """

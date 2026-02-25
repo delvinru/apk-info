@@ -232,17 +232,17 @@ impl From<ZipFileCompressionType> for FileCompressionType {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct IntentFilter {
     #[pyo3(get)]
-    action: Option<String>,
+    actions: Vec<String>,
 
     #[pyo3(get)]
-    category: Option<String>,
+    categories: Vec<String>,
 }
 
 impl<'a> From<ApkIntentFilter<'a>> for IntentFilter {
     fn from(intent: ApkIntentFilter<'a>) -> Self {
         IntentFilter {
-            action: intent.action.map(String::from),
-            category: intent.category.map(String::from),
+            actions: intent.actions.into_iter().map(String::from).collect(),
+            categories: intent.categories.into_iter().map(String::from).collect(),
         }
     }
 }
@@ -252,14 +252,28 @@ impl IntentFilter {
     fn __repr__(&self) -> String {
         let mut parts = Vec::with_capacity(16);
         macro_rules! push_field {
-            ($field:ident) => {
+            // Option<T>
+            (opt $field:ident) => {
                 if let Some(ref v) = self.$field {
                     parts.push(format!(concat!(stringify!($field), "={:?}"), v));
                 }
             };
+
+            // Vec<T> (skip if empty)
+            (vec $field:ident) => {
+                if !self.$field.is_empty() {
+                    parts.push(format!(concat!(stringify!($field), "={:?}"), self.$field));
+                }
+            };
+
+            // Plain field (always print)
+            ($field:ident) => {
+                parts.push(format!(concat!(stringify!($field), "={:?}"), self.$field));
+            };
         }
-        push_field!(action);
-        push_field!(category);
+
+        push_field!(vec actions);
+        push_field!(vec categories);
 
         format!("IntentFilter({})", parts.join(", "))
     }

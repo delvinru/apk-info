@@ -14,15 +14,15 @@ pub struct XAPKManifest {
 /// More information: <https://developer.android.com/guide/topics/manifest/intent-filter-element>
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 pub struct IntentFilter<'a> {
-    /// The name of the action filter
+    /// A list of declared actions
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/action-element>
-    pub action: Option<&'a str>,
+    pub actions: Vec<&'a str>,
 
-    /// The name of category filter
+    /// A list of declared categories
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/category-element>
-    pub category: Option<&'a str>,
+    pub categories: Vec<&'a str>,
 }
 
 /// Represents `<activity>` in manifest

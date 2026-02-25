@@ -611,18 +611,30 @@ impl Apk {
             .childrens()
             .filter(|intent| intent.name() == "intent-filter")
             .map(|intent| {
-                let mut action = None;
-                let mut category = None;
+                let mut actions = Vec::new();
+                let mut categories = Vec::new();
 
+                // only one iteration
                 for child in intent.childrens() {
                     match child.name() {
-                        "action" => action = child.attr("name"),
-                        "category" => category = child.attr("name"),
+                        "action" => {
+                            if let Some(name) = child.attr("name") {
+                                actions.push(name);
+                            }
+                        }
+                        "category" => {
+                            if let Some(name) = child.attr("name") {
+                                categories.push(name);
+                            }
+                        }
                         _ => {}
                     }
                 }
 
-                IntentFilter { action, category }
+                IntentFilter {
+                    actions,
+                    categories,
+                }
             })
     }
 
