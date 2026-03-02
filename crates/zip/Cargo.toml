@@ -12,14 +12,17 @@ version.workspace = true
 
 [dependencies]
 ahash.workspace = true
-const-hex.workspace = true
+cms.workspace = true
 flate2.workspace = true
 log.workspace = true
+md-5.workspace = true
 memchr.workspace = true
-openssl.workspace = true
 serde.workspace = true
+sha1.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 winnow.workspace = true
+x509-cert.workspace = true
 
 [lib]
 doctest = false

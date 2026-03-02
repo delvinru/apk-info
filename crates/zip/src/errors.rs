@@ -2,7 +2,6 @@
 //!
 //! This module contains the definitions for all error types returned by this crate.
 
-use openssl::error::ErrorStack;
 use thiserror::Error;
 
 /// Represents all possible errors that can occur while parsing a ZIP archive.
@@ -43,10 +42,6 @@ pub enum CertificateError {
     /// An error occurred while parsing a ZIP archive within the certificate context.
     #[error("got zip error while parsing certificate: {0}")]
     ZipError(#[from] ZipError),
-
-    /// An OpenSSL stack error occurred.
-    #[error("got stack error: {0}")]
-    StackError(#[from] ErrorStack),
 
     /// A signing error occurred (e.g., invalid signer or signature verification failed).
     #[error("got signer error")]

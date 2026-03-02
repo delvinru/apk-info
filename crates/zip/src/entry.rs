@@ -1,19 +1,25 @@
 //! Describes a `zip` archive
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use ahash::AHashMap;
+use cms::cert::CertificateChoices;
+use cms::content_info::ContentInfo;
+use cms::signed_data::SignedData;
 use flate2::{Decompress, FlushDecompress, Status};
 use log::warn;
-use openssl::hash::MessageDigest;
-use openssl::pkcs7::{Pkcs7, Pkcs7Flags};
-use openssl::stack::Stack;
-use openssl::x509::{X509, X509Ref};
+use md5::{Digest, Md5};
+use sha1::Sha1;
+use sha2::Sha256;
 use winnow::binary::{le_u32, le_u64, length_take};
 use winnow::combinator::repeat;
 use winnow::error::ContextError;
 use winnow::prelude::*;
 use winnow::token::take;
+use x509_cert::Certificate;
+use x509_cert::der::oid::db::DB;
+use x509_cert::der::{Decode, Encode};
 
 use crate::signature::{CertificateInfo, Signature};
 use crate::structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader};
@@ -291,84 +297,6 @@ impl ZipEntry {
     /// See: <https://edgeone.ai/document/58005>
     pub const VASDOLLY_V2: u32 = 0x881155ff;
 
-    /// Converts an OpenSSL [`X509Ref`] into a [`CertificateInfo`] struct.
-    ///
-    /// Extracts common certificate metadata such as serial number, subject, issuer,
-    /// validity period, signature algorithm, and cryptographic fingerprints.
-    fn get_certificate_info(
-        &self,
-        certificate: &X509Ref,
-    ) -> Result<CertificateInfo, CertificateError> {
-        #[inline]
-        fn digest_hex(cert: &X509Ref, md: MessageDigest) -> Result<String, CertificateError> {
-            Ok(const_hex::encode(
-                cert.digest(md).map_err(CertificateError::StackError)?,
-            ))
-        }
-
-        let serial_number = {
-            let bn = certificate
-                .serial_number()
-                .to_bn()
-                .map_err(CertificateError::StackError)?;
-
-            const_hex::encode(bn.to_vec())
-        };
-
-        let mut subject = String::with_capacity(128); // estimate
-        for entry in certificate.subject_name().entries() {
-            if let Ok(value) = entry.data().as_utf8() {
-                if !subject.is_empty() {
-                    subject.push(' ');
-                }
-                subject.push_str(entry.object().nid().short_name().unwrap_or_default());
-                subject.push('=');
-                subject.push_str(value.as_ref());
-            }
-        }
-
-        let mut issuer = String::with_capacity(128);
-
-        for entry in certificate.issuer_name().entries() {
-            if let Ok(value) = entry.data().as_utf8() {
-                if !issuer.is_empty() {
-                    issuer.push(' ');
-                }
-                let name = entry.object().nid().short_name().unwrap_or_default();
-                issuer.push_str(name);
-                issuer.push('=');
-                issuer.push_str(value.as_ref());
-            }
-        }
-
-        let valid_from = certificate.not_before().to_string();
-        let valid_until = certificate.not_after().to_string();
-
-        let signature_type = certificate
-            .signature_algorithm()
-            .object()
-            .nid()
-            .long_name()
-            .map_err(CertificateError::StackError)?
-            .to_string();
-
-        let md5_fingerprint = digest_hex(certificate, MessageDigest::md5())?;
-        let sha1_fingerprint = digest_hex(certificate, MessageDigest::sha1())?;
-        let sha256_fingerprint = digest_hex(certificate, MessageDigest::sha256())?;
-
-        Ok(CertificateInfo {
-            serial_number,
-            subject,
-            issuer,
-            valid_from,
-            valid_until,
-            signature_type,
-            md5_fingerprint,
-            sha1_fingerprint,
-            sha256_fingerprint,
-        })
-    }
-
     /// Extracts information from a v1 (APK-style) signature in the ZIP archive.
     ///
     /// This method searches for signature files in the `META-INF/` directory
@@ -398,19 +326,33 @@ impl ZipEntry {
 
         let (data, _) = self
             .read(signature_file)
-            .map_err(CertificateError::ZipError)?;
+            .map_err(|_| CertificateError::ParseError)?;
 
-        let info = Pkcs7::from_der(&data).map_err(CertificateError::StackError)?;
-        let certs = Stack::new().map_err(CertificateError::StackError)?;
+        let info = ContentInfo::from_der(&data).map_err(|_| CertificateError::ParseError)?;
+        let content = info
+            .content
+            .to_der()
+            .map_err(|_| CertificateError::ParseError)?;
 
-        let certificates = info
-            .signers(&certs, Pkcs7Flags::STREAM)
-            .map_err(|_| CertificateError::SignerError)?
-            .iter()
-            .map(|signer| self.get_certificate_info(signer))
-            .collect::<Result<Vec<CertificateInfo>, CertificateError>>()?;
+        let signed_data =
+            SignedData::from_der(&content).map_err(|_| CertificateError::ParseError)?;
 
-        Ok(Signature::V1(certificates))
+        let certs = signed_data
+            .certificates
+            .ok_or(CertificateError::ParseError)?
+            .0
+            .into_vec()
+            .into_iter()
+            .filter_map(|cert| {
+                if let CertificateChoices::Certificate(cert) = cert {
+                    Some(cert.into())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Ok(Signature::V1(certs))
     }
 
     /// Parses the APK Signature Block and extracts useful information.
@@ -491,11 +433,11 @@ impl ZipEntry {
         }
     }
 
-    fn parse_certificate<'a>() -> impl Parser<&'a [u8], X509, ContextError> {
+    fn parse_certificate<'a>() -> impl Parser<&'a [u8], Option<CertificateInfo>, ContextError> {
         move |input: &mut &'a [u8]| {
             let certificate = length_take(le_u32).parse_next(input)?;
 
-            Ok(X509::from_der(certificate).expect("why openssl can't decode this certificate?"))
+            Ok(Certificate::from_der(certificate).ok().map(Into::into))
         }
     }
 
@@ -532,7 +474,7 @@ impl ZipEntry {
         }
     }
 
-    fn parse_signer_v2<'a>() -> impl Parser<&'a [u8], Vec<X509>, ContextError> {
+    fn parse_signer_v2<'a>() -> impl Parser<&'a [u8], Vec<CertificateInfo>, ContextError> {
         move |input: &mut &'a [u8]| {
             // 1 - parse signer
             let mut signer_data = length_take(le_u32).parse_next(input)?;
@@ -548,7 +490,7 @@ impl ZipEntry {
 
             // 1.1.2 - parse certificates
             let mut certificates_data = length_take(le_u32).parse_next(&mut signed_data)?;
-            let certificates: Vec<X509> =
+            let certificates: Vec<Option<CertificateInfo>> =
                 repeat(0.., Self::parse_certificate()).parse_next(&mut certificates_data)?;
 
             // 1.1.3 - parse attributes
@@ -566,11 +508,11 @@ impl ZipEntry {
             // 1.3 - parse public key
             let _public_key = length_take(le_u32).parse_next(&mut signer_data)?;
 
-            Ok(certificates)
+            Ok(certificates.into_iter().flatten().collect())
         }
     }
 
-    fn parse_signer_v3<'a>() -> impl Parser<&'a [u8], Vec<X509>, ContextError> {
+    fn parse_signer_v3<'a>() -> impl Parser<&'a [u8], Vec<CertificateInfo>, ContextError> {
         move |input: &mut &'a [u8]| {
             // 1 - parse signer
             let mut signer_data = length_take(le_u32).parse_next(input)?;
@@ -586,7 +528,7 @@ impl ZipEntry {
 
             // 1.1.2 - parse certificates
             let mut certificates_data = length_take(le_u32).parse_next(&mut signed_data)?;
-            let certificates: Vec<X509> =
+            let certificates: Vec<Option<CertificateInfo>> =
                 repeat(0.., Self::parse_certificate()).parse_next(&mut certificates_data)?;
 
             // 1.1.3 - parse sdk's
@@ -611,7 +553,7 @@ impl ZipEntry {
             // 1.4 - parse public key
             let _public_key = length_take(le_u32).parse_next(&mut signer_data)?;
 
-            Ok(certificates)
+            Ok(certificates.into_iter().flatten().collect())
         }
     }
 
@@ -624,12 +566,14 @@ impl ZipEntry {
                     let mut signers_data = length_take(le_u32).parse_next(input)?;
 
                     let certificates =
-                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer_v2())
-                            .parse_next(&mut signers_data)?
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|cert| self.get_certificate_info(&cert).ok())
-                            .collect();
+                        repeat::<_, Vec<CertificateInfo>, Vec<Vec<CertificateInfo>>, _, _>(
+                            1..,
+                            Self::parse_signer_v2(),
+                        )
+                        .parse_next(&mut signers_data)?
+                        .into_iter()
+                        .flatten()
+                        .collect();
 
                     Ok(Signature::V2(certificates))
                 }
@@ -637,12 +581,14 @@ impl ZipEntry {
                     let mut signers_data = length_take(le_u32).parse_next(input)?;
 
                     let certificates =
-                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer_v3())
-                            .parse_next(&mut signers_data)?
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|cert| self.get_certificate_info(&cert).ok())
-                            .collect();
+                        repeat::<_, Vec<CertificateInfo>, Vec<Vec<CertificateInfo>>, _, _>(
+                            1..,
+                            Self::parse_signer_v3(),
+                        )
+                        .parse_next(&mut signers_data)?
+                        .into_iter()
+                        .flatten()
+                        .collect();
 
                     Ok(Signature::V3(certificates))
                 }
@@ -650,12 +596,14 @@ impl ZipEntry {
                     let mut signers_data = length_take(le_u32).parse_next(input)?;
 
                     let certificates =
-                        repeat::<_, Vec<X509>, Vec<Vec<X509>>, _, _>(1.., Self::parse_signer_v3())
-                            .parse_next(&mut signers_data)?
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|cert| self.get_certificate_info(&cert).ok())
-                            .collect();
+                        repeat::<_, Vec<CertificateInfo>, Vec<Vec<CertificateInfo>>, _, _>(
+                            1..,
+                            Self::parse_signer_v3(),
+                        )
+                        .parse_next(&mut signers_data)?
+                        .into_iter()
+                        .flatten()
+                        .collect();
 
                     Ok(Signature::V31(certificates))
                 }
@@ -675,12 +623,9 @@ impl ZipEntry {
                     // i don't think that it is usefull information
                     let _signed_data = length_take(le_u32).parse_next(input)?;
 
-                    // TODO: proper error message
-                    let certificate = self
-                        .get_certificate_info(&certificate)
-                        .map_err(|_| ContextError::new())?;
-
-                    Ok(Signature::StampBlockV1(certificate))
+                    certificate
+                        .map(Signature::StampBlockV1)
+                        .ok_or_else(ContextError::new)
                 }
                 Self::V2_SOURCE_STAMP_BLOCK_ID => {
                     // https://cs.android.com/android/platform/superproject/main/+/main:tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/V2SourceStampSigner.java;l=124;drc=61197364367c9e404c7da6900658f1b16c42d0da;bpv=0;bpt=1
@@ -697,12 +642,9 @@ impl ZipEntry {
                     // i don't think that it is usefull information
                     let _signed_attributes = length_take(le_u32).parse_next(input)?;
 
-                    // TODO: proper error message
-                    let certificate = self
-                        .get_certificate_info(&certificate)
-                        .map_err(|_| ContextError::new())?;
-
-                    Ok(Signature::StampBlockV2(certificate))
+                    certificate
+                        .map(Signature::StampBlockV2)
+                        .ok_or_else(ContextError::new)
                 }
                 Self::PACKER_NG_SIG_V2 => {
                     let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
@@ -738,6 +680,45 @@ impl ZipEntry {
                     Ok(Signature::Unknown)
                 }
             }
+        }
+    }
+}
+
+impl From<Certificate> for CertificateInfo {
+    fn from(value: Certificate) -> Self {
+        let mut cert_data = Vec::new();
+        _ = value.encode_to_vec(&mut cert_data);
+        let cert = value.tbs_certificate;
+
+        CertificateInfo {
+            serial_number: cert.serial_number.to_string(),
+            subject: cert.subject.to_string(),
+            issuer: cert.issuer.to_string(),
+            valid_from: cert.validity.not_before.to_string(),
+            valid_until: cert.validity.not_after.to_string(),
+            signature_type: DB
+                .by_oid(&cert.signature.oid)
+                .unwrap_or_default()
+                .to_string(),
+            md5_fingerprint: Md5::digest(&cert_data)
+                .iter()
+                .fold(String::new(), |mut out, x| {
+                    _ = write!(out, "{x:02x}");
+                    out
+                }),
+            sha1_fingerprint: Sha1::digest(&cert_data)
+                .iter()
+                .fold(String::new(), |mut out, x| {
+                    _ = write!(out, "{x:02x}");
+                    out
+                }),
+            sha256_fingerprint: Sha256::digest(&cert_data).iter().fold(
+                String::new(),
+                |mut out, x| {
+                    _ = write!(out, "{x:02x}");
+                    out
+                },
+            ),
         }
     }
 }
