@@ -24,7 +24,13 @@ pub(crate) fn command_show(paths: &[PathBuf], show_signatures: &bool, jsonl: &bo
 }
 
 fn show(path: &Path, show_signatures: &bool, jsonl: &bool) -> Result<()> {
-    let info = collect_apk_info(path, show_signatures)?;
+    let info = match collect_apk_info(path, show_signatures) {
+        Ok(v) => v,
+        Err(e) => {
+            println!("{:?} - {}", path, e.to_string().red());
+            return Ok(());
+        }
+    };
 
     if *jsonl {
         print!("{}", serde_json::to_string(&info)?);

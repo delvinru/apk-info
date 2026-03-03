@@ -691,7 +691,13 @@ impl From<Certificate> for CertificateInfo {
         let cert = value.tbs_certificate;
 
         CertificateInfo {
-            serial_number: cert.serial_number.to_string(),
+            serial_number: cert.serial_number.as_bytes().iter().fold(
+                String::new(),
+                |mut out, x| {
+                    _ = write!(out, "{x:02x}");
+                    out
+                },
+            ),
             subject: cert.subject.to_string(),
             issuer: cert.issuer.to_string(),
             valid_from: cert.validity.not_before.to_string(),
