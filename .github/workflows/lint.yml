@@ -5,8 +5,11 @@ jobs:
   clippy:
     name: clippy
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: install rust components
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -16,8 +19,11 @@ jobs:
   rustfmt:
     name: rustfmt
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: install rust components
         uses: dtolnay/rust-toolchain@nightly
         with:
