@@ -81,13 +81,6 @@ impl CentralDirectoryEntry {
             crc32,
             compressed_size,
             uncompressed_size,
-            file_name_length,
-            extra_field_length,
-            file_comment_length,
-            disk_number_start,
-            internal_attrs,
-            external_attrs,
-            local_header_offset,
         ) = (
             le_u32.verify(|magic| *magic == Self::MAGIC), // magic
             le_u16,                                       // version_made_by
@@ -99,13 +92,25 @@ impl CentralDirectoryEntry {
             le_u32,                                       // crc32
             le_u32,                                       // compressed_size
             le_u32,                                       // uncompressed_size
-            le_u16,                                       // file_name_length
-            le_u16,                                       // extra_field_length
-            le_u16,                                       // file_comment_length
-            le_u16,                                       // disk_number_start
-            le_u16,                                       // internal_attrs
-            le_u32,                                       // external_attrs
-            le_u32,                                       // local_header_offset
+        )
+            .parse_next(input)?;
+
+        let (
+            file_name_length,
+            extra_field_length,
+            file_comment_length,
+            disk_number_start,
+            internal_attrs,
+            external_attrs,
+            local_header_offset,
+        ) = (
+            le_u16, // file_name_length
+            le_u16, // extra_field_length
+            le_u16, // file_comment_length
+            le_u16, // disk_number_start
+            le_u16, // internal_attrs
+            le_u32, // external_attrs
+            le_u32, // local_header_offset
         )
             .parse_next(input)?;
 
