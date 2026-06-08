@@ -778,12 +778,13 @@ impl Apk {
     }
 
     /// Information about the native code (.so libraries) of the APK file
-    pub fn get_native_codes(&self) -> Vec<String> {
+    pub fn get_supported_abis(&self) -> Vec<String> {
         let mut native_codes_set = HashSet::new();
 
         for filename in self.zip.namelist() {
-            if let Some(rest) = filename.strip_prefix("lib/")
-                && let Some((abi, lib)) = rest.split_once('/')
+            if let Some((abi, lib)) = filename
+                .strip_prefix("lib/")
+                .and_then(|rest| rest.split_once('/'))
                 && lib.ends_with(".so")
                 && !abi.is_empty()
             {

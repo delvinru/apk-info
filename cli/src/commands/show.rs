@@ -51,6 +51,7 @@ struct ApkInfo {
     pub max_sdk_version: String,
     pub target_sdk_version: String,
     pub application_label: String,
+    pub abis: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signatures: Option<Vec<Signature>>,
 }
@@ -84,6 +85,7 @@ fn collect_apk_info(path: &Path, show_signatures: &bool) -> Result<ApkInfo> {
         application_label: apk
             .get_application_label()
             .unwrap_or_else(|| "-".to_string()),
+        abis: apk.get_supported_abis(),
         signatures,
     })
 }
@@ -97,6 +99,10 @@ fn pretty_print(info: &ApkInfo) {
     println!("Application Label: {}", info.application_label.green(),);
     println!("Version Name: {}", info.version_name.green(),);
     println!("Version Code: {}", info.version_code.green(),);
+
+    if !info.abis.is_empty() {
+        println!("ABIs: {}", info.abis.join(", ").green());
+    }
 
     if let Some(signatures) = &info.signatures {
         println!("{}:", "APK Signature block".blue().bold());

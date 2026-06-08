@@ -1009,8 +1009,8 @@ impl Apk {
             .collect())
     }
 
-    pub fn get_native_codes(&self) -> Vec<String> {
-        self.apkrs.get_native_codes()
+    pub fn get_supported_abis(&self) -> Vec<String> {
+        self.apkrs.get_supported_abis()
     }
 }
 

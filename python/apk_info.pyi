@@ -851,7 +851,7 @@ class APK:
         """
         ...
 
-    def get_native_codes(self) -> list[str]:
+    def get_supported_abis(self) -> list[str]:
         """
         Retrieves all available native platforms: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`
 
