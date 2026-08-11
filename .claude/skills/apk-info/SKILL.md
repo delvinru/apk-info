@@ -1,7 +1,7 @@
 ---
 name: apk-info
 description: Use this skill whenever a user needs to extract information from Android APK, XAPK, or APKM files - package name, version, SDK levels, main activity, permissions, manifest components (activities, services, receivers, providers), signing certificates, or the decoded AndroidManifest.xml. Covers the apk-info CLI and Python library. Trigger when a user wants to parse or inspect an APK in Python or on the command line; needs an androguard alternative or faster APK parser; encounters unzip or 7z failures on an APK (BadPack technique, unsupported compression method, missing or empty AndroidManifest.xml); needs to inspect APK signatures (v1/v2/v3/v3.1, source stamps, channel blocks); wants to batch-process a folder of APKs; or has a .zip file that is actually an APK. Read-only analysis - does not build, sign, modify, or decompile APKs. Trigger even when the user does not name apk-info explicitly.
-license: MIT
+license: Apache-2.0
 metadata:
   author: delvinru
   version: 1.0.12

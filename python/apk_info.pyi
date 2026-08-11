@@ -1006,7 +1006,7 @@ class Signature:
         value: bytes
 
     @dataclass
-    class VasDolleyV2:
+    class VasDollyV2:
         """
         Some apk protector/parser, idk, seen in the wild
 
@@ -1027,7 +1027,7 @@ type SignatureType = (
     | Signature.V2
     | Signature.V3
     | Signature.V31
-    | Signature.VasDolleyV2
+    | Signature.VasDollyV2
 )
 """
 Represents all available signatures
