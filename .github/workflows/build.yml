@@ -35,7 +35,7 @@ jobs:
             target: aarch64-apple-darwin
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -80,7 +80,7 @@ jobs:
             tar czf $name.tar.gz -C target/${{ matrix.platform.target }}/release-lto apk-info
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: apk-info-${{ matrix.platform.target }}
           path: apk-info-*
@@ -95,19 +95,21 @@ jobs:
           - aarch64
           - armv7
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: manylinux_2_28
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-linux-${{ matrix.target }}
           path: dist
@@ -122,19 +124,21 @@ jobs:
           - aarch64
           - armv7
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
       - name: Upload wheels
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-musllinux-${{ matrix.target }}
           path: dist
@@ -145,16 +149,18 @@ jobs:
       matrix:
         target: [x64, x86]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
           architecture: ${{ matrix.target }}
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
-      - uses: actions/upload-artifact@v4
+          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-windows-${{ matrix.target }}
           path: dist
@@ -165,15 +171,17 @@ jobs:
       matrix:
         target: [x86_64, aarch64]
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v7
         with:
           python-version: 3.x
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
-      - uses: actions/upload-artifact@v4
+          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
+      - uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-${{ matrix.target }}
           path: dist
@@ -181,14 +189,16 @@ jobs:
   sdist:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
           args: --out dist --manifest-path ./python/Cargo.toml
       - name: Upload sdist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-sdist
           path: dist
