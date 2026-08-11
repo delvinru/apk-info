@@ -1,0 +1,200 @@
+name: Build
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build-cli:
+    name: cli - (${{ matrix.platform.os }})
+    runs-on: ${{ matrix.platform.runs-on }}
+    strategy:
+      matrix:
+        platform:
+          - os: linux-x86_64
+            runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+          - os: linux-aarch64
+            runs-on: ubuntu-24.04
+            target: aarch64-unknown-linux-musl
+          - os: android-aarch64
+            runs-on: ubuntu-24.04
+            target: aarch64-linux-android
+          - os: windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: macos-x86_64
+            runs-on: macos-15
+            target: x86_64-apple-darwin
+          - os: macos-arm
+            runs-on: macos-15
+            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.platform.target }}
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+          key: cli-${{ matrix.platform.target }}
+
+      - name: Check version matches tag
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -ex
+          version=$(cargo pkgid --manifest-path core/Cargo.toml | cut -d "@" -f2)
+          if [ "${{ github.ref_name }}" != "v$version" ]; then
+            echo "Tag version does not match crate version"
+            exit 1
+          fi
+
+      - name: Install cross toolchain
+        if: endsWith(matrix.platform.target, '-musl') || endsWith(matrix.platform.target, '-android')
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.platform.target }}
+
+      - name: Build CLI
+        run: cargo build --profile release-lto --bin apk-info --target ${{ matrix.platform.target }}
+
+      - name: Create archive
+        shell: bash
+        run: |
+          set -ex
+          name=apk-info-${{ github.ref_name }}-${{ matrix.platform.target }}
+          if [ "${{ matrix.platform.os }}" == "windows-x86_64" ]; then
+            7z a $name.zip ./target/${{ matrix.platform.target }}/release-lto/apk-info.exe
+          else
+            tar czf $name.tar.gz -C target/${{ matrix.platform.target }}/release-lto apk-info
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-info-${{ matrix.platform.target }}
+          path: apk-info-*
+
+  linux-py:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target:
+          - x86_64
+          - x86
+          - aarch64
+          - armv7
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: manylinux_2_28
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-linux-${{ matrix.target }}
+          path: dist
+
+  musllinux-py:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target:
+          - x86_64
+          - x86
+          - aarch64
+          - armv7
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+          sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          manylinux: musllinux_1_2
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-musllinux-${{ matrix.target }}
+          path: dist
+
+  windows-py:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x64, x86]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+          architecture: ${{ matrix.target }}
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.target }}
+          path: dist
+
+  macos-py:
+    runs-on: macos-15
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --profile release-lto --out dist --find-interpreter --manifest-path ./python/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-macos-${{ matrix.target }}
+          path: dist
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist --manifest-path ./python/Cargo.toml
+      - name: Upload sdist
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-sdist
+          path: dist
+
+  build-all:
+    runs-on: ubuntu-latest
+    needs: [build-cli, linux-py, musllinux-py, windows-py, macos-py, sdist]
+    steps:
+      - run: echo "All builds completed successfully"
