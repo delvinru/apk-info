@@ -405,9 +405,9 @@
   <public type="attr" name="flipInterval" id="0x01010179" />
   <public type="attr" name="fillViewport" id="0x0101017a" />
   <public type="attr" name="prompt" id="0x0101017b" />
-  <!-- {@deprecated Use minDate instead.} -->
+  <!-- @deprecated Use minDate instead. -->
   <public type="attr" name="startYear" id="0x0101017c" />
-  <!-- {@deprecated Use maxDate instead.} -->
+  <!-- @deprecated Use maxDate instead. -->
   <public type="attr" name="endYear" id="0x0101017d" />
   <public type="attr" name="mode" id="0x0101017e" />
   <public type="attr" name="layout_x" id="0x0101017f" />
@@ -710,21 +710,21 @@
 
   <!-- Equivalent to 0xffaaaaaa -->
   <public type="color" name="darker_gray" id="0x01060000" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="primary_text_dark" id="0x01060001" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="primary_text_dark_nodisable" id="0x01060002" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="primary_text_light" id="0x01060003" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="primary_text_light_nodisable" id="0x01060004" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="secondary_text_dark" id="0x01060005" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="secondary_text_dark_nodisable" id="0x01060006" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="secondary_text_light" id="0x01060007" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="secondary_text_light_nodisable" id="0x01060008" />
   <!-- Equivalent to 0xff808080 -->
   <public type="color" name="tab_indicator_text" id="0x01060009" />
@@ -737,9 +737,9 @@
   <public type="color" name="background_dark" id="0x0106000e" />
   <!-- Equivalent to 0xffffffff -->
   <public type="color" name="background_light" id="0x0106000f" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="tertiary_text_dark" id="0x01060010" />
-  <!-- {@deprecated Use a text color from your theme instead.} -->
+  <!-- @deprecated Use a text color from your theme instead. -->
   <public type="color" name="tertiary_text_light" id="0x01060011" />
 
   <public type="array" name="emailAddressTypes" id="0x01070000" />
@@ -1068,7 +1068,7 @@
 
   <!-- View ID of the {@link android.inputmethodservice.KeyboardView} within
        an input method's input area.
-       {@deprecated Use Copy this definition into your own application project.} -->
+       @deprecated Use Copy this definition into your own application project. -->
   <public type="id" name="keyboardView" id="0x01020026" />
   <!-- View ID of a {@link android.view.View} to close a popup keyboard -->
   <public type="id" name="closeButton" id="0x01020027" />
@@ -1083,7 +1083,7 @@
   <public type="style" name="Theme.InputMethod" id="0x01030054" />
   <public type="style" name="Theme.NoDisplay" id="0x01030055" />
   <public type="style" name="Animation.InputMethod" id="0x01030056" />
-  <!-- {@deprecated Use Copy this definition into your own application project.} -->
+  <!-- @deprecated Use Copy this definition into your own application project. -->
   <public type="style" name="Widget.KeyboardView" id="0x01030057" />
   <public type="style" name="ButtonBar" id="0x01030058" />
   <public type="style" name="Theme.Panel" id="0x01030059" />
@@ -2816,7 +2816,7 @@
     <public type="attr" name="iconSpaceReserved" id="0x01010561"/>
     <public type="attr" name="defaultFocusHighlightEnabled" id="0x01010562" />
     <public type="attr" name="persistentWhenFeatureAvailable" id="0x01010563"/>
-    <!-- {@deprecated Use windowSplashscreenAnimatedIcon instead } -->
+    <!-- @deprecated Use windowSplashscreenAnimatedIcon instead  -->
     <public type="attr" name="windowSplashscreenContent" id="0x01010564" />
     <!-- @hide @SystemApi -->
     <public type="attr" name="requiredSystemPropertyName" id="0x01010565" />
@@ -2905,7 +2905,7 @@
     <public type="attr" name="usesNonSdkApi" id="0x0101058e" />
     <public type="attr" name="nonInteractiveUiTimeout" id="0x0101058f" />
     <public type="attr" name="isLightTheme" id="0x01010590" />
-    <!-- {@deprecated Use requiredSplitTypes instead.} -->
+    <!-- @deprecated Use requiredSplitTypes instead. -->
     <public type="attr" name="isSplitRequired" id="0x01010591" />
     <public type="attr" name="textLocale" id="0x01010592" />
     <public type="attr" name="settingsSliceUri" id="0x01010593" />
@@ -2955,11 +2955,11 @@
     <public type="string" name="config_feedbackIntentExtraKey" id="0x0104001f" />
     <!-- @hide @SystemApi -->
     <public type="string" name="config_feedbackIntentNameKey" id="0x01040020" />
-    <!-- @hide @SystemApi @TestApi -->
+    <!-- @hide @SystemApi -->
     <public type="string" name="config_defaultAssistant" id="0x01040021" />
     <!-- @hide @SystemApi -->
     <public type="string" name="config_defaultBrowser" id="0x01040022" />
-    <!-- @hide @SystemApi @TestApi -->
+    <!-- @hide @SystemApi -->
     <public type="string" name="config_defaultDialer" id="0x01040023" />
     <!-- @hide @SystemApi -->
     <public type="string" name="config_defaultSms" id="0x01040024" />
@@ -3009,7 +3009,7 @@
     <public type="string" name="config_defaultCallRedirection" id="0x01040025" />
     <!-- @hide @SystemApi -->
     <public type="string" name="config_defaultCallScreening" id="0x01040026" />
-    <!-- @hide @SystemApi @TestApi -->
+    <!-- @hide @SystemApi -->
     <public type="string" name="config_systemGallery" id="0x01040027" />
 
     <public type="id" name="accessibilityActionPressAndHold" id="0x0102004a" />
@@ -3160,9 +3160,9 @@
     <public type="dimen" name="system_app_widget_background_radius" id="0x01050008" />
     <public type="dimen" name="system_app_widget_inner_radius" id="0x01050009" />
 
-    <!-- @hide @SystemApi @TestApi -->
+    <!-- @hide @SystemApi -->
     <public type="string" name="config_systemAutomotiveCluster" id="0x01040028" />
-    <!-- @hide @SystemApi @TestApi -->
+    <!-- @hide @SystemApi -->
     <public type="string" name="config_systemAutomotiveProjection" id="0x01040029" />
     <!-- @hide @SystemApi -->
     <public type="string" name="config_systemShell" id="0x0104002a" />
@@ -3345,7 +3345,7 @@
     <public name="config_devicePolicyManagement" />
     <!-- @hide @SystemApi -->
     <public name="config_systemAppProtectionService" />
-    <!-- @hide @SystemApi @TestApi -->
+    <!-- @hide @SystemApi -->
     <public name="config_systemAutomotiveCalendarSyncManager" />
     <!-- @hide @SystemApi -->
     <public name="config_defaultAutomotiveNavigation" />
@@ -3363,7 +3363,7 @@
   <public type="string" name="config_devicePolicyManagement" id="0x0104003d" />
     <!-- @hide @SystemApi -->
   <public type="string" name="config_systemAppProtectionService" id="0x0104003e" />
-    <!-- @hide @SystemApi @TestApi -->
+    <!-- @hide @SystemApi -->
   <public type="string" name="config_systemAutomotiveCalendarSyncManager" id="0x0104003f" />
     <!-- @hide @SystemApi -->
   <public type="string" name="config_defaultAutomotiveNavigation" id="0x01040040" />
@@ -3742,7 +3742,7 @@
   <public type="bool" name="config_enableDefaultNotesForWorkProfile" id="0x0111000b" />
 
   <!-- ===============================================================
-    Resources added in version NEXT of the platform
+    Resources added in version VANILLA_ICE_CREAM (35) of the platform
 
     NOTE: After this version of the platform is forked, changes cannot be made to the root
     branch's groups for that release. Only merge changes to the forked platform branch.
@@ -3801,7 +3801,6 @@
     <public name="supportsConnectionlessStylusHandwriting" />
     <!-- @FlaggedApi("android.nfc.nfc_observe_mode") -->
     <public name="shouldDefaultToObserveMode"/>
-    <!-- @FlaggedApi("android.security.asm_restrictions_enabled") -->
     <public name="allowCrossUidActivitySwitchFromBelow"/>
     <!-- @FlaggedApi("com.android.text.flags.use_bounds_for_width") -->
     <public name="shiftDrawingOffsetForStartOverhang" />
@@ -3856,7 +3855,6 @@
   <public type="attr" name="supportsConnectionlessStylusHandwriting" id="0x0101069f" />
     <!-- @FlaggedApi("android.nfc.nfc_observe_mode") -->
   <public type="attr" name="shouldDefaultToObserveMode" id="0x010106a0" />
-    <!-- @FlaggedApi("android.security.asm_restrictions_enabled") -->
   <public type="attr" name="allowCrossUidActivitySwitchFromBelow" id="0x010106a1" />
     <!-- @FlaggedApi("com.android.text.flags.use_bounds_for_width") -->
   <public type="attr" name="shiftDrawingOffsetForStartOverhang" id="0x010106a2" />
@@ -3921,5 +3919,379 @@
   <public type="color" name="system_error_800" id="0x010600cf" />
   <public type="color" name="system_error_900" id="0x010600d0" />
   <public type="color" name="system_error_1000" id="0x010600d1" />
+
+  <!-- ===============================================================
+    Resources added in version BAKLAVA (36) of the platform
+
+    NOTE: After this version of the platform is forked, changes cannot be made to the root
+    branch's groups for that release. Only merge changes to the forked platform branch.
+    =============================================================== -->
+  <eat-comment/>
+
+  <staging-public-group-final type="attr" first-id="0x01b70000">
+    <public name="removed_" />
+    <!-- @FlaggedApi("android.media.tv.flags.enable_ad_service_fw") -->
+    <public name="adServiceTypes" />
+    <public name="languageSettingsActivity"/>
+    <!-- @FlaggedApi(android.service.controls.flags.Flags.FLAG_HOME_PANEL_DREAM) -->
+    <public name="dreamCategory"/>
+    <!-- @FlaggedApi("android.permission.flags.replace_body_sensor_permission_enabled")
+         @hide @SystemApi -->
+    <public name="backgroundPermission"/>
+    <!-- @FlaggedApi("android.view.accessibility.supplemental_description") -->
+    <public name="supplementalDescription"/>
+    <!-- @FlaggedApi("android.security.enable_intent_matching_flags") -->
+    <public name="intentMatchingFlags"/>
+    <public name="layoutLabel"/>
+    <public name="removed_" />
+    <public name="removed_" />
+    <!-- @FlaggedApi(android.content.pm.Flags.FLAG_APP_COMPAT_OPTION_16KB) -->
+    <public name="pageSizeCompat" />
+    <!-- @FlaggedApi(android.nfc.Flags.FLAG_NFC_ASSOCIATED_ROLE_SERVICES) -->
+    <public name="wantsRoleHolderPriority"/>
+    <public name="removed_"/>
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi("android.media.tv.flags.enable_ad_service_fw") -->
+  <public type="attr" name="adServiceTypes" id="0x010106a4" />
+  <public type="attr" name="languageSettingsActivity" id="0x010106a5" />
+  <!-- @FlaggedApi(android.service.controls.flags.Flags.FLAG_HOME_PANEL_DREAM) -->
+  <public type="attr" name="dreamCategory" id="0x010106a6" />
+  <!-- @FlaggedApi("android.permission.flags.replace_body_sensor_permission_enabled")
+       @hide @SystemApi -->
+  <public type="attr" name="backgroundPermission" id="0x010106a7" />
+  <!-- @FlaggedApi("android.view.accessibility.supplemental_description") -->
+  <public type="attr" name="supplementalDescription" id="0x010106a8" />
+  <!-- @FlaggedApi("android.security.enable_intent_matching_flags") -->
+  <public type="attr" name="intentMatchingFlags" id="0x010106a9" />
+  <public type="attr" name="layoutLabel" id="0x010106aa" />
+  <!-- @FlaggedApi(android.content.pm.Flags.FLAG_APP_COMPAT_OPTION_16KB) -->
+  <public type="attr" name="pageSizeCompat" id="0x010106ab" />
+  <!-- @FlaggedApi(android.nfc.Flags.FLAG_NFC_ASSOCIATED_ROLE_SERVICES) -->
+  <public type="attr" name="wantsRoleHolderPriority" id="0x010106ac" />
+
+  <staging-public-group-final type="string" first-id="0x01b40000">
+    <!-- @FlaggedApi(android.content.pm.Flags.FLAG_SDK_DEPENDENCY_INSTALLER)
+         @hide @SystemApi -->
+    <public name="config_systemDependencyInstaller" />
+    <!-- @hide @SystemApi -->
+    <public name="removed_config_defaultReservedForTestingProfileGroupExclusivity" />
+    <!-- @FlaggedApi(android.permission.flags.Flags.FLAG_SYSTEM_VENDOR_INTELLIGENCE_ROLE_ENABLED)
+         @hide @SystemApi -->
+    <public name="config_systemVendorIntelligence" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi(android.content.pm.Flags.FLAG_SDK_DEPENDENCY_INSTALLER)
+       @hide @SystemApi -->
+  <public type="string" name="config_systemDependencyInstaller" id="0x0104004a" />
+  <!-- @FlaggedApi(android.permission.flags.Flags.FLAG_SYSTEM_VENDOR_INTELLIGENCE_ROLE_ENABLED)
+       @hide @SystemApi -->
+  <public type="string" name="config_systemVendorIntelligence" id="0x0104004b" />
+
+  <!-- ===============================================================
+    Resources added in version BAKLAVA_1 (36.1) of the platform
+
+    NOTE: After this version of the platform is forked, changes cannot be made to the root
+    branch's groups for that release. Only merge changes to the forked platform branch.
+    =============================================================== -->
+  <eat-comment/>
+
+  <staging-public-group-final type="id" first-id="0x01b20000">
+    <!-- @FlaggedApi(android.appwidget.flags.Flags.FLAG_ENGAGEMENT_METRICS) -->
+    <public name="removed_remoteViewsMetricsId"/>
+    <!-- @FlaggedApi("android.view.accessibility.a11y_selection_api")  -->
+    <public name="accessibilityActionSetExtendedSelection"/>
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi("android.view.accessibility.a11y_selection_api")  -->
+  <public type="id" name="accessibilityActionSetExtendedSelection" id="0x0102005f" />
+
+  <staging-public-group-final type="dimen" first-id="0x01af0000">
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardFastSpatialDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardFastEffectDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardDefaultSpatialDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardDefaultEffectDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardSlowSpatialDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardSlowEffectDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveFastSpatialDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveFastEffectDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveDefaultSpatialDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveDefaultEffectDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveSlowSpatialDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveSlowEffectDamping"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+    <public name="config_shapeCornerRadiusXsmall"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+    <public name="config_shapeCornerRadiusSmall"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+    <public name="config_shapeCornerRadiusMedium"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+    <public name="config_shapeCornerRadiusLarge"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+    <public name="config_shapeCornerRadiusXlarge"/>
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionStandardFastSpatialDamping" id="0x0105000b" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionStandardFastEffectDamping" id="0x0105000c" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionStandardDefaultSpatialDamping" id="0x0105000d" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionStandardDefaultEffectDamping" id="0x0105000e" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionStandardSlowSpatialDamping" id="0x0105000f" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionStandardSlowEffectDamping" id="0x01050010" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionExpressiveFastSpatialDamping" id="0x01050011" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionExpressiveFastEffectDamping" id="0x01050012" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionExpressiveDefaultSpatialDamping" id="0x01050013" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionExpressiveDefaultEffectDamping" id="0x01050014" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionExpressiveSlowSpatialDamping" id="0x01050015" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="dimen" name="config_motionExpressiveSlowEffectDamping" id="0x01050016" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+  <public type="dimen" name="config_shapeCornerRadiusXsmall" id="0x01050017" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+  <public type="dimen" name="config_shapeCornerRadiusSmall" id="0x01050018" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+  <public type="dimen" name="config_shapeCornerRadiusMedium" id="0x01050019" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+  <public type="dimen" name="config_shapeCornerRadiusLarge" id="0x0105001a" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_SHAPE_TOKENS)-->
+  <public type="dimen" name="config_shapeCornerRadiusXlarge" id="0x0105001b" />
+
+  <staging-public-group-final type="integer" first-id="0x01a60000">
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardFastSpatialStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardFastEffectStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardDefaultSpatialStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardDefaultEffectStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardSlowSpatialStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionStandardSlowEffectStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveFastSpatialStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveFastEffectStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveDefaultSpatialStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveDefaultEffectStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveSlowSpatialStiffness"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+    <public name="config_motionExpressiveSlowEffectStiffness"/>
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionStandardFastSpatialStiffness" id="0x010e0004" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionStandardFastEffectStiffness" id="0x010e0005" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionStandardDefaultSpatialStiffness" id="0x010e0006" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionStandardDefaultEffectStiffness" id="0x010e0007" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionStandardSlowSpatialStiffness" id="0x010e0008" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionStandardSlowEffectStiffness" id="0x010e0009" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionExpressiveFastSpatialStiffness" id="0x010e000a" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionExpressiveFastEffectStiffness" id="0x010e000b" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionExpressiveDefaultSpatialStiffness" id="0x010e000c" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionExpressiveDefaultEffectStiffness" id="0x010e000d" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionExpressiveSlowSpatialStiffness" id="0x010e000e" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_MOTION_TOKENS)-->
+  <public type="integer" name="config_motionExpressiveSlowEffectStiffness" id="0x010e000f" />
+
+  <staging-public-group-final type="bool" first-id="0x01a30000">
+    <!-- @FlaggedApi(android.content.pm.Flags.FLAG_USE_PIA_V2)
+        @hide @SystemApi -->
+    <public name="config_enableMaterialDesignInPackageInstaller" />
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi(android.content.pm.Flags.FLAG_USE_PIA_V2)
+      @hide @SystemApi -->
+  <public type="bool" name="config_enableMaterialDesignInPackageInstaller" id="0x0111000c" />
+
+  <!-- ===============================================================
+    Resources added in version NEXT of the platform
+
+    NOTE: After this version of the platform is forked, changes cannot be made to the root
+    branch's groups for that release. Only merge changes to the forked platform branch.
+    =============================================================== -->
+  <eat-comment/>
+
+  <staging-public-group-final type="attr" first-id="0x01a20000">
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <!-- @hide No longer needed. -->
+    <public name="removed_runInPccSandbox"/>
+    <!-- @FlaggedApi(android.service.dreams.Flags.FLAG_USER_SELECTABLE_METADATA)
+    @hide @SystemApi -->
+    <public name="userSelectable"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_NATIVE_FRAMEWORK_PROTOTYPE) -->
+    <public name="nativeService"/>
+    <public name="removed_" />
+    <!-- @FlaggedApi(android.os.Flags.FLAG_NATIVE_APP_ZYGOTE) -->
+    <public name="zygotePreloadNativeLib"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_NATIVE_APP_ZYGOTE) -->
+    <public name="zygotePreloadNativeFunc"/>
+    <!-- @FlaggedApi(android.service.voice.flags.Flags.FLAG_ENABLE_ASSIST_RESOURCE_ATTRIBUTES) -->
+    <public name="usesAssistData"/>
+    <!-- @FlaggedApi(android.service.voice.flags.Flags.FLAG_ENABLE_ASSIST_RESOURCE_ATTRIBUTES) -->
+    <public name="usesAssistScreenshots"/>
+    <!-- @FlaggedApi(android.service.voice.flags.Flags.FLAG_ENABLE_ASSIST_RESOURCE_ATTRIBUTES) -->
+    <public name="usesAssistStructureScreenContent"/>
+    <!-- @FlaggedApi(android.view.inputmethod.Flags.FLAG_IME_SUBTYPE_SHORT_LABEL) -->
+    <public name="shortLabel"/>
+    <!-- @FlaggedApi(android.app.privatecompute.flags.Flags.FLAG_ENABLE_PCC_FRAMEWORK_SUPPORT) -->
+    <public name="privateComputeCore"/>
+    <!-- @FlaggedApi(android.app.privatecompute.flags.Flags.FLAG_ENABLE_PCC_FRAMEWORK_SUPPORT) -->
+    <public name="backupAgentProcess"/>
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+    <public name="iconColor"/>
+    <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+    <public name="suggestionBackgroundColor"/>
+    <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+    <public name="suggestionCornerRadius"/>
+    <public name="removed_" />
+    <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+    <public name="embeddedViewTheme"/>
+    <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+    <public name="inlineSuggestion"/>
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi(android.service.dreams.Flags.FLAG_USER_SELECTABLE_METADATA)
+  @hide @SystemApi -->
+  <public type="attr" name="userSelectable" id="0x010106ad" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_NATIVE_FRAMEWORK_PROTOTYPE) -->
+  <public type="attr" name="nativeService" id="0x010106ae" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_NATIVE_APP_ZYGOTE) -->
+  <public type="attr" name="zygotePreloadNativeLib" id="0x010106af" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_NATIVE_APP_ZYGOTE) -->
+  <public type="attr" name="zygotePreloadNativeFunc" id="0x010106b0" />
+  <!-- @FlaggedApi(android.service.voice.flags.Flags.FLAG_ENABLE_ASSIST_RESOURCE_ATTRIBUTES) -->
+  <public type="attr" name="usesAssistData" id="0x010106b1" />
+  <!-- @FlaggedApi(android.service.voice.flags.Flags.FLAG_ENABLE_ASSIST_RESOURCE_ATTRIBUTES) -->
+  <public type="attr" name="usesAssistScreenshots" id="0x010106b2" />
+  <!-- @FlaggedApi(android.service.voice.flags.Flags.FLAG_ENABLE_ASSIST_RESOURCE_ATTRIBUTES) -->
+  <public type="attr" name="usesAssistStructureScreenContent" id="0x010106b3" />
+  <!-- @FlaggedApi(android.view.inputmethod.Flags.FLAG_IME_SUBTYPE_SHORT_LABEL) -->
+  <public type="attr" name="shortLabel" id="0x010106b4" />
+  <!-- @FlaggedApi(android.app.privatecompute.flags.Flags.FLAG_ENABLE_PCC_FRAMEWORK_SUPPORT) -->
+  <public type="attr" name="privateComputeCore" id="0x010106b5" />
+  <!-- @FlaggedApi(android.app.privatecompute.flags.Flags.FLAG_ENABLE_PCC_FRAMEWORK_SUPPORT) -->
+  <public type="attr" name="backupAgentProcess" id="0x010106b6" />
+  <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+  <public type="attr" name="iconColor" id="0x010106b7" />
+  <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+  <public type="attr" name="suggestionBackgroundColor" id="0x010106b8" />
+  <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+  <public type="attr" name="suggestionCornerRadius" id="0x010106b9" />
+  <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+  <public type="attr" name="embeddedViewTheme" id="0x010106ba" />
+  <!-- @FlaggedApi(android.service.personalcontext.Flags.FLAG_ENABLE_PERSONAL_CONTEXT_SERVICE) -->
+  <public type="attr" name="inlineSuggestion" id="0x010106bb" />
+
+  <staging-public-group-final type="color" first-id="0x019d0000">
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_inverse_on_surface_light"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_inverse_primary_light"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_inverse_surface_light"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_scrim_light"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_shadow_light"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_surface_tint_light"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_inverse_on_surface_dark"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_inverse_primary_dark"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_inverse_surface_dark"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_scrim_dark"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_shadow_dark"/>
+    <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+    <public name="system_surface_tint_dark"/>
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+    <public name="removed_" />
+  </staging-public-group-final>
+
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_inverse_on_surface_light" id="0x010600d2" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_inverse_primary_light" id="0x010600d3" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_inverse_surface_light" id="0x010600d4" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_scrim_light" id="0x010600d5" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_shadow_light" id="0x010600d6" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_surface_tint_light" id="0x010600d7" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_inverse_on_surface_dark" id="0x010600d8" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_inverse_primary_dark" id="0x010600d9" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_inverse_surface_dark" id="0x010600da" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_scrim_dark" id="0x010600db" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_shadow_dark" id="0x010600dc" />
+  <!-- @FlaggedApi(android.os.Flags.FLAG_MATERIAL_COLORS_10_2024)-->
+  <public type="color" name="system_surface_tint_dark" id="0x010600dd" />
 
 </resources>

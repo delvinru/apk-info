@@ -295,7 +295,7 @@
             granted to the system app predictor -->
         <flag name="appPredictor" value="0x200000" />
         <!-- Additional flag from base permission type: this permission can also be granted if the
-             requesting application is included in the mainline module}. -->
+             requesting application is included in a platform module. -->
         <flag name="module" value="0x400000" />
         <!-- Additional flag from base permission type: this permission can be automatically
             granted to the system companion device manager service -->
@@ -355,11 +355,37 @@
              the app is uninstalled.
         -->
         <flag name="immutablyRestricted" value="0x10" />
-        <!--
-             Modifier for permission restriction. This permission cannot
-             be exempted by the installer.
+
+        <!-- Determines whether this permission can be obtained by components running in the
+             Private Compute Core restricted environment.
+
+             By default, permissions are not permitted in Private Compute Core and must
+             be explicitly allowed via this permission flag.
+
+             The Android system will prevent any Private Compute Core components
+             from obtaining permissions that are not explicitly allowed via this flag.
+
+             In the example below the following is true:
+
+             <ul>
+                 <li>
+                     The "basicpermission" would not be obtainable by any
+                     Private Compute Core components, even if it is requested.
+                 </li>
+                 <li>
+                     The "fancypermission" is allowed to be obtained by a private compute
+                     component, but it still must be requested in the manifest to be obtainable.
+                 </li>
+             </ul>
+
+             <pre>
+                 <permission android:name="android.permission.basicpermission" />
+
+                 <permission android:name="android.permission.fancypermission"
+                     android:permissionFlags="allowedInPrivateComputeCore" />
+             </pre>
         -->
-        <flag name="installerExemptIgnored" value="0x20" />
+        <flag name="allowedInPrivateComputeCore" value="0x20" />
     </attr>
 
     <!-- Specified the name of a group that this permission is associated
@@ -562,10 +588,15 @@
 
     <!-- Declare that this application may use cleartext traffic, such as HTTP rather than HTTPS;
          WebSockets rather than WebSockets Secure; XMPP, IMAP, SMTP without STARTTLS or TLS.
-         Defaults to true. If set to false {@code false}, the application declares that it does not
-         intend to use cleartext network traffic, in which case platform components (e.g. HTTP
-         stacks, {@code DownloadManager}, {@code MediaPlayer}) will refuse applications's requests
+         Defaults to true before API level 27, to false afterwards. If set to
+         false {@code false}, the application declares that it does not intend to use cleartext
+         network traffic, in which case platform components (e.g. HTTP stacks,
+         {@code DownloadManager}, {@code MediaPlayer}) will refuse applications's requests
          to use cleartext traffic. Third-party libraries are encouraged to honor this flag as well.
+         @deprecated This API will be deprecated in the future and will have no effect.
+         Specify a <a href="{@docRoot}privacy-and-security/security-config#manifest">
+         Network Security Config file</a> in addition to this API to prevent future breakage.
+         @FlaggedApi(android.security.Flags.FLAG_DEPRECATE_USES_CLEARTEXT_TRAFFIC2)
          -->
     <attr name="usesCleartextTraffic" format="boolean" />
 
@@ -781,6 +812,9 @@
          single integer, with higher numbers considered to be better. -->
     <attr name="priority" format="integer" />
 
+    <!-- If set to true, this component is run in a Private Compute Core Process. -->
+    <attr name="privateComputeCore" format="boolean" />
+
     <!-- Indicate if this component is aware of direct boot lifecycle, and can be
          safely run before the user has entered their credentials (such as a lock
          pattern or PIN). -->
@@ -846,16 +880,39 @@
             This enum value is introduced in API level 31. -->
         <enum name="singleInstancePerTask" value="4" />
     </attr>
-    <!-- Specify the orientation an activity should be run in.  If not
-         specified, it will run in the current preferred orientation
-         of the screen.
+    <!-- Specify the orientation an activity should run in. If the orientation is not specified, the
+         system determines the best orientation for the activity.
          <p>This attribute is supported by the <a
             href="{@docRoot}guide/topics/manifest/activity-element.html">{@code <activity>}</a>
             element.
-         <aside class="note"><b>Note:</b> Device manufacturers can configure devices to override
-            (ignore) this attribute to improve the layout of apps. See
-            <a href="{@docRoot}guide/practices/device-compatibility-mode">
-            Device compatibility mode</a>.
+         <aside class="note"><b>Note:</b>
+            <ul>
+                <li>To improve the layout of apps on form factors with smallest width >= 600dp, the
+                    system ignores the following values of this attribute for apps that target
+                    Android 16 (API level 36) or higher:
+                    <ul>
+                      <li><code>portrait</code></li>
+                      <li><code>landscape</code></li>
+                      <li><code>reversePortrait</code></li>
+                      <li><code>reverseLandscape</code></li>
+                      <li><code>sensorPortrait</code></li>
+                      <li><code>sensorLandscape</code></li>
+                      <li><code>userPortrait</code></li>
+                      <li><code>userLandscape</code></li>
+                    </ul>
+                    <p>The values are treated as if the app had set orientation as
+                       <code>unspecified</code>.</p>
+                </li>
+                <li>Device manufacturers can configure devices to override (ignore) this attribute
+                    to improve the layout of apps.</li>
+                <li>On devices with Android 16 (API level 36) or higher installed, virtual device
+                    owners (select trusted and privileged apps) can configure devices they manage to
+                    override (ignore) this attribute to improve app layout. See also
+                    <a href="https://source.android.com/docs/core/permissions/app-streaming">
+                    Companion app streaming</a>.</li>
+             </ul>
+             <p>See <a href="{@docRoot}guide/practices/device-compatibility-mode">Device
+             compatibility mode</a>.</p>
          </aside> -->
     <attr name="screenOrientation">
         <!-- No preference specified: let the system decide the best
@@ -955,10 +1012,17 @@
 
     <!-- Specify the configuration changes that trigger the system to recreate the
          current activity if any of these configuration changes happen in the system.
-         The valid configuration changes include mcc and mnc which are the same with
-         those in configChanges. By default from Android O, we don't recreate the activity
-         even the app doesn't specify mcc or mnc in configChanges. If the app wants to
-         be recreated, specify them in recreateOnConfigChanges. -->
+         The valid configuration changes include mcc, mnc, touchscreen, keyboard,
+         keyboardHidden, navigation and colorMode, which are the same with those in
+         configChanges. By default from Android O, we don't recreate the activity
+         even the app doesn't specify mcc or mnc in configChanges. Similarly, by
+         default from Android 17, we don't recreate the activity even the app
+         doesn't specify touchscreen, keyboard, keyboardHidden, navigation and
+         colorMode in configChanges. If the app wants the activity to be recreated,
+         it should specify the corresponding flag in recreateOnConfigChanges and
+         not specify it in configChanges. Please note that if a flag is specified
+         in both attributes, the activity will not be recreated on that config
+         changes.-->
     <attr name="recreateOnConfigChanges">
         <!-- The IMSI MCC has changed, that is a SIM has been detected and
              updated the Mobile Country Code. -->
@@ -966,6 +1030,21 @@
         <!-- The IMSI MNC has changed, that is a SIM has been detected and
              updated the Mobile Network Code. -->
         <flag name="mnc" value="0x0002" />
+        <!-- The touchscreen has changed, for example the user has moved the
+             app across displays with different touchscreen abilities. -->
+        <flag name="touchscreen" value="0x0008" />
+        <!-- The keyboard type has changed, for example the user has plugged
+             in an external keyboard. -->
+        <flag name="keyboard" value="0x0010" />
+        <!-- The keyboard or navigation accessibility has changed, for example
+             the user has slid the keyboard out to expose it.  Note that
+             despite its name, this applied to any accessibility: keyboard
+             or navigation. -->
+        <flag name="keyboardHidden" value="0x0020" />
+        <!-- The navigation type has changed.  Should never normally happen. -->
+        <flag name="navigation" value="0x0040" />
+        <!-- The color mode of the screen has changed (color gamut or dynamic range). -->
+        <flag name="colorMode" value="0x4000" />
     </attr>
 
     <!-- Specify one or more configuration changes that the activity will
@@ -999,17 +1078,32 @@
         <!-- The locale has changed, that is the user has selected a new
              language that text should be displayed in. -->
         <flag name="locale" value="0x0004" />
-        <!-- The touchscreen has changed.  Should never normally happen. -->
+        <!-- The touchscreen has changed, for example the user has moved the
+             app across displays with different touchscreen abilities. By
+             default from Android 17, we don't recreate the activity even the
+             app doesn't specify touchscreen in configChanges. If the app wants
+             to recreate the activity, specify touchscreen in
+             recreateOnConfigChanges. -->
         <flag name="touchscreen" value="0x0008" />
         <!-- The keyboard type has changed, for example the user has plugged
-             in an external keyboard. -->
+             in an external keyboard. By default from Android 17, we don't
+             recreate the activity even the app doesn't specify keyboard in
+             configChanges. If the app wants to recreate the activity, specify
+             keyboard in recreateOnConfigChanges. -->
         <flag name="keyboard" value="0x0010" />
         <!-- The keyboard or navigation accessibility has changed, for example
              the user has slid the keyboard out to expose it.  Note that
              despite its name, this applied to any accessibility: keyboard
-             or navigation. -->
+             or navigation. By default from Android 17, we don't recreate
+             the activity even the app doesn't specify keyboardHidden in
+             configChanges. If the app wants to recreate the activity,
+             specify keyboardHidden in recreateOnConfigChanges. -->
         <flag name="keyboardHidden" value="0x0020" />
-        <!-- The navigation type has changed.  Should never normally happen. -->
+        <!-- The navigation type has changed.  Should never normally happen.
+             By default from Android 17, we don't recreate the activity
+             even the app doesn't specify navigation in configChanges. If the
+             app wants to recreate the activity, specify navigation in
+             recreateOnConfigChanges. -->
         <flag name="navigation" value="0x0040" />
         <!-- The screen orientation has changed, that is the user has
              rotated the device. -->
@@ -1041,7 +1135,11 @@
         <flag name="density" value="0x1000" />
         <!-- The layout direction has changed. For example going from LTR to RTL. -->
         <flag name="layoutDirection" value="0x2000" />
-        <!-- The color mode of the screen has changed (color gamut or dynamic range). -->
+        <!-- The color mode of the screen has changed (color gamut or dynamic range).
+             By default from Android 17, we don't recreate the activity even
+             the app doesn't specify colorMode in configChanges. If the app
+             wants to recreate the activity, specify colorMode in
+             recreateOnConfigChanges. -->
         <flag name="colorMode" value="0x4000" />
         <!-- The grammatical gender has changed, for example the user set the grammatical gender
              from the UI. -->
@@ -1218,6 +1316,17 @@
          music via a service in the startForeground() state). -->
     <attr name="backupInForeground" format="boolean" />
 
+    <!-- Specifies the process that the backup agent will run in.
+         @FlaggedApi(android.app.privatecompute.flags.Flags.FLAG_ENABLE_PCC_FRAMEWORK_SUPPORT) -->
+    <attr name="backupAgentProcess">
+        <!-- Specifies that the backup agent should run in the default main process of
+             the application that runs under the regular uid of the application. -->
+        <enum name="main" value="0" />
+        <!-- Specifies that the backup agent should run in the private compute core process
+             of the application -->
+        <enum name="privateComputeCore" value="1" />
+    </attr>
+
     <!-- The default install location defined by an application. -->
     <attr name="installLocation">
         <!-- Let the system decide ideal install location -->
@@ -1263,6 +1372,19 @@
          to your package name. The class must implement the {@link android.app.ZygotePreload}
          interface. -->
     <attr name="zygotePreloadName" format="string"/>
+
+     <!-- Name of the library to be preloaded by Native App Zygote. When a service with this
+          attribute sets {@link android.R.attr#nativeService}, {@link android.R.attr#useAppZygote},
+          and {@link android.R.attr#isolatedProcess} to <code>true</code>, the system launches a
+          Native App Zygote process. When both {@link android.R.attr#zygotePreloadName} and
+          {@link android.R.attr#zygotePreloadNativeLib} are specified, a service will fork a Native
+          App Zygote process if the aforementioned attributes are all set to <code>true</code>, and
+          a Managed App Zygote process otherwise. -->
+    <attr name="zygotePreloadNativeLib" format="string"/>
+
+    <!-- Optional function name to be called once the library by zygotePreloadNativeLib has been
+         preloaded. If not specified, no function is called after the library is loaded. -->
+    <attr name="zygotePreloadNativeFunc" format="string"/>
 
     <!-- If set to <code>true</code>, indicates to the platform that this APK is
          a 'feature' split and that it implicitly depends on the base APK. This distinguishes
@@ -1474,13 +1596,21 @@
             <ul>
                 <li>On Android 11 (API level 30) and lower, the value of
                     {@link android.R.attr#screenOrientation} is ignored for resizeable activities
-                    in multi-window mode.
+                    in multi-window mode.</li>
+                <li>To improve the layout of apps on form factors with smallest width >= 600dp, the
+                    system ignores this attribute for apps that target Android 16 (API level 36) or
+                    higher.</li>
                 <li>Device manufacturers can configure devices to override (ignore) this attribute
                     to force apps to resize. The override does not affect the app's support for
-                    multi-window mode. See
-                    <a href="{@docRoot}guide/practices/device-compatibility-mode">
-                    Device compatibility mode</a>.
+                    multi-window mode.</li>
+                <li>On devices with Android 16 (API level 36) or higher installed, virtual device
+                    owners (select trusted and privileged apps) can configure devices they manage to
+                    override (ignore) this attribute to force apps to resize. See
+                    also <a href="https://source.android.com/docs/core/permissions/app-streaming">
+                    Companion app streaming</a>.</li>
             </ul>
+            <p>See <a href="{@docRoot}guide/practices/device-compatibility-mode"> Device
+            compatibility mode</a>.</p>
          </aside> -->
     <attr name="resizeableActivity" format="boolean" />
 
@@ -1504,12 +1634,20 @@
          <aside class="note"><b>Note:</b>
             <ul>
                 <li>This attribute is ignored if the activity has
-                    {@link android.R.attr#resizeableActivity} set to {@code true}.
+                    {@link android.R.attr#resizeableActivity} set to {@code true}.</li>
+                <li>To improve the layout of apps on form factors with smallest width >= 600dp, the
+                    system ignores this attribute for apps that target Android 16 (API level 36) or
+                    higher.</li>
                 <li>Device manufacturers can configure devices to override (ignore) this attribute
-                    to improve the layout of apps. See
-                    <a href="{@docRoot}guide/practices/device-compatibility-mode">
-                    Device compatibility mode</a>.
+                    to improve the layout of apps.</li>
+                <li>On devices with Android 16 (API level 36) or higher installed, virtual device
+                    owners (select trusted and privileged apps) can configure devices they manage to
+                    override (ignore) this attribute to improve app layout. See
+                    <a href="https://source.android.com/docs/core/permissions/app-streaming">
+                    Companion app streaming</a>.</li>
             </ul>
+            <p>See <a href="{@docRoot}guide/practices/device-compatibility-mode"> Device
+            compatibility mode</a>.</p>
          </aside> -->
     <attr name="maxAspectRatio" format="float" />
 
@@ -1519,17 +1657,25 @@
          <p>Minimum aspect ratio, expressed as (longer dimension / shorter dimension) in decimal
             form. For example, if the minimum aspect ratio is 4:3, set value to 1.33.
          <p>Value needs to be greater or equal to 1.0, otherwise it is ignored.
-         <aside class="note"><b>Note:</b>
+          <aside class="note"><b>Note:</b>
             <ul>
                 <li>This attribute is ignored if the activity has
-                    {@link android.R.attr#resizeableActivity} set to {@code true}.
+                    {@link android.R.attr#resizeableActivity} set to {@code true}.</li>
+                <li>To improve the layout of apps on form factors with smallest width >= 600dp, the
+                    system ignores this attribute for apps that target Android 16 (API level 36) or
+                    higher.</li>
                 <li>Device manufacturers can configure devices to override (ignore) this attribute
-                    to improve the layout of apps. See
-                    <a href="{@docRoot}guide/practices/device-compatibility-mode">
-                    Device compatibility mode</a>.
+                    to improve the layout of apps.</li>
+                <li>On devices with Android 16 (API level 36) or higher installed, virtual device
+                    owners (select trusted and privileged apps) can configure devices they manage to
+                    override (ignore) this attribute to improve app layout. See
+                    <a href="https://source.android.com/docs/core/permissions/app-streaming">
+                    Companion app streaming</a>.</li>
             </ul>
+            <p>See <a href="{@docRoot}guide/practices/device-compatibility-mode"> Device
+            compatibility mode</a>.</p>
          </aside> -->
-    <attr name="minAspectRatio" format="float" />
+   <attr name="minAspectRatio" format="float" />
 
     <!-- This value indicates how tasks rooted at this activity will behave in lockTask mode.
          While in lockTask mode the system will not launch non-permitted tasks until
@@ -1808,7 +1954,7 @@
         -->
         <flag name="mediaProcessing" value="0x2000" />
         <!-- Use cases that can't be categorized into any other foreground service types, but also
-            can't use @link android.app.job.JobInfo.Builder} APIs.
+            can't use {@link android.app.job.JobInfo.Builder} APIs.
             See {@link android.content.pm.ServiceInfo#FOREGROUND_SERVICE_TYPE_SPECIAL_USE} for the
             best practice of the use of this type.
 
@@ -1862,9 +2008,38 @@
        <enum name="sync" value="2" />
     </attr>
 
-    <!-- This attribute will be used to override app compatibility mode on 16 KB devices.
-         If set to enabled, Natives lib will be extracted from APK if they are not page aligned on
-         16 KB device. 4 KB natives libs will be loaded app-compat mode if they are eligible.
+    <!-- This attribute overrides the user-set or platform-set 16 KB page size
+         compatibility mode, so that page agnostic compatibility is always enabled
+         or always disabled, rather than according to the user's preference.
+
+         <p>On 4 KB systems, this attribute is ignored and apps are installed
+         normally.
+
+         <p>On 16 KB systems, if an app is built for 16 KB page sizes, this
+         attribute is ignored and apps are installed normally.
+
+         <p>This attribute only affects 16 KB systems for apps that are built
+         with 4 KB page size (old) options.
+
+         <p>When page agnostic compatibility is enabled (either through this
+         flag or via the user's preference), the system specializes the app
+         installation process in ways known to improve compatibility of 4 KB
+         built apps on 16 KB systems. That is, apps which do not have aligned
+         libraries in APK files are extracted, requiring more space on the
+         device. An additional specialization when this option is enabled is
+         that the linker loads the application in a special mode intended
+         to allow 4 KB aligned program segments to load on a 16 KB page system.
+
+         <p>Here are the situations where this attribute should be most useful:
+         <ul>
+            <li>If an app works on 16 KB mode, but is not built for it, enabling this
+            attribute forces the app to be installed in 16 KB mode without
+            the user having to set these options themself.
+            <li>If an app is fully working in 16 KB mode, you can set this
+            attribute to disabled, so that any regression causes a clear failure
+            and this compatibility mode is not used.
+         </ul>
+
          @FlaggedApi(android.content.pm.Flags.FLAG_APP_COMPAT_OPTION_16KB) -->
     <attr name="pageSizeCompat">
         <!-- value for enabled must match with
@@ -1937,7 +2112,8 @@
          {@link #AndroidManifestUsesConfiguration uses-configuration},
          {@link #AndroidManifestApplication application},
          {@link #AndroidManifestInstrumentation instrumentation},
-         {@link #AndroidManifestUsesFeature uses-feature}.  -->
+         {@link #AndroidManifestUsesFeature uses-feature},
+         {@link #AndroidManifestAllowComponentAccess allow-component-access}.  -->
     <declare-styleable name="AndroidManifest">
         <attr name="versionCode" />
         <attr name="versionCodeMajor" />
@@ -2004,7 +2180,6 @@
              other applications in the same task. If set to false, activity launches which would
              replace this application with another when in the user's view will be blocked.
              The default is true. -->
-        <!-- @FlaggedApi("android.security.asm_restrictions_enabled") -->
         <attr name="allowCrossUidActivitySwitchFromBelow" format="boolean" />
         <attr name="persistent" />
         <attr name="persistentWhenFeatureAvailable" />
@@ -2029,6 +2204,7 @@
         <attr name="restoreNeedsApplication" />
         <attr name="restoreAnyVersion" />
         <attr name="backupInForeground" />
+        <attr name="backupAgentProcess" />
         <!-- Request that your application's processes be created with
              a large Dalvik heap.  This applies to <em>all</em> processes
              created for the application.  It only applies to the first
@@ -2062,13 +2238,6 @@
         <attr name="requiredAccountType" format="string"/>
         <!-- @deprecated replaced by setting appCategory attribute to "game" -->
         <attr name="isGame" />
-        <!-- Declare that this application may use cleartext traffic, such as HTTP rather than
-             HTTPS; WebSockets rather than WebSockets Secure; XMPP, IMAP, SMTP without STARTTLS or
-             TLS). Defaults to true. If set to false {@code false}, the application declares that it
-             does not intend to use cleartext network traffic, in which case platform components
-             (e.g. HTTP stacks, {@code DownloadManager}, {@code MediaPlayer}) will refuse
-             applications's requests to use cleartext traffic. Third-party libraries are encouraged
-             to honor this flag as well. -->
         <attr name="usesCleartextTraffic" />
         <attr name="multiArch" />
         <attr name="useEmbeddedDex" />
@@ -2117,6 +2286,10 @@
         <attr name="hasFragileUserData" format="boolean"/>
 
         <attr name="zygotePreloadName" />
+
+        <attr name="zygotePreloadNativeLib" />
+
+        <attr name="zygotePreloadNativeFunc" />
 
         <!-- If {@code true} the system will clear app's data if a restore operation fails.
              This flag is turned on by default. <em>This attribute is usable only by system apps.
@@ -2367,7 +2540,66 @@
              of Android higher than the number given here, the permission will not
              be created.  -->
         <attr name="maxSdkVersion" />
+        <!-- Used to specify the app's minimum target SDK version for which purpose
+             validation should be enforced in order to prevent app compatibility issues. This must
+             be set to at least SDK version 37.
+
+             <p>If specified, {@link #AndroidManifestValidPurpose valid-purpose}
+             tag must be used to specify at least one valid purpose. For install-time
+             permissions, permission requests made using the {@link #AndroidManifestUsesPermission
+             uses-permission} tag will need to specify at least one of these configured valid
+             purposes to prevent permission from being revoked. This enforcement of purpose
+             validation is currently only supported for permissions defined within the platform
+             manifest.-->
+        <attr name="requiresPurposeTargetSdkVersion"  format="integer" />
+        <!-- Used to specify the app's minimum target SDK version for which general purpose
+             validation should be enforced in order to prevent app compatibility issues. This must
+             be set to at least SDK version 37.
+
+             <p>If specified, {@link #AndroidManifestValidGeneralPurpose valid-general-purpose} tag
+             must be used to specify at least one valid general purpose.-->
+        <attr name="requiresGeneralPurposeTargetSdkVersion"  format="integer" />
+
+        <!-- Used to specify the app's minimum target SDK version for which a purpose string
+             should be provided. This must be set to at least SDK version 37. -->
+        <attr name="requiresPurposeStringTargetSdkVersion"  format="integer" />
+
     </declare-styleable>
+
+     <!-- The <code>valid-purpose</code> tag is used to specify valid purpose(s)
+          for a permission. If there are multiple valid purposes, use multiple
+          <code>valid-purpose</code> tags.
+
+          <p>This appears as a child tag of the
+          {@link #AndroidManifestPermission permission} tag. -->
+    <declare-styleable name="AndroidManifestValidPurpose" parent="AndroidManifestPermission">
+        <!-- Specify the name of the valid purpose. -->
+        <attr name="name" />
+        <!-- Optional: This is mainly intended to deprecate a pre-defined purpose. Specify the max
+             target SDK version for which this purpose is valid. Not specifying this attribute
+             signifies the purpose is valid indefinitely. To avoid app compatibility issues, DO NOT
+             simply delete the purpose from the manifest. Note that deprecation of purposes cannot
+             be done retroactively on older platform versions. -->
+        <attr name="maxTargetSdkVersion" format="integer" />
+    </declare-styleable>
+
+     <!-- The <code>valid-general-purpose</code> tag is used to specify valid general purpose(s) for
+          a permission. If there are multiple valid purposes, use multiple
+          <code>valid-general-purpose</code> tags.
+
+          <p>This appears as a child tag of the
+          {@link #AndroidManifestPermission permission} tag. -->
+    <declare-styleable name="AndroidManifestValidGeneralPurpose" parent="AndroidManifestPermission">
+        <!-- Specify the name of the valid purpose. -->
+        <attr name="name" format="string"/>
+        <!-- Optional: This is mainly intended to deprecate a pre-defined purpose. Specify the max
+             target SDK version for which this purpose is valid. Not specifying this attribute
+             signifies the purpose is valid indefinitely. To avoid app compatibility issues, DO NOT
+             simply delete the purpose from the manifest. Note that deprecation of purposes cannot
+             be done retroactively on older platform versions. -->
+        <attr name="maxTargetSdkVersion" format="integer"/>
+    </declare-styleable>
+
 
     <!-- The <code>permission-group</code> tag declares a logical grouping of
          related permissions.
@@ -2472,14 +2704,81 @@
         request it at all. -->
         <attr name="requiredNotFeature" format="string" />
         <!-- Optional: set of flags that should apply to this permission request. Note that
-             these flags start at 0x4 to match PackageInfo.requestedPermissionsFlags. -->
+             these flags start at 0x4 to match PackageInfo.requestedPermissionsFlags.
+
+             <p>Please refrain from using this for purpose related flags; use
+             {@link #AndroidManifestPurpose purpose} child tag instead. -->
         <attr name="usesPermissionFlags">
             <!-- Strong assertion by a developer that they will never use this
                  permission to derive the physical location of the device, even
                  when the app has been granted the ACCESS_FINE_LOCATION and/or
                  ACCESS_COARSE_LOCATION permissions. -->
             <flag name="neverForLocation" value="0x00010000" />
+            <!-- Only applies to android.permission.ACCESS_FINE_LOCATION. When this flag is set,
+                 apps cannot request that permission through
+                 {@link Activity#requestPermissions(String[], int)}, and can only use location
+                 button to obtain it temporarily.
+                 -->
+            <flag name="onlyForLocationButton" value="0x00020000" />
         </attr>
+        <!-- Optional: The resource ID for the purpose string. Only required when stated so by the
+             {@link #AndroidManifestPermission permission} tag's <code>
+             requiresPurposeStringTargetSdkVersion</code> attribute. If required, a string resource
+             ID should be provided that has a brief explanation of what the permission will be used
+             for. The string should be present in all locales the app developer wants to support.
+
+             <p>The string is recommended to be around 150 characters in most locales with a
+             maximum length of 300 characters in all locales. This string may appear in the runtime
+             permission grant dialog that is presented to users to help inform them of the app's
+             intended usage of the permission.
+             @FlaggedApi(android.permission.flags.Flags.FLAG_PPD_MANIFEST_ENABLED)-->
+        <attr name="purposeString" format="reference" />
+    </declare-styleable>
+
+    <!-- Use <code>purpose</code> tag to specify purpose(s) for requesting a permission.
+         Purpose(s) will need to be provided if the requested
+         {@link #AndroidManifestPermission permission} tag's <code>requiresPurpose</code> attribute
+         is set to true. Only valid purposes from the permission's
+         {@link #AndroidManifestValidPurpose valid-purpose} tags can be specified. If there are
+         multiple purposes for requesting the permission, use multiple <code>purpose</code> tags.
+
+         <p>This appears as a child tag of the
+         {@link #AndroidManifestUsesPermission uses-permission} tag. -->
+    <declare-styleable name="AndroidManifestPurpose" parent="AndroidManifestUsesPermission">
+        <!-- Specify the name of the purpose. -->
+        <attr name="name" />
+        <!-- Optional: specify the min SDK version for which the permission is requested with the
+             declared purpose. Not specifying this element implies there’s no lower bound on the
+             SDK version for which the purpose is declared. -->
+        <attr name="minSdkVersion" format="integer|string" />
+        <!-- Optional: specify the max SDK version for which the permission is requested with the
+             declared purpose. Not specifying this element implies there’s no upper bound on the SDK
+             version for which the purpose is declared. -->
+        <attr name="maxSdkVersion" format="integer" />
+    </declare-styleable>
+
+     <!-- Use <code>general-purpose</code> tag to specify general purpose(s) for requesting a
+          permission. General purpose(s) will need to be provided if the requested {@link
+          #AndroidManifestPermission permission} tag's <code>requiresGeneralPurposeTargetSdkVersion
+          </code> attribute is set to a value and the targeted SDK version is greater than or equal
+          to that value. Only valid purposes from the permission's {@link
+          #AndroidManifestValidGeneralPurpose valid-general-purpose} tags should be specified. If
+          there are multiple purposes for requesting the permission, use multiple <code>
+          general-purpose</code> tags.
+
+          <p>This appears as a child tag of the {@link
+          #AndroidManifestUsesPermission uses-permission} tag. -->
+    <declare-styleable name="AndroidManifestGeneralPurpose" parent="AndroidManifestUsesPermission">
+        <!-- Specify the name of the general purpose. -->
+        <attr name="name" format="string" />
+        <!-- Optional: specify the min SDK version for which the permission is requested with the
+             declared purpose. Not specifying this element implies there’s no lower bound on the
+             SDK version for which the purpose is declared. -->
+        <attr name="minSdkVersion" format="integer|string" />
+        <!-- Optional: specify the max SDK version for which the permission is requested with the
+             declared purpose. Not specifying this element implies there’s no upper bound on the SDK
+             version for which the purpose is declared. -->
+        <attr name="maxSdkVersion" format="integer" />
     </declare-styleable>
 
     <!-- <code>required-feature</code> and <code>required-not-feature</code> elements inside
@@ -2572,8 +2871,6 @@
              against a development branch, in which case it will only work against
              the development builds. -->
         <attr name="minSdkVersion" format="integer|string" />
-        <!-- @FlaggedApi(android.sdk.Flags.FLAG_MAJOR_MINOR_VERSIONING_SCHEME) -->
-        <attr name="minSdkVersionFull" format="string" />
         <!-- This is the SDK version number that the application is targeting.
              It is able to run on older versions (down to minSdkVersion), but
              was explicitly tested to work with the version specified here.
@@ -2750,12 +3047,14 @@
 
     <!-- The <code>additional-certificate</code> specifies the SHA-256 digest of a static
          shared library's additional signing certificate. You need to use this tag if the
-         library is singed with more than one certificate.
+         library is signed with more than one certificate.
 
          <p>This appears as a child tag of the
          {@link #AndroidManifestUsesStaticLibrary uses-static-library} or
-         {@link #AndroidManifestUsesPackage uses-package} tag. -->
-    <declare-styleable name="AndroidManifestAdditionalCertificate" parent="AndroidManifestUsesStaticLibrary">
+         {@link #AndroidManifestUsesPackage uses-package} tag or
+         {@link #AndroidManifestAllowComponentAccessPackage package} tag. -->
+    <declare-styleable name="AndroidManifestAdditionalCertificate"
+        parent="AndroidManifestUsesStaticLibrary AndroidManifestAllowComponentAccessPackage">
         <!-- The SHA-256 digest of the library signing certificate. -->
         <attr name="certDigest" />
     </declare-styleable>
@@ -2890,6 +3189,17 @@
         <attr name="name" />
     </declare-styleable>
 
+    <!-- Private tag to declare the package name that the permissions of this package
+         is based on.  Only used for packages installed in the system image.  If
+         given, the permissions from the other package will be propagated into the
+         new package.
+
+         <p>This appears as a child tag of the root
+         {@link #AndroidManifest manifest} tag. -->
+    <declare-styleable name="AndroidManifestAdoptPermissions" parent="AndroidManifest">
+        <attr name="name" />
+    </declare-styleable>
+
     <!-- The <code>processes</code> tag specifies the processes the application will run code in
          and optionally characteristics of those processes.  This tag is optional; if not
          specified, components will simply run in the processes they specify.  If supplied,
@@ -2922,7 +3232,7 @@
          for a particular process (if specified under the
          {@link #AndroidManifestProcess process} tag) or by default for all
          processes {if specified under the
-         @link #AndroidManifestProcesses processes} tag).
+         {@link #AndroidManifestProcesses processes} tag).
 
          <p>This appears as a child tag of the
          {@link #AndroidManifestProcesses processes} and
@@ -2996,6 +3306,7 @@
         <attr name="attributionTags" />
         <attr name="systemUserOnly" format="boolean" />
         <attr name="intentMatchingFlags"/>
+        <attr name="privateComputeCore" />
     </declare-styleable>
 
     <!-- Attributes that can be supplied in an AndroidManifest.xml
@@ -3103,6 +3414,7 @@
              that is isolated from the rest of the system.  The only communication
              with it is through the Service API (binding and starting). -->
         <attr name="isolatedProcess" format="boolean" />
+        <attr name="privateComputeCore" />
         <attr name="singleUser" />
         <attr name="directBootAware" />
         <!-- If the service is an {@link android.R.attr#isolatedProcess} service, this permits a
@@ -3148,7 +3460,7 @@
              vendors.
              <p>
              Shared isolated processes are created when using the
-             {@link android.content.Context#BIND_SHARED_ISOLATED_PROCESS) during service binding.
+             {@link android.content.Context#BIND_SHARED_ISOLATED_PROCESS} during service binding.
              <p>
              Note that when this flag is used, the {@link android.R.attr#process} attribute is
              ignored when the process is bound into a shared isolated process by a client.
@@ -3156,6 +3468,23 @@
         <attr name="allowSharedIsolatedProcess" format="boolean" />
         <attr name="systemUserOnly" format="boolean" />
         <attr name="intentMatchingFlags"/>
+        <!-- If true, the system does not initialize the Android Runtime in the process that runs
+             the service. Instead the system loads a library named <code>libmain.so</code> into
+             the process and then starts the service from a function named
+             <code>ANativeService_onCreate</code> in the library. The library and function names
+             can be configured by setting the properties
+             {@link android.content.pm.PackageManager#PROPERTY_NATIVE_SERVICE_LIBRARY_NAME} and
+             {@link android.content.pm.PackageManager#PROPERTY_NATIVE_SERVICE_FUNCTION_NAME}
+             respectively.
+             <p>
+             Attempts to start services that enable this attribute may fail in system running older
+             Android version than that this feature is introduced. Users must check the API level
+             before starting the services.
+             <p>
+             This flag is ignored if {@link android.R.attr#isolatedProcess} is false or isn't
+             specified.
+        -->
+        <attr name="nativeService" format="boolean" />
     </declare-styleable>
 
     <!-- @hide The <code>apex-system-service</code> tag declares an apex system service
@@ -3180,7 +3509,7 @@
         The value is a simple integer, with higher number being initialized first. If not specified,
         the default order is 0. -->
         <attr name="initOrder" format="integer" />
-    </declare-styleable>
+   </declare-styleable>
 
     <!-- The <code>receiver</code> tag declares an
          {@link android.content.BroadcastReceiver} class that is available
@@ -3224,6 +3553,7 @@
              contained here. -->
         <attr name="attributionTags" />
         <attr name="intentMatchingFlags"/>
+        <attr name="privateComputeCore" />
     </declare-styleable>
 
     <!-- The <code>activity</code> tag declares an
@@ -3280,6 +3610,7 @@
              any value in the theme. -->
         <attr name="windowSoftInputMode" />
         <attr name="immersive" />
+        <attr name="privateComputeCore" />
         <attr name="hardwareAccelerated" />
         <attr name="uiOptions" />
         <attr name="parentActivityName" />
@@ -3306,11 +3637,6 @@
         <attr name="turnScreenOn" />
 
         <attr name="directBootAware" />
-        <!-- @hide This activity is always focusable regardless of if it is in a task/stack whose
-             activities are normally not focusable.
-             For example, {@link android.R.attr#supportsPictureInPicture} activities are placed
-             in a task/stack that isn't focusable. This flag allows them to be focusable.-->
-        <attr name="alwaysFocusable" format="boolean" />
         <attr name="enableVrMode" />
         <attr name="rotationAnimation" />
         <attr name="visibleToInstantApps" />
@@ -3462,6 +3788,7 @@
         <attr name="allowUntrustedActivityEmbedding" />
         <attr name="knownActivityEmbeddingCerts" />
         <attr name="intentMatchingFlags"/>
+        <attr name="privateComputeCore" />
     </declare-styleable>
 
     <!-- The <code>meta-data</code> tag is used to attach additional
@@ -4063,5 +4390,38 @@
     <declare-styleable name="AndroidManifestInstallConstraintsFingerprintPrefix"
                        parent="AndroidManifestInstallConstraints">
         <attr name="value" />
+    </declare-styleable>
+
+    <!-- The {@code <allow-component-access>} tag allows an application to explicitly define
+    the set of other applications (and their components) it is permitted to associate with.
+
+    <p>"Association" in this context refers to specific inter-app interactions initiated
+    by this application, specifically:
+    <ul>
+      <li>Binding to a service ({@link android.content.Context#bindService}).</li>
+      <li>Accessing a Content Provider (via {@link android.content.ContentResolver}).</li>
+      <li>Sending a broadcast ({@link android.content.Context#sendBroadcast}).</li>
+    </ul>
+
+    <p>If this tag isn't present, associations can be established with all components
+    visible and accessible to the application.
+
+    <p>If this tag is present, the system enforces a "deny-by-default" policy:
+    associations are only permitted per rules defined in this tag.
+
+    <p>If this tag is present but contains no child {@code <package>} tags, the
+    application is restricted to intra-application communication and essential system
+    services (e.g., System Server). -->
+
+    <declare-styleable name="AndroidManifestAllowComponentAccess" parent="AndroidManifest" />
+
+    <declare-styleable name="AndroidManifestAllowComponentAccessPackage"
+        parent="AndroidManifestAllowComponentAccess">
+        <!-- The package name of the app to allow association with. -->
+        <attr name="name" />
+        <!-- Optional SHA-256 digest of the package signing certificate. If present, the system
+        validates that the target package matches this certificate. If omitted, only the package
+        name is verified. -->
+        <attr name="certDigest" format="string" />
     </declare-styleable>
 </resources>
