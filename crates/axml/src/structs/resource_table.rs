@@ -15,6 +15,19 @@ use crate::structs::{
     StringPool,
 };
 
+/// Decodes a NUL-terminated, little-endian UTF-16 byte slice into a `String`.
+fn utf16_from_bytes(bytes: &[u8]) -> String {
+    let utf16_str: Vec<u16> = bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|chunk| u16::from_le_bytes(*chunk))
+        .take_while(|&c| c != 0)
+        .collect();
+
+    String::from_utf16(&utf16_str).unwrap_or_default()
+}
+
 /// Header for a resource table
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#906>
@@ -131,14 +144,7 @@ impl ResTablePackageHeader {
 
     /// Get a real package name from `name` slice
     pub fn name(&self) -> String {
-        let utf16_str: Vec<u16> = self
-            .name
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-            .take_while(|&c| c != 0)
-            .collect();
-
-        String::from_utf16(&utf16_str).unwrap_or_default()
+        utf16_from_bytes(&self.name)
     }
 
     /// Get size in bytes of this structure
@@ -633,14 +639,7 @@ impl ResTableLibraryEntry {
 
     /// Get a real package name from `package_name` slice.
     pub fn package_name(&self) -> String {
-        let utf16_str: Vec<u16> = self
-            .package_name
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-            .take_while(|&c| c != 0)
-            .collect();
-
-        String::from_utf16(&utf16_str).unwrap_or_default()
+        utf16_from_bytes(&self.package_name)
     }
 }
 
@@ -716,26 +715,12 @@ impl ResTableOverlayble {
 
     /// Get a real package name from `name` slice.
     pub fn name(&self) -> String {
-        let utf16_str: Vec<u16> = self
-            .name
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-            .take_while(|&c| c != 0)
-            .collect();
-
-        String::from_utf16(&utf16_str).unwrap_or_default()
+        utf16_from_bytes(&self.name)
     }
 
     /// Get a real actor from `actor` slice.
     pub fn actor(&self) -> String {
-        let utf16_str: Vec<u16> = self
-            .actor
-            .chunks_exact(2)
-            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-            .take_while(|&c| c != 0)
-            .collect();
-
-        String::from_utf16(&utf16_str).unwrap_or_default()
+        utf16_from_bytes(&self.actor)
     }
 }
 

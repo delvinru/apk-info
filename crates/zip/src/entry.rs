@@ -25,6 +25,9 @@ use crate::signature::{CertificateInfo, Signature};
 use crate::structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader};
 use crate::{CertificateError, FileCompressionType, ZipError};
 
+/// Maximum allowed uncompressed size for a file entry.
+const MAX_UNCOMPRESSED_SIZE: usize = u32::MAX as usize;
+
 /// Represents a parsed ZIP archive.
 #[derive(Debug)]
 pub struct ZipEntry {
@@ -159,6 +162,10 @@ impl ZipEntry {
                     local_header.uncompressed_size as usize,
                 )
             };
+
+        if uncompressed_size > MAX_UNCOMPRESSED_SIZE {
+            return Err(ZipError::FileTooLarge);
+        }
 
         let offset = central_directory_entry.local_header_offset as usize + local_header.size();
         // helper to safely get a slice from input

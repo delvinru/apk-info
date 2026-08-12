@@ -15,6 +15,10 @@ pub enum ZipError {
     #[error("got error while decompressing object")]
     DecompressionError,
 
+    /// The file entry is too large to decompress.
+    #[error("file entry is too large to decompress")]
+    FileTooLarge,
+
     /// Unexpected end-of-file (EOF) was reached while reading the ZIP archive.
     #[error("got EOF while parsing zip")]
     EOF,
