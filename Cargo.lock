@@ -137,6 +137,7 @@ dependencies = [
  "colored",
  "env_logger",
  "log",
+ "md-5",
  "regex",
  "serde",
  "serde_json",
@@ -172,6 +173,7 @@ version = "1.0.12"
 dependencies = [
  "ahash",
  "cms",
+ "crc32fast",
  "flate2",
  "log",
  "md-5",

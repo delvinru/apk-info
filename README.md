@@ -47,6 +47,7 @@ Commands:
   show        Show basic information about apk file
   extract     Unpack apk files as zip archive [aliases: x]
   axml        Read and pretty-print binary AndroidManifest.xml
+  repack      Unpack and repack a BadPack-damaged APK into a standard, well-formed zip archive
   completion  Generate shell completion
   help        Print this message or the help of the given subcommand(s)
 
@@ -177,6 +178,14 @@ Androguard is a great tool in itself, but it is simply not possible to maintain 
 - I want to modify the apk, how do I do it using this library?
 
 The library is designed for read-only mode only, because i need a good tool with which i can easily and quickly extract information from the apk. There are many other good tools out there.
+
+- I repacked an apk, how do I sign it?
+
+The `repack` command produces an unsigned apk. To re-sign it, we recommend [uber-apk-signer](https://github.com/patrickfav/uber-apk-signer) — a simple one-command tool that signs with v1/v2/v3 and zipaligns in a single pass:
+
+```bash
+java -jar uber-apk-signer.jar --apks ./malware.repacked.apk
+```
 
 ## Credits
 

@@ -22,6 +22,7 @@ clap_complete.workspace = true
 colored.workspace = true
 env_logger.workspace = true
 log.workspace = true
+md-5.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true

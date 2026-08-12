@@ -15,6 +15,8 @@ pub mod errors;
 pub mod signature;
 
 mod structs;
+mod writer;
+
 pub use compression::*;
 pub use entry::*;
 pub use errors::*;

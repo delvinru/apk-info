@@ -1,6 +1,6 @@
 # CLI reference
 
-The `apk-info` CLI has four subcommands. Run `apk-info --help` or `apk-info <command> --help` for built-in help.
+The `apk-info` CLI has five subcommands. Run `apk-info --help` or `apk-info <command> --help` for built-in help.
 
 ## `show` — basic APK info
 
@@ -60,6 +60,7 @@ apk-info extract <PATH> [<PATH> ...] [-o <OUTPUT_DIR>] [-f <REGEX> ...]
 **Options:**
 - `-o, --output <DIR>` — base output directory. Each APK is extracted to `<DIR>/<filename>.unp/`. If omitted, defaults to `./<filename>.unp/`.
 - `-f, --files <REGEX>` — only extract files whose name matches the regex. Can be repeated to allow multiple patterns. Any match passes.
+- `-v, --verbose` — print progress for every extracted file. By default only "interesting" files are shown: `AndroidManifest.xml`, `resources.arsc`, `.so` libraries, and tampered (BadPack) entries; all other files are printed only in verbose mode.
 
 **Examples:**
 
@@ -77,9 +78,11 @@ apk-info extract ./app.apk -f 'classes\d+\.dex' -f 'AndroidManifest.xml'
 apk-info extract ./app.apk -f 'lib/.*\.so'
 ```
 
-**Output highlighting:** `AndroidManifest.xml` and `resources.arsc` are highlighted in green/bold; `.so` files in magenta; other files are plain. The compression type is shown in parentheses — tampered types (`StoredTampered`/`DeflatedTampered`, indicating the BadPack technique) are shown in bold red.
+**Output highlighting:** `AndroidManifest.xml` and `resources.arsc` are highlighted in green/bold; `.so` files in magenta; other files are plain. The compression type is shown in parentheses — tampered types (`StoredTampered`/`DeflatedTampered`, indicating the BadPack technique) are shown in bold red. These interesting/tampered entries are shown by default; plain files are printed only with `--verbose`.
 
-Bad filenames (paths starting with `..` or `/`, empty names, directory entries ending in `/`) are skipped with a warning to avoid path traversal.
+Path-traversal and placeholder entries (paths starting with `..` or `/`, empty names, directory entries ending in `/`) are skipped with a warning to avoid path traversal.
+
+Malicious/broken paths are extracted safely: if a single component or the full output path is too long for the filesystem (`File name too long`, e.g. deeply nested garbage names used to break `unzip`/`7z`), apk-info prints a warning and saves the data under an **md5 hash** of the original name instead of the broken path, so nothing is lost and extraction never aborts.
 
 ## `axml` — pretty-print AndroidManifest.xml
 
@@ -123,10 +126,46 @@ apk-info completion zsh > "${fpath[1]}/_apk-info"
 apk-info completion fish > ~/.config/fish/completions/apk-info.fish
 ```
 
+## `repack` — unpack and rebuild a BadPack-damaged APK
+
+Reads every entry using the same robust decoder as `extract` (which handles the `BadPack` technique) and writes the data back into a fresh, well-formed zip archive with correct compression headers, CRC32 checksums and offsets. This "repack" lets tools that choke on tampered headers — `unzip`, `7z`, androguard, etc. — open the APK normally.
+
+```bash
+apk-info repack <PATH> [<PATH> ...] [-o <OUTPUT_DIR>]
+```
+
+**Options:**
+- `-o, --output <DIR>` — write results into `<DIR>/<name>.repacked.apk`. If omitted, the output is written next to the source file as `<name>.repacked.apk` (source stem + `.repacked.apk`).
+- Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
+
+**Examples:**
+
+```bash
+apk-info repack ./malware.apk                      # → ./malware.repacked.apk
+apk-info repack ./malware.apk -o ./clean/          # → ./clean/malware.repacked.apk
+apk-info repack ./malware-collection/              # repack every APK in a folder
+```
+
+**Output highlighting:** the source path is green; when the archive contained tampered (`StoredTampered`/`DeflatedTampered`) entries, a `fixed N tampered entries` message is printed (bold).
+
+> **Note:** the rebuilt archive is **NOT signed** — v1 signature files under `META-INF/` and the APK Signature Block (v2/v3/stamp/channel blocks) are not reproduced. Treat the output as an unsigned APK.
+
+**Typical workflow** for a sample where `unzip`/`7z` fail or drop `AndroidManifest.xml`:
+
+```bash
+# before: unzip silently skips the manifest
+unzip -t ./malware.apk          # ... AndroidManifest.xml: unknown compression method
+
+# fix the headers via repack, then use any standard tool
+apk-info repack ./malware.apk   # → ./malware.repacked.apk
+unzip -p ./malware.repacked.apk AndroidManifest.xml   # now works
+apk-info show ./malware.repacked.apk                  # package info readable
+```
+
 ## Exit codes & error behavior
 
 - On a per-file parse error, `show` prints the error in red and continues to the next file (exit 0 unless a fatal error occurs). This makes it safe to run over large collections of potentially-malformed files.
-- `extract` and `axml` propagate errors via `anyhow` and print them with `{:#}` formatting.
+- `extract`, `axml` and `repack` propagate errors via `anyhow` and print them with `{:#}` formatting.
 - `show` separates multiple APKs with a blank line in human-readable mode; JSONL mode emits one line per APK with no separator.
 
 ## Common pipelines

@@ -13,6 +13,7 @@ version.workspace = true
 [dependencies]
 ahash.workspace = true
 cms.workspace = true
+crc32fast.workspace = true
 flate2.workspace = true
 log.workspace = true
 md-5.workspace = true

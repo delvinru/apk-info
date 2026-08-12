@@ -209,7 +209,7 @@ for name in apk.namelist():
         print(f"TAMPERED: {name} ({compression})")
 ```
 
-CLI: `apk-info extract` prints tampered compression types in bold red:
+CLI: `apk-info extract -v` prints tampered compression types in bold red:
 
 ```
 [*] extracted "AndroidManifest.xml" (StoredTampered)
@@ -242,7 +242,7 @@ $ ls -la ./out/AndroidManifest.xml
 
 **`apk-info`** — detects the tampered compression, extracts the manifest fully:
 ```
-$ apk-info extract ./malware.apk -f AndroidManifest.xml
+$ apk-info extract -v ./malware.apk -f AndroidManifest.xml
 [*] extracted "AndroidManifest.xml" (StoredTampered)   # BadPack detected, data recovered
 
 $ apk-info show ./malware.apk
@@ -391,7 +391,8 @@ The critical problem is **exit code 0** — scripts and pipelines that check `$?
 ### Safe extraction with apk-info
 
 ```bash
-# Extract everything — tampered entries are flagged, bad filenames skipped with a warning
+# Extract everything — tampered entries flagged, path-traversal names skipped,
+# and over-long garbage paths saved under an md5 hash (data never lost, never aborts)
 apk-info extract ./malware.apk
 
 # Extract only what you need (regex filter)
@@ -449,3 +450,33 @@ if tampered:
     for name in tampered:
         print(f"  {name}")
 ```
+
+## 17. Repack a BadPack APK so standard tools can open it
+
+Instead of relying on apk-info for every read, you can rebuild the archive with correct headers once, then hand it to any standard tool (`unzip`, `7z`, `jar`, androguard, `aapt`, …). This is exactly what the CLI `repack` command does: decode every entry with the BadPack-aware reader and write it back into a clean, well-formed zip (Deflate-compressed, correct CRC32, sizes and offsets).
+
+```bash
+apk-info repack ./malware.apk                  # → ./malware.repacked.apk
+apk-info repack ./malware.apk -o ./clean/      # → ./clean/malware.repacked.apk
+apk-info repack ./malware-collection/          # repack a whole folder
+```
+
+**Before** — `unzip` drops the tampered manifest:
+```
+$ unzip -t ./malware.apk
+    testing: AndroidManifest.xml     unknown compression method   # ← BadPack
+```
+
+**After** — the repacked archive validates and extracts cleanly:
+```
+$ apk-info repack ./malware.apk
+[*] repacked "malware.apk" - fixed 1 tampered entry -> "malware.repacked.apk"
+
+$ unzip -t ./malware.repacked.apk
+No errors detected in compressed data of malware.repacked.apk.
+
+$ unzip -p ./malware.repacked.apk AndroidManifest.xml   # now readable
+$ apk-info show ./malware.repacked.apk                  # full info works
+```
+
+> **Note:** the rebuilt archive is **unsigned** — v1 signature files (`META-INF/`) and the APK Signature Block (v2/v3) are not reproduced. Use it for analysis, not for direct sideloading.
