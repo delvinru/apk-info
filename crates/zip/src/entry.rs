@@ -695,22 +695,22 @@ impl From<Certificate> for CertificateInfo {
     fn from(value: Certificate) -> Self {
         let mut cert_data = Vec::new();
         _ = value.encode_to_vec(&mut cert_data);
-        let cert = value.tbs_certificate;
+        let cert = value.tbs_certificate();
 
         CertificateInfo {
-            serial_number: cert.serial_number.as_bytes().iter().fold(
+            serial_number: cert.serial_number().as_bytes().iter().fold(
                 String::new(),
                 |mut out, x| {
                     _ = write!(out, "{x:02x}");
                     out
                 },
             ),
-            subject: cert.subject.to_string(),
-            issuer: cert.issuer.to_string(),
-            valid_from: cert.validity.not_before.to_string(),
-            valid_until: cert.validity.not_after.to_string(),
+            subject: cert.subject().to_string(),
+            issuer: cert.issuer().to_string(),
+            valid_from: cert.validity().not_before.to_string(),
+            valid_until: cert.validity().not_after.to_string(),
             signature_type: DB
-                .by_oid(&cert.signature.oid)
+                .by_oid(&cert.signature().oid)
                 .unwrap_or_default()
                 .to_string(),
             md5_fingerprint: Md5::digest(&cert_data)

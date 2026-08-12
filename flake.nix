@@ -33,20 +33,24 @@
               "rustfmt"
             ])
           ];
+
+        rustPlatform = pkgs.makeRustPlatform {
+          cargo = toolchain;
+          rustc = toolchain;
+        };
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
             cargo-fuzz
             cargo-machete
+            llvm
             maturin
-            openssl
-            pkg-config
             toolchain
             fenix-pkgs.latest.rust-analyzer
           ];
         };
 
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+        packages.default = rustPlatform.buildRustPackage {
           pname = pname;
           version = manifest.version;
           src = pkgs.lib.cleanSource ./.;
@@ -56,12 +60,11 @@
           };
 
           doCheck = false;
+          stripDebug = true;
 
           nativeBuildInputs = with pkgs; [
-            openssl
-            perl
-            pkg-config
             installShellFiles
+            llvm
           ];
 
           postInstall = ''
@@ -72,7 +75,19 @@
           '';
 
           CARGO_PROFILE = "release-lto";
-          PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+        };
+
+        checks.default = rustPlatform.buildRustPackage {
+          pname = "${pname}-tests";
+          version = manifest.version;
+          src = pkgs.lib.cleanSource ./.;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+          };
+
+          cargoBuildFlags = "--workspace --exclude apk-info-python --exclude apk-info-fuzz";
+          nativeBuildInputs = with pkgs; [llvm];
+          CARGO_PROFILE = "release-lto";
         };
       }
     );

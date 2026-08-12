@@ -30,38 +30,38 @@ apk-info-xml = { path = "crates/xml", version = "1.0.12" }
 apk-info-zip = { path = "crates/zip", version = "1.0.12" }
 
 # external
-anyhow = "1.0.102"
+anyhow = "1.0.104"
 ahash = "0.8.12"
 bat = { version = "0.26.1", default-features = false, features = [
     "build-assets",
     "regex-fancy",
 ] }
-bitflags = "2.11.1"
-clap = { version = "4.6.1", features = ["derive"] }
-clap_complete = "4.6.3"
-cms = "0.2.3"
+bitflags = "2.13.1"
+clap = { version = "4.6.6", features = ["derive"] }
+clap_complete = "4.6.9"
+cms = "0.3.0-pre.2"
 colored = "3.1.1"
 crc32fast = "1.5.0"
-env_logger = { version = "0.11.10", features = ["auto-color"] }
+env_logger = { version = "0.11.11", features = ["auto-color"] }
 flate2 = "1.1.9"
-log = "0.4.29"
+log = "0.4.33"
 md-5 = "0.11.0"
-memchr = "2.8.0"
+memchr = "2.8.3"
 once_cell = "1.21.4"
-phf = { version = "0.13.1", default-features = false }
-phf_codegen = "0.13.1"
-pyo3 = "0.28.3"
-quick-xml = "0.39.3"
-regex = "1.12.3"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
+phf = { version = "0.14.0", default-features = false }
+phf_codegen = "0.14.0"
+pyo3 = "0.29.2"
+quick-xml = "0.41.0"
+regex = "1.13.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
 sha1 = "0.11.0"
 sha2 = "0.11.0"
-smallvec = "1.15.1"
+smallvec = "1.15.2"
 thiserror = "2"
 walkdir = "2.5.0"
-winnow = { version = "1.0.2", features = ["binary"] }
-x509-cert = "0.2.5"
+winnow = { version = "1.0.4", features = ["binary"] }
+x509-cert = "0.3.0"
 
 [profile.release]
 codegen-units = 1
