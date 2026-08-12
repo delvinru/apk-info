@@ -123,7 +123,7 @@ impl AXML {
 
                     if name == "manifest" {
                         element.set_attribute_with_prefix(
-                            Some("xlmns"),
+                            Some("xmlns"),
                             "android",
                             ANDROID_NAMESPACE,
                         );
