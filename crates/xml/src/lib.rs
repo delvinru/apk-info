@@ -1,5 +1,7 @@
 //! A small library that allows you to build an XML DOM tree.
 
+use std::fmt::{Display as _, Write as _};
+
 /// Represents a single XML attribute, including an optional namespace prefix.
 ///
 /// This struct models attributes like `id="123"` or `android:name="..."`.
@@ -56,12 +58,107 @@ impl Attribute {
 
 impl std::fmt::Display for Attribute {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // attribute value may contain characters that break XML output:
+        // - control chars (except \t \n \r) are invalid in XML entirely
+        // - newlines would break the pretty-printed structure
+        // - &, <, >, ", ' need to be escaped for valid XML
         if let Some(prefix) = &self.prefix {
-            write!(f, "{}:{}=\"{}\"", prefix, self.name, self.value)
-        } else {
-            write!(f, "{}=\"{}\"", self.name, self.value)
+            f.write_str(prefix)?;
+            f.write_char(':')?;
         }
+        f.write_str(&self.name)?;
+        f.write_str("=\"")?;
+        write_attr_value(f, &self.value)?; // empty -> writes nothing here
+        f.write_str("\"")
     }
+}
+
+/// Returns whether `ch` is a code point permitted in XML 1.0 attribute values.
+///
+/// The allowed ranges are `#x20`–`#xD7FF`, `#xE000`–`#xFFFD` and
+/// `#x10000`–`#x10FFFF`. Everything outside them (control characters below
+/// `#x20` except `\t`/`\n`/`\r`, surrogates, and `#xFFFE`/`#xFFFF`) is not
+/// representable in a well-formed XML 1.0 document.
+#[inline]
+fn is_valid_xml_char(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{20}'..='\u{D7FF}' | '\u{E000}'..='\u{FFFD}' | '\u{10000}'..='\u{10FFFF}'
+    )
+}
+
+/// Writes `value` to `f` escaped for use inside an XML attribute value.
+///
+/// The written output is always well-formed XML 1.0:
+///
+/// * `\t`, `\n`, `\r` are replaced with a single space (` `), so multi-line and
+///   tab-indented values cannot break the pretty-printed element layout.
+/// * `&`, `<`, `>`, `"` and `'` are escaped as `&amp;`, `&lt;`, `&gt;`,
+///   `&quot;` and `&apos;` respectively.
+/// * Code points that are not valid in XML 1.0 (see [`is_valid_xml_char`]) are
+///   dropped entirely.
+/// * A value that contains no valid characters writes nothing.
+///
+/// # Examples
+///
+/// Escaping of the XML-special characters (newlines become spaces):
+///
+/// ```
+/// use apk_info_xml::Attribute;
+///
+/// let attr = Attribute::new(None, "label", "AVG Antivirus & Security\n<pro>\"v1\"");
+/// assert_eq!(attr.to_string(), "label=\"AVG Antivirus &amp; Security &lt;pro&gt;&quot;v1&quot;\"");
+/// ```
+///
+/// A value made up only of invalid characters renders as an empty attribute:
+///
+/// ```
+/// use apk_info_xml::Attribute;
+///
+/// let attr = Attribute::new(None, "a", "\u{1}\u{FFFF}");
+/// assert_eq!(attr.to_string(), "a=\"\"");
+/// ```
+#[inline]
+fn write_attr_value(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::Result {
+    let bytes = value.as_bytes();
+    let mut run_start = 0;
+    let mut i = 0;
+
+    while i < bytes.len() {
+        let b = bytes[i];
+        // Fast path: batch a run of already-safe ASCII bytes into one write_str.
+        let ascii_safe =
+            (0x20..0x80).contains(&b) && !matches!(b, b'&' | b'<' | b'>' | b'"' | b'\'');
+        if ascii_safe {
+            i += 1;
+            continue;
+        }
+
+        if run_start < i {
+            f.write_str(&value[run_start..i])?;
+        }
+
+        // `i` is always on a char boundary here.
+        let ch = value[i..].chars().next().unwrap();
+        match ch {
+            '\t' | '\n' | '\r' => f.write_char(' ')?,
+            '&' => f.write_str("&amp;")?,
+            '<' => f.write_str("&lt;")?,
+            '>' => f.write_str("&gt;")?,
+            '"' => f.write_str("&quot;")?,
+            '\'' => f.write_str("&apos;")?,
+            c if is_valid_xml_char(c) => f.write_char(c)?, // non-ASCII valid char
+            _ => {} // invalid XML char, drop it (same as before)
+        }
+
+        i += ch.len_utf8();
+        run_start = i;
+    }
+
+    if run_start < i {
+        f.write_str(&value[run_start..i])?;
+    }
+    Ok(())
 }
 
 /// Represents an XML element, including its name, attributes, and child elements.
@@ -259,41 +356,55 @@ impl Element {
         f: &mut std::fmt::Formatter<'_>,
         indent: usize,
     ) -> std::fmt::Result {
-        let indent_str = "  ".repeat(indent);
+        write_indent(f, indent)?;
+        f.write_char('<')?;
+        f.write_str(&self.name)?;
 
-        write!(f, "{}<{}", indent_str, self.name)?;
-
-        if self.attributes.len() > 1 {
-            let indent_str = "  ".repeat(indent + 1);
-
-            write!(f, "\n{}", indent_str)?;
-
-            for (idx, attr) in self.attributes.iter().enumerate() {
-                write!(f, "{}", attr)?;
-
-                if idx != self.attributes.len() - 1 {
-                    write!(f, "\n{}", indent_str)?;
+        match self.attributes.len() {
+            0 => {}
+            1 => {
+                f.write_char(' ')?;
+                self.attributes[0].fmt(f)?;
+            }
+            n => {
+                let child_indent = indent + 1;
+                f.write_char('\n')?;
+                write_indent(f, child_indent)?;
+                for (idx, attr) in self.attributes.iter().enumerate() {
+                    attr.fmt(f)?;
+                    if idx + 1 != n {
+                        f.write_char('\n')?;
+                        write_indent(f, child_indent)?;
+                    }
                 }
             }
-        } else if self.attributes.len() == 1 {
-            // safe unwrap, checked that contains at least 1 item
-            write!(f, " {}", self.attributes().next().unwrap())?;
         }
 
         if self.childrens.is_empty() {
-            writeln!(f, "/>")?;
+            f.write_str("/>")?;
+            f.write_char('\n')?;
         } else {
-            writeln!(f, ">")?;
-
+            f.write_char('>')?;
+            f.write_char('\n')?;
             for child in &self.childrens {
                 child.fmt_with_indent(f, indent + 1)?;
             }
-
-            writeln!(f, "{}</{}>", indent_str, self.name)?;
+            write_indent(f, indent)?;
+            f.write_str("</")?;
+            f.write_str(&self.name)?;
+            f.write_str(">\n")?;
         }
-
         Ok(())
     }
+}
+
+/// Writes `indent` levels of two-space indentation into `f` without allocating.
+#[inline]
+fn write_indent(f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
+    for _ in 0..indent {
+        f.write_str("  ")?;
+    }
+    Ok(())
 }
 
 impl std::fmt::Display for Element {
@@ -334,5 +445,74 @@ impl<'a> Iterator for Descendants<'a> {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn attribute_plain_renders_quoted() {
+        assert_eq!(Attribute::new(None, "id", "123").to_string(), "id=\"123\"");
+    }
+
+    #[test]
+    fn attribute_prefixed_renders() {
+        assert_eq!(
+            Attribute::new(Some("android"), "name", "x").to_string(),
+            "android:name=\"x\""
+        );
+    }
+
+    #[test]
+    fn attribute_escapes_specials() {
+        assert_eq!(
+            Attribute::new(None, "a", "&\n<>\"'").to_string(),
+            "a=\"&amp; &lt;&gt;&quot;&apos;\""
+        );
+    }
+
+    #[test]
+    fn attribute_tabs_cr_to_space() {
+        assert_eq!(
+            Attribute::new(None, "a", "x\ty\r").to_string(),
+            "a=\"x y \""
+        );
+    }
+
+    #[test]
+    fn attribute_all_invalid_renders_empty() {
+        assert_eq!(
+            Attribute::new(None, "a", "\u{1}\u{FFFF}\u{FFFE}").to_string(),
+            "a=\"\""
+        );
+    }
+
+    #[test]
+    fn attribute_non_ascii_preserved() {
+        assert_eq!(
+            Attribute::new(None, "a", "café 😀").to_string(),
+            "a=\"café 😀\""
+        );
+    }
+
+    #[test]
+    fn element_render_golden() {
+        let mut root = Element::new("root");
+        root.set_attribute("a", "1");
+        root.set_attribute("b", "2");
+
+        let mut child = Element::new("child");
+        child.set_attribute("x", "y");
+        root.append_child(child);
+
+        let mut ns_kid = Element::new("ns:kid");
+        ns_kid.set_attribute("prefix", "p");
+        root.append_child(ns_kid);
+
+        let expected = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\
+<root\n  a=\"1\"\n  b=\"2\">\n  <child x=\"y\"/>\n  <ns:kid prefix=\"p\"/>\n</root>\n";
+        assert_eq!(root.to_string(), expected);
     }
 }

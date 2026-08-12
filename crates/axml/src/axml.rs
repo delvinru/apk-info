@@ -115,7 +115,9 @@ impl AXML {
                         Err(_) => break,
                     };
 
-                    let Some(name) = string_pool.get(node.name) else {
+                    // why is_attribute_name == true? idk, but this works, for example - b1e83615e07999862f15f5649656941f754db4ed31458b4b6b5ba9d36bc1b1b3
+                    let Some(name) = string_pool.get_with_resources(node.name, xml_resource, true)
+                    else {
                         continue;
                     };
 
