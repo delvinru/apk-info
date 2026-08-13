@@ -33,6 +33,9 @@ pub struct Apk {
     zip: ZipEntry,
     axml: AXML,
     arsc: Option<ARSC>,
+
+    /// The name of the app entry inside a `xapk`/`apkm` container.
+    base_apk_name: Option<String>,
 }
 
 /// Implementation of internal methods
@@ -55,7 +58,7 @@ impl Apk {
     }
 
     /// Helper function for reading apk files
-    fn init(p: &Path) -> Result<(ZipEntry, AXML, Option<ARSC>), APKError> {
+    fn init(p: &Path) -> Result<(ZipEntry, Option<String>, AXML, Option<ARSC>), APKError> {
         let file = File::open(p).map_err(APKError::IoError)?;
         let mut reader = BufReader::with_capacity(1024 * 1024, file);
         let mut input = Vec::new();
@@ -67,15 +70,15 @@ impl Apk {
 
         let zip = ZipEntry::new(input).map_err(APKError::ZipError)?;
 
-        // attempt to get normal apk
+        // apk
         if let Ok((manifest, _)) = zip.read(ANDROID_MANIFEST_PATH) {
             let arsc = Self::get_arsc(&zip)?;
             let axml = Self::get_axml(&manifest, arsc.as_ref())?;
 
-            return Ok((zip, axml, arsc));
+            return Ok((zip, None, axml, arsc));
         }
 
-        // attempt to get xapk
+        // xapk
         if let Ok((manifest_json_data, _)) = zip.read(XAPK_MANIFEST_PATH) {
             let manifest_json: XAPKManifest =
                 serde_json::from_slice(&manifest_json_data).map_err(APKError::XAPKManifestError)?;
@@ -90,10 +93,10 @@ impl Apk {
             let arsc = Self::get_arsc(&inner_apk)?;
             let axml = Self::get_axml(&inner_manifest, arsc.as_ref())?;
 
-            return Ok((zip, axml, arsc));
+            return Ok((zip, Some(package_name), axml, arsc));
         }
 
-        // attempt to get apkm
+        // apkm
         if let Ok((inner_apk_data, _)) = zip.read(APKM_BASE_APK) {
             let inner_apk = ZipEntry::new(inner_apk_data).map_err(APKError::ZipError)?;
             let (inner_manifest, _) = inner_apk
@@ -103,10 +106,45 @@ impl Apk {
             let arsc = Self::get_arsc(&inner_apk)?;
             let axml = Self::get_axml(&inner_manifest, arsc.as_ref())?;
 
-            return Ok((zip, axml, arsc));
+            return Ok((zip, Some(APKM_BASE_APK.to_owned()), axml, arsc));
         }
 
         Err(APKError::InvalidInput("is it apk/xapk/apkm?"))
+    }
+
+    /// Checks if a zip entry name matches an Android `classes*.dex` file, i.e. `classes.dex`,
+    fn is_dex_name(name: &str) -> bool {
+        name.strip_prefix("classes")
+            .and_then(|rest| rest.strip_suffix(".dex"))
+            .is_some_and(|middle| middle.is_empty() || middle.bytes().all(|b| b.is_ascii_digit()))
+    }
+
+    /// Extracts the ABI from a split apk file name inside a `xapk`/`apkm` container.
+    fn split_abi_from_name(name: &str) -> Option<String> {
+        let token = name
+            .strip_prefix("config.")
+            .or_else(|| name.strip_prefix("split_config."))?
+            .strip_suffix(".apk")?;
+
+        let abi = token.replace('_', "-");
+
+        Self::is_known_abi(&abi).then_some(abi)
+    }
+
+    /// Checks whether a string is a well-known Android ABI.
+    #[inline]
+    fn is_known_abi(abi: &str) -> bool {
+        matches!(
+            abi,
+            "arm64-v8a"
+                | "armeabi"
+                | "armeabi-v7a"
+                | "mips"
+                | "mips64"
+                | "riscv64"
+                | "x86"
+                | "x86_64"
+        )
     }
 }
 
@@ -129,9 +167,14 @@ impl Apk {
             )));
         }
 
-        let (zip, axml, arsc) = Self::init(path)?;
+        let (zip, base_apk_name, axml, arsc) = Self::init(path)?;
 
-        Ok(Apk { zip, axml, arsc })
+        Ok(Apk {
+            zip,
+            axml,
+            arsc,
+            base_apk_name,
+        })
     }
 
     /// Reads data from `apk` file.
@@ -166,20 +209,28 @@ impl Apk {
 
     /// Checks if the APK has multiple `classes.dex` files or not.
     pub fn is_multidex(&self) -> bool {
-        self.zip
-            .namelist()
-            .filter(|name| {
-                // don't use regexes, i think it's overengineering for this task
-                if !name.starts_with("classes") || !name.ends_with(".dex") {
-                    return false;
-                }
+        // regular apk
+        let Some(base) = &self.base_apk_name else {
+            return self
+                .zip
+                .namelist()
+                .filter(|name| Self::is_dex_name(name))
+                .count()
+                > 1;
+        };
 
-                let middle = &name["classes".len()..name.len() - ".dex".len()];
+        // split container (xapk/apkm)
+        if let Ok((data, _)) = self.zip.read(base)
+            && let Ok(inner_apk) = ZipEntry::new(data)
+        {
+            return inner_apk
+                .namelist()
+                .filter(|name| Self::is_dex_name(name))
+                .count()
+                > 1;
+        }
 
-                middle.is_empty() || middle.chars().all(|c| c.is_ascii_digit())
-            })
-            .count()
-            > 1
+        false
     }
 
     /// An auxiliary method that allows you to get a value from a reference to a resource.
@@ -390,7 +441,7 @@ impl Apk {
             .get_attribute_value("application", "debuggable", self.arsc.as_ref())
     }
 
-    /// Extracts and resolve the `android:description` attribute from `<application>`.
+    /// Extracts and resolves the `android:description` attribute from `<application>`.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#desc>
     #[inline]
@@ -427,7 +478,7 @@ impl Apk {
             .get_attribute_value("application", "logo", self.arsc.as_ref())
     }
 
-    /// The fully qualified name of an `Application` subclasss implemented for the application.
+    /// The fully qualified name of an `Application` subclass implemented for the application.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/application-element#nm>
     #[inline]
@@ -553,7 +604,7 @@ impl Apk {
             .any(|x| x == "android.hardware.type.watch")
     }
 
-    /// Checks whether app is designed to show its UI on Chromebooks.
+    /// Checks whether the app is designed to show its UI on Chromebooks.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features>
     #[inline]
@@ -561,7 +612,7 @@ impl Apk {
         self.get_features().any(|x| x == "android.hardware.type.pc")
     }
 
-    /// Retrieves all user defines permissions.
+    /// Retrieves all user-defined permissions.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element>
     #[inline]
@@ -581,7 +632,7 @@ impl Apk {
             })
     }
 
-    /// Retrieves first main (launchable) activity defined in the manifest.
+    /// Retrieves the first main (launchable) activity defined in the manifest.
     ///
     /// A main activity is typically one that has an intent filter with actions `MAIN` and categories `LAUNCHER` or `INFO`.
     ///
@@ -777,11 +828,13 @@ impl Apk {
         Ok(signatures)
     }
 
-    /// Information about the native code (.so libraries) of the APK file
+    /// Information about the native code (.so libraries) of the APK file.
     pub fn get_supported_abis(&self) -> Vec<String> {
-        let mut native_codes_set = HashSet::new();
+        let mut native_codes_set: HashSet<String> = HashSet::new();
 
+        // regular apk
         for filename in self.zip.namelist() {
+            // native libs inside the app itself (regular apk)
             if let Some((abi, lib)) = filename
                 .strip_prefix("lib/")
                 .and_then(|rest| rest.split_once('/'))
@@ -789,11 +842,100 @@ impl Apk {
                 && !abi.is_empty()
             {
                 native_codes_set.insert(abi.to_owned());
+                continue;
+            }
+
+            // ABI split apk inside a xapk/apkm container, e.g. `config.armeabi_v7a.apk` or `split_config.arm64_v8a.apk`.
+            if let Some(abi) = Self::split_abi_from_name(filename) {
+                native_codes_set.insert(abi);
+            }
+        }
+
+        // split (xapk/apkm)
+        if let Some(base) = &self.base_apk_name
+            && let Ok((data, _)) = self.zip.read(base)
+            && let Ok(inner_apk) = ZipEntry::new(data)
+        {
+            for filename in inner_apk.namelist() {
+                if let Some((abi, lib)) = filename
+                    .strip_prefix("lib/")
+                    .and_then(|rest| rest.split_once('/'))
+                    && lib.ends_with(".so")
+                    && !abi.is_empty()
+                {
+                    native_codes_set.insert(abi.to_owned());
+                }
             }
         }
 
         let mut native_codes: Vec<String> = native_codes_set.into_iter().collect();
         native_codes.sort();
         native_codes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Apk;
+
+    #[test]
+    fn valid_dex_names_are_accepted() {
+        for valid in [
+            "classes.dex",
+            "classes2.dex",
+            "classes0.dex",
+            "classes09.dex",
+            "classes123.dex",
+            "classes999999.dex",
+            "classes18446744073709551615.dex",
+        ] {
+            assert!(Apk::is_dex_name(valid), "{valid:?} should be accepted");
+        }
+    }
+
+    #[test]
+    fn invalid_names_are_rejected() {
+        for invalid in [
+            "AndroidManifest.xml",
+            "resources.arsc",
+            "lib/classes2.dex", // not the right shape: prefix isn't `classes`
+            "xclasses.dex",
+            "Classes2.dex", // case-sensitive
+            "classesdex",   // no `.dex` suffix
+            "classes.dxe",
+            "classes2.dexx",
+            "classes",
+            ".dex",
+            "",
+        ] {
+            assert!(!Apk::is_dex_name(invalid), "{invalid:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn non_numeric_middle_is_rejected() {
+        for invalid in [
+            "classes_.dex",
+            "classes-.dex",
+            "classesA.dex",
+            "classesab.dex",
+            "classes2.2.dex",
+            "classes.dex.dex", // middle would be `.dex`
+            "classes12a34.dex",
+        ] {
+            assert!(!Apk::is_dex_name(invalid), "{invalid:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn non_ascii_and_whitespace_middle_is_rejected() {
+        for invalid in [
+            "classesé.dex",
+            "classes1 .dex",
+            "classes 2.dex",
+            "classes.dex ",
+        ] {
+            assert!(!Apk::is_dex_name(invalid), "{invalid:?} should be rejected");
+        }
     }
 }
