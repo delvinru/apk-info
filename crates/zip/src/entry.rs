@@ -41,11 +41,7 @@ pub struct ZipEntry {
     /// Owned zip data
     input: Vec<u8>,
 
-    /// Corrected absolute offset of the central directory.
-    ///
-    /// Computed as `eocd_offset - central_dir_size`, so it stays correct even
-    /// when the archive carries prepended data or a slightly wrong `central_dir_offset` field.
-    /// Used to locate the central directory and the APK signature block preceding it.
+    /// Absolute offset of the central directory.
     central_dir_offset: usize,
 
     /// Central directory structure
@@ -58,10 +54,8 @@ pub struct ZipEntry {
 /// Implementation of basic methods
 impl ZipEntry {
     /// Recovers the real local file header offset for an entry whose
-    /// `local_header_offset` is corrupt.
-    ///
-    /// Tries the claimed offset, then scans a bounded, filename-verified
-    /// window for a matching `PK\x03\x04`.
+    /// `local_header_offset` is corrupt: tries the claim, then scans a bounded,
+    /// filename-verified window for a matching `PK\x03\x04`.
     fn find_local_header_offset(&self, claim: usize, expected_name: &[u8]) -> Option<usize> {
         let input = &self.input;
         let central_dir_offset = self.central_dir_offset;
@@ -130,13 +124,21 @@ impl ZipEntry {
         let eocd = EndOfCentralDirectory::parse(&mut &input[eocd_offset..])
             .map_err(|_| ZipError::ParseError)?;
 
-        // The central directory ends where the EOCD begins, so its start is
-        // `eocd_offset - central_dir_size`.
-        // Deriving it this way keeps the offset correct for archives with prepended data and for slightly
-        // wrong `central_dir_offset` values.
-        let central_dir_offset = eocd_offset
+        // Prefer the EOCD's declared CD offset;
+        // derive it (`eocd - cd_size`) only when prepended/polyglot data left it stale.
+        let declared = eocd.central_dir_offset as usize;
+        let derived = eocd_offset
             .checked_sub(eocd.central_dir_size as usize)
             .ok_or(ZipError::ParseError)?;
+
+        let central_dir_offset = if input
+            .get(declared..)
+            .is_some_and(|s| s.starts_with(b"PK\x01\x02"))
+        {
+            declared
+        } else {
+            derived
+        };
 
         let central_directory = CentralDirectory::parse(&input, central_dir_offset)
             .map_err(|_| ZipError::ParseError)?;
@@ -816,6 +818,16 @@ mod tests {
     /// together with the byte position of each central directory entry's
     /// `local_header_offset` field (so tests can corrupt it).
     fn build_archive(entries: &[(&str, &[u8])]) -> (Vec<u8>, AHashMap<String, usize>) {
+        build_archive_gap(entries, 0)
+    }
+
+    /// Like [`build_archive`], but inserts `gap` filler bytes between the CD and
+    /// the EOCD (e.g. a ZIP64 EOCD record), so the declared `cd_offset` no
+    /// longer equals `eocd_offset - cd_size`.
+    fn build_archive_gap(
+        entries: &[(&str, &[u8])],
+        gap: usize,
+    ) -> (Vec<u8>, AHashMap<String, usize>) {
         let mut data = Vec::new();
 
         struct Meta {
@@ -876,6 +888,9 @@ mod tests {
         }
         let cd_size = data.len() as u32 - cd_start;
 
+        // bytes between the central directory and the EOCD (not counted in cd_size)
+        data.extend(std::iter::repeat_n(0, gap));
+
         // EOCD
         data.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
         data.extend_from_slice(&0u16.to_le_bytes()); // disk number
@@ -895,6 +910,18 @@ mod tests {
 
     fn corrupt_offset(data: &mut [u8], field: usize, value: u32) {
         data[field..field + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    #[test]
+    fn cd_offset_declared_wins_over_derived_when_gap_present() {
+        // ZIP64 record between CD and EOCD: the declared cd_offset points at the
+        // real CD, while `eocd_offset - cd_size` lands `gap` bytes too late.
+        let (data, _) = build_archive_gap(&[("a.txt", b"a"), ("b.txt", b"bb")], 76);
+
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.namelist().count(), 2);
+        assert_eq!(zip.read("a.txt").unwrap().0, b"a");
+        assert_eq!(zip.read("b.txt").unwrap().0, b"bb");
     }
 
     #[test]
