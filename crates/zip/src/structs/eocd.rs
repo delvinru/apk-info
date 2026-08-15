@@ -22,6 +22,7 @@ pub(crate) struct EndOfCentralDirectory {
     #[allow(unused)]
     pub(crate) central_dir_size: u32,
 
+    #[allow(unused)]
     pub(crate) central_dir_offset: u32,
 
     #[allow(unused)]
@@ -62,6 +63,8 @@ impl EndOfCentralDirectory {
         )
             .parse_next(input)?;
 
+        // Clamp the comment length to the bytes actually present.
+        let comment_length = comment_length.min(input.len() as u16);
         let comment: &[u8] = take(comment_length).parse_next(input)?;
 
         Ok(EndOfCentralDirectory {
@@ -203,14 +206,20 @@ mod tests {
     }
 
     #[test]
-    fn test_bad_comment_length() {
+    fn test_oversized_comment_length_is_tolerated() {
+        // A `comment_length` larger than the remaining bytes must not fail the
+        // parse: we clamp to what is present (mirroring Python's zipfile), so a
+        // record with a bogus length but no comment bytes parses with an empty
+        // comment.
         let eocd = make_bad_eocd(&[]);
         let mut input = &eocd[..];
 
         let result = EndOfCentralDirectory::parse(&mut input);
         assert!(
-            result.is_err(),
-            "expected parse error for bad comment length"
+            result.is_ok(),
+            "expected oversized comment length to be tolerated"
         );
+        let parsed = result.unwrap();
+        assert!(parsed.comment.is_empty());
     }
 }

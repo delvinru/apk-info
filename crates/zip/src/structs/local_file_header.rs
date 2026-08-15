@@ -5,7 +5,7 @@ use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct LocalFileHeader {
     #[allow(unused)]
     pub(crate) version_needed: u16,
@@ -24,8 +24,10 @@ pub(crate) struct LocalFileHeader {
     #[allow(unused)]
     pub(crate) crc32: u32,
 
+    #[allow(unused)]
     pub(crate) compressed_size: u32,
 
+    #[allow(unused)]
     pub(crate) uncompressed_size: u32,
 
     #[allow(unused)]
@@ -36,7 +38,12 @@ pub(crate) struct LocalFileHeader {
 
     pub(crate) file_name: Arc<[u8]>,
 
+    #[allow(unused)]
     pub(crate) extra_field: Arc<[u8]>,
+
+    /// Actual offset of this local header in the file; differs from the claimed
+    /// `local_header_offset` once self-healing recovered a shifted entry.
+    pub(crate) offset: usize,
 }
 
 impl LocalFileHeader {
@@ -92,6 +99,7 @@ impl LocalFileHeader {
             extra_field_length,
             file_name: Arc::from(file_name),
             extra_field: Arc::from(extra_field),
+            offset,
         })
     }
 

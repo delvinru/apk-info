@@ -10,6 +10,7 @@ use cms::signed_data::SignedData;
 use flate2::{Decompress, FlushDecompress, Status};
 use log::warn;
 use md5::{Digest, Md5};
+use memchr::memmem;
 use sha1::Sha1;
 use sha2::Sha256;
 use winnow::binary::{le_u32, le_u64, length_take};
@@ -28,14 +29,24 @@ use crate::{CertificateError, FileCompressionType, ZipError};
 /// Maximum allowed uncompressed size for a file entry.
 const MAX_UNCOMPRESSED_SIZE: usize = u32::MAX as usize;
 
+/// Caps the self-healing forward scan so a corrupt archive can't degrade to a quadratic scan.
+const SELF_HEAL_MAX_SCAN: usize = 1 << 20;
+
+/// How far back from a claimed offset to search; corrupt offsets shift by a few bytes.
+const SELF_HEAL_BACKWARD: usize = 1 << 16;
+
 /// Represents a parsed ZIP archive.
 #[derive(Debug)]
 pub struct ZipEntry {
     /// Owned zip data
     input: Vec<u8>,
 
-    /// EOCD structure
-    eocd: EndOfCentralDirectory,
+    /// Corrected absolute offset of the central directory.
+    ///
+    /// Computed as `eocd_offset - central_dir_size`, so it stays correct even
+    /// when the archive carries prepended data or a slightly wrong `central_dir_offset` field.
+    /// Used to locate the central directory and the APK signature block preceding it.
+    central_dir_offset: usize,
 
     /// Central directory structure
     central_directory: CentralDirectory,
@@ -46,6 +57,51 @@ pub struct ZipEntry {
 
 /// Implementation of basic methods
 impl ZipEntry {
+    /// Recovers the real local file header offset for an entry whose
+    /// `local_header_offset` is corrupt.
+    ///
+    /// Tries the claimed offset, then scans a bounded, filename-verified
+    /// window for a matching `PK\x03\x04`.
+    fn find_local_header_offset(&self, claim: usize, expected_name: &[u8]) -> Option<usize> {
+        let input = &self.input;
+        let central_dir_offset = self.central_dir_offset;
+
+        // 1. exact claimed offset
+        if let Ok(header) = LocalFileHeader::parse(input, claim)
+            && header.file_name.as_ref() == expected_name
+        {
+            return Some(claim);
+        }
+
+        // 2. bounded scan for a matching local header, verified by filename.
+        let start = claim.saturating_sub(SELF_HEAL_BACKWARD);
+        let end = input
+            .len()
+            .min(central_dir_offset)
+            .min(claim.saturating_add(SELF_HEAL_MAX_SCAN));
+        let mut pos = start;
+        while pos < end {
+            match memmem::find(&input[pos..end], b"PK\x03\x04") {
+                Some(rel) => {
+                    let candidate = pos + rel;
+                    if candidate == claim {
+                        // same offset as the failed first attempt; move on
+                        pos = candidate + 1;
+                        continue;
+                    }
+                    if let Ok(header) = LocalFileHeader::parse(input, candidate)
+                        && header.file_name.as_ref() == expected_name
+                    {
+                        return Some(candidate);
+                    }
+                    pos = candidate + 1;
+                }
+                None => break,
+            }
+        }
+        None
+    }
+
     /// Creates a new `ZipEntry` from raw ZIP data.
     ///
     /// # Errors
@@ -74,22 +130,31 @@ impl ZipEntry {
         let eocd = EndOfCentralDirectory::parse(&mut &input[eocd_offset..])
             .map_err(|_| ZipError::ParseError)?;
 
-        let central_directory =
-            CentralDirectory::parse(&input, &eocd).map_err(|_| ZipError::ParseError)?;
+        // The central directory ends where the EOCD begins, so its start is
+        // `eocd_offset - central_dir_size`.
+        // Deriving it this way keeps the offset correct for archives with prepended data and for slightly
+        // wrong `central_dir_offset` values.
+        let central_dir_offset = eocd_offset
+            .checked_sub(eocd.central_dir_size as usize)
+            .ok_or(ZipError::ParseError)?;
+
+        let central_directory = CentralDirectory::parse(&input, central_dir_offset)
+            .map_err(|_| ZipError::ParseError)?;
 
         let local_headers = central_directory
             .entries
             .iter()
             .filter_map(|(filename, entry)| {
-                LocalFileHeader::parse(&input, entry.local_header_offset as usize)
-                    .ok()
-                    .map(|header| (Arc::clone(filename), header))
+                let header =
+                    LocalFileHeader::parse(&input, entry.local_header_offset as usize).ok()?;
+                (header.file_name.as_ref() == entry.file_name.as_bytes())
+                    .then(|| (Arc::clone(filename), header))
             })
             .collect();
 
         Ok(ZipEntry {
             input,
-            eocd,
+            central_dir_offset,
             central_directory,
             local_headers,
         })
@@ -139,46 +204,48 @@ impl ZipEntry {
     /// }
     /// ```
     pub fn read(&self, filename: &str) -> Result<(Vec<u8>, FileCompressionType), ZipError> {
-        let local_header = self
-            .local_headers
-            .get(filename)
-            .ok_or(ZipError::FileNotFound)?;
-
         let central_directory_entry = self
             .central_directory
             .entries
             .get(filename)
             .ok_or(ZipError::FileNotFound)?;
 
-        let (compressed_size, uncompressed_size) =
-            if local_header.compressed_size == 0 || local_header.uncompressed_size == 0 {
-                (
-                    central_directory_entry.compressed_size as usize,
-                    central_directory_entry.uncompressed_size as usize,
-                )
-            } else {
-                (
-                    local_header.compressed_size as usize,
-                    local_header.uncompressed_size as usize,
-                )
-            };
+        // Index miss = corrupt claim; lazily recover this one entry.
+        let local_header = match self.local_headers.get(filename) {
+            Some(header) => header.clone(),
+            None => {
+                let offset = self
+                    .find_local_header_offset(
+                        central_directory_entry.local_header_offset as usize,
+                        central_directory_entry.file_name.as_bytes(),
+                    )
+                    .ok_or(ZipError::FileNotFound)?;
+                LocalFileHeader::parse(&self.input, offset).map_err(|_| ZipError::FileNotFound)?
+            }
+        };
+
+        let method = central_directory_entry.compression_method;
+        let compressed_size = central_directory_entry.compressed_size as usize;
+        let uncompressed_size = central_directory_entry.uncompressed_size as usize;
+        let tampered = local_header.compression_method != method;
 
         if uncompressed_size > MAX_UNCOMPRESSED_SIZE {
             return Err(ZipError::FileTooLarge);
         }
 
-        let offset = central_directory_entry.local_header_offset as usize + local_header.size();
-        // helper to safely get a slice from input
+        let offset = local_header.offset + local_header.size();
         let get_slice = |start: usize, end: usize| self.input.get(start..end).ok_or(ZipError::EOF);
 
-        match (
-            local_header.compression_method,
-            compressed_size == uncompressed_size,
-        ) {
+        match (method, compressed_size == uncompressed_size) {
             (0, _) => {
                 // stored (no compression)
                 let slice = get_slice(offset, offset + uncompressed_size)?;
-                Ok((slice.to_vec(), FileCompressionType::Stored))
+                let compression = if tampered {
+                    FileCompressionType::StoredTampered
+                } else {
+                    FileCompressionType::Stored
+                };
+                Ok((slice.to_vec(), compression))
             }
             (8, _) => {
                 // deflate default
@@ -193,15 +260,20 @@ impl ZipEntry {
                     )
                     .map_err(|_| ZipError::DecompressionError)?;
 
-                Ok((uncompressed_data, FileCompressionType::Deflated))
+                let compression = if tampered {
+                    FileCompressionType::DeflatedTampered
+                } else {
+                    FileCompressionType::Deflated
+                };
+                Ok((uncompressed_data, compression))
             }
             (_, true) => {
-                // stored tampered
+                // unknown method but stored-sized
                 let slice = get_slice(offset, offset + uncompressed_size)?;
                 Ok((slice.to_vec(), FileCompressionType::StoredTampered))
             }
             (_, false) => {
-                // deflate tampered
+                // unknown method: try deflate, then fall back to stored
                 let compressed_data = get_slice(offset, offset + compressed_size)?;
                 let mut uncompressed_data = Vec::with_capacity(uncompressed_size);
                 let mut decompressor = Decompress::new(false);
@@ -376,7 +448,7 @@ impl ZipEntry {
     ///
     /// </div>
     pub fn get_signatures_other(&self) -> Result<Vec<Signature>, CertificateError> {
-        let offset = self.eocd.central_dir_offset as usize;
+        let offset = self.central_dir_offset;
         let mut slice = match self.input.get(offset.saturating_sub(24)..offset) {
             Some(v) => v,
             None => return Ok(Vec::new()),
@@ -733,5 +805,158 @@ impl From<Certificate> for CertificateInfo {
                 },
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Builds a minimal, well-formed two-file STORED zip archive and returns it
+    /// together with the byte position of each central directory entry's
+    /// `local_header_offset` field (so tests can corrupt it).
+    fn build_archive(entries: &[(&str, &[u8])]) -> (Vec<u8>, AHashMap<String, usize>) {
+        let mut data = Vec::new();
+
+        struct Meta {
+            name: String,
+            local_header_offset: u32,
+            size: u32,
+            cd_off_field: usize,
+        }
+        let mut metas = Vec::new();
+
+        // local file headers + raw (stored) data
+        for (name, content) in entries {
+            let size = content.len() as u32;
+            let lho = data.len() as u32;
+            data.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
+            data.extend_from_slice(&20u16.to_le_bytes()); // version needed
+            data.extend_from_slice(&0u16.to_le_bytes()); // flags
+            data.extend_from_slice(&0u16.to_le_bytes()); // method = stored
+            data.extend_from_slice(&0u16.to_le_bytes()); // mod time
+            data.extend_from_slice(&0u16.to_le_bytes()); // mod date
+            data.extend_from_slice(&0u32.to_le_bytes()); // crc (not verified)
+            data.extend_from_slice(&size.to_le_bytes());
+            data.extend_from_slice(&size.to_le_bytes());
+            data.extend_from_slice(&(name.len() as u16).to_le_bytes());
+            data.extend_from_slice(&0u16.to_le_bytes()); // extra len
+            data.extend_from_slice(name.as_bytes());
+            data.extend_from_slice(content);
+            metas.push(Meta {
+                name: name.to_string(),
+                local_header_offset: lho,
+                size,
+                cd_off_field: 0,
+            });
+        }
+
+        // central directory
+        let cd_start = data.len() as u32;
+        for m in &mut metas {
+            data.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
+            data.extend_from_slice(&20u16.to_le_bytes()); // version made by
+            data.extend_from_slice(&20u16.to_le_bytes()); // version needed
+            data.extend_from_slice(&0u16.to_le_bytes()); // flags
+            data.extend_from_slice(&0u16.to_le_bytes()); // method
+            data.extend_from_slice(&0u16.to_le_bytes()); // mod time
+            data.extend_from_slice(&0u16.to_le_bytes()); // mod date
+            data.extend_from_slice(&0u32.to_le_bytes()); // crc
+            data.extend_from_slice(&m.size.to_le_bytes());
+            data.extend_from_slice(&m.size.to_le_bytes());
+            data.extend_from_slice(&(m.name.len() as u16).to_le_bytes());
+            data.extend_from_slice(&0u16.to_le_bytes()); // extra len
+            data.extend_from_slice(&0u16.to_le_bytes()); // comment len
+            data.extend_from_slice(&0u16.to_le_bytes()); // disk number
+            data.extend_from_slice(&0u16.to_le_bytes()); // internal attrs
+            data.extend_from_slice(&0u32.to_le_bytes()); // external attrs
+            m.cd_off_field = data.len();
+            data.extend_from_slice(&m.local_header_offset.to_le_bytes());
+            data.extend_from_slice(m.name.as_bytes());
+        }
+        let cd_size = data.len() as u32 - cd_start;
+
+        // EOCD
+        data.extend_from_slice(&0x0605_4b50u32.to_le_bytes());
+        data.extend_from_slice(&0u16.to_le_bytes()); // disk number
+        data.extend_from_slice(&0u16.to_le_bytes()); // cd start disk
+        data.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+        data.extend_from_slice(&(entries.len() as u16).to_le_bytes());
+        data.extend_from_slice(&cd_size.to_le_bytes());
+        data.extend_from_slice(&cd_start.to_le_bytes());
+        data.extend_from_slice(&0u16.to_le_bytes()); // comment len
+
+        let mut fields = AHashMap::new();
+        for m in metas {
+            fields.insert(m.name, m.cd_off_field);
+        }
+        (data, fields)
+    }
+
+    fn corrupt_offset(data: &mut [u8], field: usize, value: u32) {
+        data[field..field + 4].copy_from_slice(&value.to_le_bytes());
+    }
+
+    #[test]
+    fn read_works_on_healthy_archive() {
+        let (data, _) = build_archive(&[("a.txt", b"hello"), ("b.txt", b"world!")]);
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.read("a.txt").unwrap().0, b"hello");
+        assert_eq!(zip.read("b.txt").unwrap().0, b"world!");
+    }
+
+    #[test]
+    fn read_heals_shifted_local_header_offset() {
+        let (mut data, fields) = build_archive(&[("a.txt", b"AAA"), ("b.txt", b"BBBBBBBB")]);
+        // Corrupt b's local_header_offset: claim it is 40 bytes after reality.
+        let orig = u32::from_le_bytes(
+            data[fields["b.txt"]..fields["b.txt"] + 4]
+                .try_into()
+                .unwrap(),
+        );
+        corrupt_offset(&mut data, fields["b.txt"], orig + 40);
+
+        let zip = ZipEntry::new(data).unwrap();
+        // b.txt's local header is not in the fast index, so read must lazily heal it.
+        assert_eq!(zip.read("b.txt").unwrap().0, b"BBBBBBBB");
+        // The untouched entry still reads normally.
+        assert_eq!(zip.read("a.txt").unwrap().0, b"AAA");
+    }
+
+    #[test]
+    fn read_rejects_wrong_filename_during_recovery() {
+        // Point b's claim at a.txt's local header. The exact-offset attempt finds
+        // a.txt's header but its filename does not match, so recovery must keep
+        // scanning until it reaches b.txt's own (matching) header.
+        let (mut data, fields) = build_archive(&[("a.txt", b"AAA"), ("b.txt", b"BBBB")]);
+        let a_claim = u32::from_le_bytes(
+            data[fields["a.txt"]..fields["a.txt"] + 4]
+                .try_into()
+                .unwrap(),
+        );
+        corrupt_offset(&mut data, fields["b.txt"], a_claim);
+
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.read("b.txt").unwrap().0, b"BBBB");
+    }
+
+    #[test]
+    fn unhealable_offset_is_not_found() {
+        let (mut data, fields) = build_archive(&[("a.txt", b"AAAAAAA"), ("b.txt", b"BBBBBB")]);
+        // Corrupt b's claim to a huge offset well away from any local header, so
+        // the bounded scan cannot reach it and read must report FileNotFound.
+        corrupt_offset(&mut data, fields["b.txt"], u32::MAX - 100);
+
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.read("b.txt").unwrap_err(), ZipError::FileNotFound);
+        // a.txt (healthy) still reads.
+        assert_eq!(zip.read("a.txt").unwrap().0, b"AAAAAAA");
+    }
+
+    #[test]
+    fn read_missing_file_is_not_found() {
+        let (data, _) = build_archive(&[("a.txt", b"hello")]);
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.read("nope.txt").unwrap_err(), ZipError::FileNotFound);
     }
 }

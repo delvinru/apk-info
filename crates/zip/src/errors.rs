@@ -5,7 +5,7 @@
 use thiserror::Error;
 
 /// Represents all possible errors that can occur while parsing a ZIP archive.
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum ZipError {
     /// The provided file does not have a valid ZIP header.
     #[error("provided file is not a zip archive")]

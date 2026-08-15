@@ -7,8 +7,6 @@ use winnow::error::{ErrMode, Needed, ParserError};
 use winnow::prelude::*;
 use winnow::token::take;
 
-use crate::structs::eocd::EndOfCentralDirectory;
-
 #[derive(Debug)]
 pub(crate) struct CentralDirectoryEntry {
     #[allow(unused)]
@@ -154,12 +152,9 @@ pub(crate) struct CentralDirectory {
 
 impl CentralDirectory {
     #[inline(always)]
-    pub(crate) fn parse(
-        input: &[u8],
-        eocd: &EndOfCentralDirectory,
-    ) -> ModalResult<CentralDirectory> {
+    pub(crate) fn parse(input: &[u8], cd_offset: usize) -> ModalResult<CentralDirectory> {
         let mut input = input
-            .get(eocd.central_dir_offset as usize..)
+            .get(cd_offset..)
             .ok_or(ErrMode::Incomplete(Needed::Unknown))?;
 
         let entries = repeat::<_, CentralDirectoryEntry, Vec<CentralDirectoryEntry>, _, _>(
@@ -177,8 +172,6 @@ impl CentralDirectory {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use super::*;
 
     fn make_cde_record(
@@ -269,19 +262,7 @@ mod tests {
         data.extend_from_slice(&e1);
         data.extend_from_slice(&e2);
 
-        // Fake EOCD pointing to offset 0 (start)
-        let eocd = EndOfCentralDirectory {
-            disk_number: 0,
-            central_dir_start_disk: 0,
-            entries_on_this_disk: 0,
-            total_entries: 0,
-            central_dir_size: data.len() as u32,
-            central_dir_offset: 0,
-            comment_length: 0,
-            comment: Arc::from([]),
-        };
-
-        let cd = CentralDirectory::parse(&data, &eocd).unwrap();
+        let cd = CentralDirectory::parse(&data, 0).unwrap();
         assert_eq!(cd.entries.len(), 2);
         assert!(cd.entries.contains_key("a.txt"));
         assert!(cd.entries.contains_key("b.txt"));
@@ -298,18 +279,7 @@ mod tests {
         let offset = file.len();
         file.extend_from_slice(&entry);
 
-        let eocd = EndOfCentralDirectory {
-            disk_number: 0,
-            central_dir_start_disk: 0,
-            entries_on_this_disk: 0,
-            total_entries: 0,
-            central_dir_size: entry.len() as u32,
-            central_dir_offset: offset as u32,
-            comment_length: 0,
-            comment: Arc::from([]),
-        };
-
-        let cd = CentralDirectory::parse(&file, &eocd).unwrap();
+        let cd = CentralDirectory::parse(&file, offset).unwrap();
         assert_eq!(cd.entries.len(), 1);
         assert!(cd.entries.contains_key("offset.txt"));
     }
@@ -317,18 +287,8 @@ mod tests {
     #[test]
     fn test_parse_central_directory_invalid_offset() {
         let data = vec![0x00; 10];
-        let eocd = EndOfCentralDirectory {
-            disk_number: 0,
-            central_dir_start_disk: 0,
-            entries_on_this_disk: 0,
-            total_entries: 0,
-            central_dir_size: 0,
-            central_dir_offset: 9999, // invalid
-            comment_length: 0,
-            comment: Arc::from([]),
-        };
 
-        let result = CentralDirectory::parse(&data, &eocd);
+        let result = CentralDirectory::parse(&data, 9999);
         assert!(result.is_err(), "expected error for out-of-bounds offset");
     }
 }
