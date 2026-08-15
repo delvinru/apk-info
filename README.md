@@ -109,6 +109,9 @@ for signature in signatures:
         case _:
             print(f"oh, cool, library added some new feature - {signature}")
 
+# For `xapk`/`apkm` containers, `get_container_signatures()` returns the
+# distributor's signature on the outer archive, separate from the app.
+container_signatures = apk.get_container_signatures()
 ```
 
 ## Performance Analysis

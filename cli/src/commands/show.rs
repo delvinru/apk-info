@@ -54,6 +54,8 @@ struct ApkInfo {
     pub abis: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signatures: Option<Vec<Signature>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub container_signatures: Option<Vec<Signature>>,
 }
 
 fn collect_apk_info(path: &Path, show_signatures: &bool) -> Result<ApkInfo> {
@@ -66,6 +68,21 @@ fn collect_apk_info(path: &Path, show_signatures: &bool) -> Result<ApkInfo> {
                 .filter(|s| !matches!(s, Signature::Unknown))
                 .collect::<Vec<_>>(),
         )
+    } else {
+        None
+    };
+
+    let container_signatures = if *show_signatures {
+        let sigs = apk.get_container_signatures()?;
+        let filtered = sigs
+            .into_iter()
+            .filter(|s| !matches!(s, Signature::Unknown))
+            .collect::<Vec<_>>();
+        if filtered.is_empty() {
+            None
+        } else {
+            Some(filtered)
+        }
     } else {
         None
     };
@@ -87,6 +104,7 @@ fn collect_apk_info(path: &Path, show_signatures: &bool) -> Result<ApkInfo> {
             .unwrap_or_else(|| "-".to_string()),
         abis: apk.get_supported_abis(),
         signatures,
+        container_signatures,
     })
 }
 
@@ -106,54 +124,62 @@ fn pretty_print(info: &ApkInfo) {
 
     if let Some(signatures) = &info.signatures {
         println!("{}:", "APK Signature block".blue().bold());
+        print_signatures(signatures);
+    }
 
-        for (i, signature) in signatures.iter().enumerate() {
-            match signature {
-                Signature::V1(certificates)
-                | Signature::V2(certificates)
-                | Signature::V3(certificates)
-                | Signature::V31(certificates) => {
-                    println!("  Type: {}", signature.name().green());
+    if let Some(signatures) = &info.container_signatures {
+        println!("{}:", "Container Signature block".blue().bold());
+        print_signatures(signatures);
+    }
+}
 
-                    for (j, certificate) in certificates.iter().enumerate() {
-                        print_certificate(certificate);
-                        if j != certificates.len() - 1 {
-                            println!();
-                        }
+fn print_signatures(signatures: &[Signature]) {
+    for (i, signature) in signatures.iter().enumerate() {
+        match signature {
+            Signature::V1(certificates)
+            | Signature::V2(certificates)
+            | Signature::V3(certificates)
+            | Signature::V31(certificates) => {
+                println!("  Type: {}", signature.name().green());
+
+                for (j, certificate) in certificates.iter().enumerate() {
+                    print_certificate(certificate);
+                    if j != certificates.len() - 1 {
+                        println!();
                     }
                 }
-                Signature::StampBlockV1(certificate) | Signature::StampBlockV2(certificate) => {
-                    println!("  Type: {}", signature.name().green());
-                    print_certificate(certificate);
-                }
-                Signature::ApkChannelBlock(channel) => {
-                    println!("  Type: {}", signature.name().green());
-                    println!("  Channel: {}", channel.green());
-                }
-                Signature::PackerNextGenV2(data) => {
-                    let hex_string = data
-                        .iter()
-                        .map(|b| format!("{:02x}", b))
-                        .collect::<Vec<_>>()
-                        .join("");
-
-                    println!("  Type: {}", signature.name().green());
-                    println!("  Value: {}", hex_string.green());
-                }
-                Signature::GooglePlayFrosting => {
-                    println!("  Type: {}", signature.name().green());
-                    println!("  Info: {}", "Metadata exist".green());
-                }
-                Signature::VasDollyV2(channel) => {
-                    println!("  Type: {}", signature.name().green());
-                    println!("  Channel: {}", channel.green());
-                }
-                _ => continue,
             }
-
-            if i != signatures.len() - 1 {
-                println!();
+            Signature::StampBlockV1(certificate) | Signature::StampBlockV2(certificate) => {
+                println!("  Type: {}", signature.name().green());
+                print_certificate(certificate);
             }
+            Signature::ApkChannelBlock(channel) => {
+                println!("  Type: {}", signature.name().green());
+                println!("  Channel: {}", channel.green());
+            }
+            Signature::PackerNextGenV2(data) => {
+                let hex_string = data
+                    .iter()
+                    .map(|b| format!("{:02x}", b))
+                    .collect::<Vec<_>>()
+                    .join("");
+
+                println!("  Type: {}", signature.name().green());
+                println!("  Value: {}", hex_string.green());
+            }
+            Signature::GooglePlayFrosting => {
+                println!("  Type: {}", signature.name().green());
+                println!("  Info: {}", "Metadata exist".green());
+            }
+            Signature::VasDollyV2(channel) => {
+                println!("  Type: {}", signature.name().green());
+                println!("  Channel: {}", channel.green());
+            }
+            _ => continue,
+        }
+
+        if i != signatures.len() - 1 {
+            println!();
         }
     }
 }

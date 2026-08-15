@@ -1009,6 +1009,19 @@ impl Apk {
             .collect())
     }
 
+    pub fn get_container_signatures<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Vec<Bound<'py, Signature>>> {
+        Ok(self
+            .apkrs
+            .get_container_signatures()
+            .map_err(|e| APKError::new_err(format!("failed to get signatures: {:?}", e)))?
+            .into_iter()
+            .filter_map(|x| Signature::from(py, x))
+            .collect())
+    }
+
     pub fn get_supported_abis(&self) -> Vec<String> {
         self.apkrs.get_supported_abis()
     }

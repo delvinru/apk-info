@@ -809,23 +809,53 @@ impl Apk {
             })
     }
 
-    /// Retrieves all APK signing signatures (v1, v2, v3, v3.1, etc).
-    ///
-    /// Combines results from multiple signature blocks within the APK file.
-    pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
+    fn collect_signatures(zip: &ZipEntry) -> Result<Vec<Signature>, APKError> {
         let mut signatures = Vec::new();
-        if let Ok(v1_sig) = self.zip.get_signature_v1() {
+        if let Ok(v1_sig) = zip.get_signature_v1() {
             signatures.push(v1_sig);
         }
-
-        // TODO: need somehow also detect xapk files
         signatures.extend(
-            self.zip
-                .get_signatures_other()
+            zip.get_signatures_other()
                 .map_err(APKError::CertificateError)?,
         );
-
         Ok(signatures)
+    }
+
+    /// Returns the base APK inside a `xapk`/`apkm` container as a parsed ZIP archive.
+    fn get_inner_zip(&self) -> Result<ZipEntry, APKError> {
+        let name = self
+            .base_apk_name
+            .as_deref()
+            .ok_or(APKError::InvalidInput("not a container"))?;
+        let (data, _) = self.zip.read(name).map_err(APKError::ZipError)?;
+        ZipEntry::new(data).map_err(APKError::ZipError)
+    }
+
+    /// Returns the app signatures (v1, v2, v3, v3.1, etc).
+    ///
+    /// For a plain APK this is the signature of the file itself.
+    ///
+    /// For a `xapk`/`apkm` container this is the signature of the inner base APK,
+    /// which is the actual app identity.
+    /// See [`Apk::get_container_signatures`] for the signature of the container itself.
+    pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
+        if self.base_apk_name.is_some() {
+            let inner = self.get_inner_zip()?;
+            return Self::collect_signatures(&inner);
+        }
+        Self::collect_signatures(&self.zip)
+    }
+
+    /// Returns the container signature of a `xapk`/`apkm` file, if it is signed.
+    ///
+    /// This is the signature of the outer archive that carries the split APKs.
+    /// It belongs to the distributor, not to the app.
+    /// Most `xapk`/`apkm` containers are unsigned, so an empty result is expected and normal.
+    pub fn get_container_signatures(&self) -> Result<Vec<Signature>, APKError> {
+        if self.base_apk_name.is_none() {
+            return Ok(Vec::new());
+        }
+        Self::collect_signatures(&self.zip)
     }
 
     /// Information about the native code (.so libraries) of the APK file.

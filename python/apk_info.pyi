@@ -12,8 +12,6 @@ class APKError(Exception):
     Generic exception related to issues with `apk-info` library
     """
 
-    ...
-
 class APK:
     """
     APK class, the main entrypoint to use `apk-info` library.
@@ -39,7 +37,6 @@ class APK:
         APKError
             If the parsing failed
         """
-        ...
 
     def read(self, filename: str) -> tuple[bytes, FileCompressionType]:
         """
@@ -68,7 +65,6 @@ class APK:
             fd.write(data)
         ```
         """
-        ...
 
     def namelist(self) -> list[str]:
         """
@@ -83,7 +79,6 @@ class APK:
             print(f"get file - {file}")
         ```
         """
-        ...
 
     def is_multidex(self) -> bool:
         """
@@ -96,7 +91,6 @@ class APK:
         print(apk.is_multidex()) # True
         ```
         """
-        ...
 
     def get_xml_string(self) -> str:
         """
@@ -107,7 +101,6 @@ class APK:
         str
             pretty-printed AndroidManifest.xml
         """
-        ...
 
     def get_resource_value(self, name: str) -> str | None:
         """
@@ -158,7 +151,6 @@ class APK:
         print(apk.get_attribute_value("application", "allowClearUserData"))
         ```
         """
-        ...
 
     def get_all_attribute_values(self, tag: str, name: str) -> list[str]:
         """
@@ -172,7 +164,6 @@ class APK:
         print(apk.get_all_atribute_values("uses-permission", "name"))
         ```
         """
-        ...
 
     def get_package_name(self) -> str | None:
         """
@@ -185,7 +176,6 @@ class APK:
             str | None
                 The package name (e.g., "com.example.app") if found, otherwise None
         """
-        ...
 
     def get_shared_user_id(self) -> str | None:
         """
@@ -198,7 +188,6 @@ class APK:
         str | None
             The shared user ID if declared, otherwise None
         """
-        ...
 
     def get_shared_user_label(self) -> str | None:
         """
@@ -211,7 +200,6 @@ class APK:
         str | None
             The shared user label if declared, otherwise None.
         """
-        ...
 
     def get_shared_user_max_sdk_version(self) -> str | None:
         """
@@ -224,7 +212,6 @@ class APK:
         str | None
             The maximum SDK version for the shared user, if declared
         """
-        ...
 
     def get_version_code(self) -> str | None:
         """
@@ -251,7 +238,6 @@ class APK:
         str | None
             The version code as a string if present, otherwise None
         """
-        ...
 
     def get_version_name(self) -> str | None:
         """
@@ -272,7 +258,6 @@ class APK:
         str | None
             The version name as a string if present, otherwise None
         """
-        ...
 
     def get_build_version_code(self) -> str | None:
         """
@@ -283,7 +268,6 @@ class APK:
         str | None
             The version name as a string if present, otherwise None
         """
-        ...
 
     def get_build_version_name(self) -> str | None:
         """
@@ -294,7 +278,6 @@ class APK:
         str | None
             The version name as a string if present, otherwise None
         """
-        ...
 
     def get_compile_sdk_version(self) -> str | None:
         """
@@ -305,7 +288,6 @@ class APK:
         str | None
             The sdk version as a string if present, otherwise None
         """
-        ...
 
     def get_comnpile_sdk_version_codename(self) -> str | None:
         """
@@ -316,9 +298,10 @@ class APK:
         str | None
             The sdk version codename as a string if present, otherwise None
         """
-        ...
 
-    def get_install_location(self) -> Literal["auto", "internalOnly", "preferExternal"] | None:
+    def get_install_location(
+        self,
+    ) -> Literal["auto", "internalOnly", "preferExternal"] | None:
         """
         Retrieves the preferred installation location declared in the manifest.
 
@@ -335,7 +318,6 @@ class APK:
         None
             The installation location is not specified
         """
-        ...
 
     def get_application_task_reparenting(self) -> Literal["true", "false"] | None:
         """
@@ -350,7 +332,6 @@ class APK:
         None
             If value is not declared
         """
-        ...
 
     def get_application_allow_backup(self) -> Literal["true", "false"] | None:
         """
@@ -365,11 +346,23 @@ class APK:
         None
             If value is not declared
         """
-        ...
 
     def get_application_category(
         self,
-    ) -> Literal["accessibility", "audio", "game", "image", "maps", "news", "productivity", "social", "video"] | None:
+    ) -> (
+        Literal[
+            "accessibility",
+            "audio",
+            "game",
+            "image",
+            "maps",
+            "news",
+            "productivity",
+            "social",
+            "video",
+        ]
+        | None
+    ):
         """
         Extracts the `android:appCategory` attribute from `<application>`.
 
@@ -398,7 +391,6 @@ class APK:
         None
             Value not defined
         """
-        ...
 
     def get_application_backup_agent(self) -> str | None:
         """
@@ -419,7 +411,6 @@ class APK:
         str | None
             The name of the backup agent class if declared, otherwise None.
         """
-        ...
 
     def get_application_debuggable(self) -> Literal["true", "false"] | None:
         """
@@ -432,7 +423,6 @@ class APK:
         str | None
             "true" or "false" if declared, otherwise None.
         """
-        ...
 
     def get_application_description(self) -> str | None:
         """
@@ -449,7 +439,6 @@ class APK:
         str | None
             The description resource or literal value, if available.
         """
-        ...
 
     def get_application_icon(self) -> str | None:
         """
@@ -478,7 +467,6 @@ class APK:
         str | None
             The path to the icon file, if available.
         """
-        ...
 
     def get_application_label(self) -> str | None:
         """
@@ -495,7 +483,6 @@ class APK:
         str | None
             The label resource or literal value, if available
         """
-        ...
 
     def get_application_logo(self) -> str | None:
         """
@@ -520,7 +507,6 @@ class APK:
         str | None
             The path to the logo file, if available
         """
-        ...
 
     def get_application_name(self) -> str | None:
         """
@@ -541,7 +527,6 @@ class APK:
         str | None
             The fully qualified application class name, if defined.
         """
-        ...
 
     def get_attributions(self) -> set[Attribution]:
         """
@@ -554,7 +539,6 @@ class APK:
         set[Attribution]
             All found attribution tags
         """
-        ...
 
     def get_permissions(self) -> set[str]:
         """
@@ -567,7 +551,6 @@ class APK:
         set[str]
             A list of all permission names (e.g., "android.permission.INTERNET").
         """
-        ...
 
     def get_permissions_sdk23(self) -> list[str]:
         """
@@ -580,7 +563,6 @@ class APK:
         set[str]
             A list of permission names
         """
-        ...
 
     def get_min_sdk_version(self) -> str | None:
         """
@@ -601,7 +583,6 @@ class APK:
         str | None
             The minimum SDK version as a string, or None if not specified.
         """
-        ...
 
     def get_target_sdk_version(self) -> int:
         """
@@ -622,7 +603,6 @@ class APK:
         int
             The target SDK version
         """
-        ...
 
     def get_max_sdk_version(self) -> str | None:
         """
@@ -635,7 +615,6 @@ class APK:
         str | None
             The maximum SDK version as a string, or None if not specified
         """
-        ...
 
     def get_libraries(self) -> set[str]:
         """
@@ -648,7 +627,6 @@ class APK:
         set[str]
             A set of library names
         """
-        ...
 
     def get_native_libraries(self) -> set[str]:
         """
@@ -673,7 +651,6 @@ class APK:
         set[str]
             A set of declared feature names
         """
-        ...
 
     def is_automotive(self) -> bool:
         """
@@ -681,7 +658,6 @@ class APK:
 
         See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
-        ...
 
     def is_leanback(self) -> bool:
         """
@@ -689,7 +665,6 @@ class APK:
 
         See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
-        ...
 
     def is_wearable(self) -> bool:
         """
@@ -697,7 +672,6 @@ class APK:
 
         See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
-        ...
 
     def is_chromebook(self) -> bool:
         """
@@ -705,7 +679,6 @@ class APK:
 
         See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
-        ...
 
     def get_declared_permissions(self) -> set[Permission]:
         """
@@ -718,7 +691,6 @@ class APK:
         set[str]
             A set of permission names defined by the application
         """
-        ...
 
     def get_main_activity(self) -> str | None:
         """
@@ -751,7 +723,6 @@ class APK:
         str | None
             A main activity class name
         """
-        ...
 
     def get_main_activities(self) -> list[str]:
         """
@@ -768,7 +739,6 @@ class APK:
         list[str]
             A list of main activity class names
         """
-        ...
 
     def get_activities(self) -> list[Activity]:
         """
@@ -781,7 +751,6 @@ class APK:
         list[Activity]
             A list of found activites
         """
-        ...
 
     def get_activity_aliases(self) -> list[ActivityAlias]:
         """
@@ -794,7 +763,6 @@ class APK:
         list[ActivityAlias]
             A list of found aliases
         """
-        ...
 
     def get_services(self) -> list[Service]:
         """
@@ -807,7 +775,6 @@ class APK:
         list[Service]
             A list of found services
         """
-        ...
 
     def get_receivers(self) -> list[Receiver]:
         """
@@ -820,7 +787,6 @@ class APK:
         list[Receiver]
             A list of broadcast receivers
         """
-        ...
 
     def get_providers(self) -> list[Provider]:
         """
@@ -831,13 +797,16 @@ class APK:
         list[Provider]
             A list of content providers
         """
-        ...
 
     def get_signatures(self) -> list[SignatureType]:
         """
-        Retrieves all APK signing signatures (v1, v2, v3, v3.1, etc).
+        Returns the app signatures (v1, v2, v3, v3.1, etc).
 
-        Combines results from multiple signature blocks within the APK file.
+        For a plain APK this is the signature of the file itself.
+
+        For a `xapk`/`apkm` container this is the signature of the inner base
+        APK, which is the actual app identity.
+        See ``get_container_signatures`` for the signature of the container itself.
 
         Raises
         ------
@@ -849,7 +818,26 @@ class APK:
         list[SignatureType]
             A list of certificate signatures
         """
-        ...
+
+    def get_container_signatures(self) -> list[SignatureType]:
+        """
+        Returns the container signature of a `xapk`/`apkm` file, if signed.
+
+        This is the signature of the outer archive that carries the split
+        APKs. It belongs to the distributor, not to the app.
+        Most `xapk`/`apkm` containers are unsigned, so an empty result is
+        expected and normal.
+
+        Raises
+        ------
+        APKError
+            If the certificates could not be parsed
+
+        Returns
+        -------
+        list[SignatureType]
+            A list of certificate signatures
+        """
 
     def get_supported_abis(self) -> list[str]:
         """
@@ -860,7 +848,6 @@ class APK:
         list[str]
             A sorted list of supported platforms
         """
-        ...
 
 @dataclass(frozen=True)
 class CertificateInfo:

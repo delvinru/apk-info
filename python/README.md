@@ -78,6 +78,10 @@ for signature in signatures:
         case _:
             print(f"oh, cool, library added some new feature - {signature}")
 
+# `xapk`/`apkm` containers carry two separate signatures:
+#   * get_signatures()           - the app identity, read from the inner base APK
+#   * get_container_signatures() - the distributor's signature on the outer archive (empty for plain APKs)
+container_sigs = apk.get_container_signatures()
 ```
 
 For more information visit - [homepage](https://github.com/delvinru/apk-info).
