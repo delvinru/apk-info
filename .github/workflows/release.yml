@@ -25,23 +25,24 @@ jobs:
       attestations: write
     environment:
       name: pypi
-      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/download-artifact@v8
+        with:
+          pattern: "wheels-*"
 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4.2.2
         with:
           subject-path: "wheels-*/*"
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.0.1
+
       - name: Publish to PyPI
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        uses: PyO3/maturin-action@v1
         env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        with:
-          command: upload
-          args: --non-interactive --skip-existing wheels-*/*
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish wheels-*/*
 
   publish-crate:
     name: Release (crates.io)
@@ -50,7 +51,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: crates
-      url: ${{ steps.deploy.outputs.url }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
@@ -76,7 +76,7 @@ jobs:
           pattern: apk-info*
 
       - name: Generating release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           draft: true
           files: apk-info*/apk-info*
