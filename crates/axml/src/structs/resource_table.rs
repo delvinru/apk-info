@@ -1,8 +1,7 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::hash::Hash;
 
-use ahash::AHashMap;
 use log::{debug, info, warn};
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
@@ -861,7 +860,7 @@ pub struct ResTablePackage {
 
     // requires fastloop by resource id => resource
     // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
-    pub resources: BTreeMap<ResTableConfig, AHashMap<u8, Vec<ResTableEntry>>>,
+    pub resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
 }
 
 impl ResTablePackage {
@@ -873,7 +872,7 @@ impl ResTablePackage {
         )
             .parse_next(input)?;
 
-        let mut resources: BTreeMap<ResTableConfig, AHashMap<u8, Vec<ResTableEntry>>> =
+        let mut resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>> =
             BTreeMap::new();
 
         loop {
@@ -938,13 +937,15 @@ impl ResTablePackage {
         type_id: u8,
         entry_id: u16,
     ) -> Option<&ResTableEntry> {
-        // fast track?
-        if let Some(type_map) = self.resources.get(config)
-            && let Some(entries) = type_map.get(&type_id)
-            && let Some(entry) = entries.get(entry_id as usize)
-            && !matches!(entry, ResTableEntry::NoEntry)
+        // fast track? (exact config)
+        match self
+            .resources
+            .get(config)
+            .and_then(|type_map| type_map.get(&type_id))
+            .and_then(|entries| entries.get(entry_id as usize))
         {
-            return Some(entry);
+            Some(entry) if !matches!(entry, ResTableEntry::NoEntry) => return Some(entry),
+            _ => {}
         }
 
         for (other_config, type_map) in &self.resources {
@@ -953,11 +954,12 @@ impl ResTablePackage {
                 continue;
             }
 
-            if let Some(entries) = type_map.get(&type_id)
-                && let Some(entry) = entries.get(entry_id as usize)
-                && !matches!(entry, ResTableEntry::NoEntry)
+            match type_map
+                .get(&type_id)
+                .and_then(|entries| entries.get(entry_id as usize))
             {
-                return Some(entry);
+                Some(entry) if !matches!(entry, ResTableEntry::NoEntry) => return Some(entry),
+                _ => {}
             }
         }
 

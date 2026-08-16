@@ -111,7 +111,6 @@ dependencies = [
 name = "apk-info-axml"
 version = "1.0.12"
 dependencies = [
- "ahash",
  "apk-info-xml",
  "bitflags",
  "log",
