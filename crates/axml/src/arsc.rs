@@ -7,7 +7,8 @@ use winnow::prelude::*;
 
 use crate::errors::ARCSError;
 use crate::structs::{
-    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceValueType, StringPool,
+    ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceValue,
+    ResourceValueType, StringPool,
 };
 
 /// Represents an Android Resource Table (ARSC) file.
@@ -157,5 +158,18 @@ impl ARSC {
             ((id >> 16) & 0xff) as u8,
             (id & 0xffff) as u16,
         )
+    }
+
+    /// Returns an iterator over the resource packages in this table.
+    #[inline]
+    pub fn packages(&self) -> impl Iterator<Item = &ResTablePackage> {
+        self.packages.values()
+    }
+
+    /// Decodes a raw [`ResourceValue`] into a human-readable string, resolving
+    /// string-pool indices and references against this table.
+    #[inline]
+    pub fn value_to_string(&self, value: &ResourceValue) -> String {
+        value.to_string(&self.global_string_pool, Some(self))
     }
 }

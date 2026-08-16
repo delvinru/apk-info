@@ -161,6 +161,27 @@ fn write_attr_value(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::R
     Ok(())
 }
 
+/// Writes `value` as XML text content (between tags).
+///
+/// Unlike attribute values, whitespace and newlines are preserved verbatim, so
+/// multi-line content does not get collapsed. `&`, `<` and `>` are escaped as
+/// `&amp;`, `&lt;` and `&gt;`; code points that are not valid in XML 1.0 are
+/// dropped.
+#[inline]
+fn write_text(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::Result {
+    for ch in value.chars() {
+        match ch {
+            '&' => f.write_str("&amp;")?,
+            '<' => f.write_str("&lt;")?,
+            '>' => f.write_str("&gt;")?,
+            '\t' | '\n' | '\r' => f.write_char(ch)?, // valid XML whitespace in content
+            c if is_valid_xml_char(c) => f.write_char(c)?,
+            _ => {} // invalid XML char, drop it
+        }
+    }
+    Ok(())
+}
+
 /// Represents an XML element, including its name, attributes, and child elements.
 ///
 /// This is the core abstraction over an XML DOM node.
@@ -184,6 +205,7 @@ fn write_attr_value(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::R
 pub struct Element {
     name: String,
     attributes: Vec<Attribute>,
+    text: Option<String>,
     childrens: Vec<Element>,
 }
 
@@ -262,6 +284,23 @@ impl Element {
         self.attributes.push(Attribute::new(prefix, name, value));
     }
 
+    /// Sets the text content of this element (e.g. `<string>value</string>`).
+    ///
+    /// # Example
+    /// ```
+    /// use apk_info_xml::Element;
+    ///
+    /// let mut s = Element::new("string");
+    /// s.set_attribute("name", "app_name");
+    /// s.set_text("Hello & welcome");
+    /// assert_eq!(s.to_string(), "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<string name=\"app_name\">Hello &amp; welcome</string>\n");
+    /// ```
+    pub fn set_text(&mut self, text: &str) {
+        if self.childrens.is_empty() {
+            self.text = Some(text.to_owned());
+        }
+    }
+
     /// Appends a new child [`Element`] to this element.
     ///
     /// # Example
@@ -273,6 +312,7 @@ impl Element {
     /// ```
     #[inline]
     pub fn append_child(&mut self, child: Element) {
+        self.text = None;
         self.childrens.push(child);
     }
 
@@ -381,7 +421,18 @@ impl Element {
         }
 
         if self.childrens.is_empty() {
-            f.write_str("/>")?;
+            match self.text.as_deref() {
+                Some(text) => {
+                    f.write_char('>')?;
+                    write_text(f, text)?;
+                    f.write_str("</")?;
+                    f.write_str(&self.name)?;
+                    f.write_str(">")?;
+                }
+                None => {
+                    f.write_str("/>")?;
+                }
+            }
             f.write_char('\n')?;
         } else {
             f.write_char('>')?;

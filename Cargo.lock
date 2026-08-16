@@ -130,6 +130,7 @@ dependencies = [
  "anyhow",
  "apk-info",
  "apk-info-axml",
+ "apk-info-xml",
  "apk-info-zip",
  "bat",
  "clap",

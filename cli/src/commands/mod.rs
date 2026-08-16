@@ -2,6 +2,7 @@ pub(crate) mod axml;
 pub(crate) mod extract;
 mod path_helpers;
 pub(crate) mod repack;
+pub(crate) mod resdecode;
 pub(crate) mod show;
 
 pub(crate) use axml::command_axml;

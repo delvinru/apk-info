@@ -30,8 +30,12 @@ pub struct AXML {
     /// Raw resource id of reference-typed attributes, keyed by `(element, attr)`.
     /// Lets [`AXML::get_attribute_value`] resolve a reference by its exact id instead of a
     /// (potentially ambiguous/redacted) resource name.
-    reference_ids: HashMap<(String, String), u32>,
+    reference_ids: ReferenceIds,
 }
+
+/// Map of `(element name, attribute name)` to the raw resource id of a reference
+/// attribute, captured while parsing an AXML tree.
+type ReferenceIds = HashMap<(String, String), u32>;
 
 impl AXML {
     /// Parses a byte slice into an `AXML` structure.
@@ -76,9 +80,9 @@ impl AXML {
         arsc: Option<&ARSC>,
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
-    ) -> Option<(Element, HashMap<(String, String), u32>)> {
+    ) -> Option<(Element, ReferenceIds)> {
         let mut stack: Vec<Element> = Vec::with_capacity(16);
-        let mut reference_ids: HashMap<(String, String), u32> = HashMap::new();
+        let mut reference_ids: ReferenceIds = HashMap::new();
 
         loop {
             let chunk_header = match ResChunkHeader::parse(input) {
@@ -133,7 +137,8 @@ impl AXML {
 
                     let mut element = Element::with_capacity(name, node.attributes.len());
 
-                    if name == "manifest" {
+                    // The `android` namespace is always in scope in decoded binary XML.
+                    if stack.is_empty() {
                         element.set_attribute_with_prefix(
                             Some("xmlns"),
                             "android",

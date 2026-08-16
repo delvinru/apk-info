@@ -969,16 +969,12 @@ impl ResTableConfig {
             config.screen_size_dp = le_u32.parse_next(input)?;
         }
         if size >= 40 {
-            config.locale_script = take(4usize)
-                .parse_next(input)?
-                .try_into()
-                .expect("expected 4 bytes for locale_script");
+            let script: &[u8] = take(4usize).parse_next(input)?;
+            config.locale_script.copy_from_slice(script);
         }
         if size >= 48 {
-            config.locale_variant = take(8usize)
-                .parse_next(input)?
-                .try_into()
-                .expect("expected 8 bytes for locale_variant");
+            let variant: &[u8] = take(8usize).parse_next(input)?;
+            config.locale_variant.copy_from_slice(variant);
         }
         if size >= 52 {
             config.screen_config_2 = le_u32.parse_next(input)?;
@@ -987,16 +983,12 @@ impl ResTableConfig {
             config.locale_script_was_computed = u8.parse_next(input)? != 0;
         }
         if size >= 61 {
-            config.locale_numbering_system = take(8usize)
-                .parse_next(input)?
-                .try_into()
-                .expect("expected 8 bytes for locale_numbering_system");
+            let numsys: &[u8] = take(8usize).parse_next(input)?;
+            config.locale_numbering_system.copy_from_slice(numsys);
         }
         if size >= 64 {
-            config.end_padding = take(3usize)
-                .parse_next(input)?
-                .try_into()
-                .expect("expected 3 bytes for end padding");
+            let pad: &[u8] = take(3usize).parse_next(input)?;
+            config.end_padding.copy_from_slice(pad);
         }
         if size > 64 {
             warn!("got unexpected ResTable_config structure, please open issue with this file");
@@ -1088,20 +1080,12 @@ impl ResTableConfig {
 
     fn unpack_language(&self, input: [u8; 2]) -> String {
         let (_, buf) = self.unpack_language_or_region(input, b'a');
-
-        std::str::from_utf8(&buf)
-            .expect("can't decode language from given configuration")
-            .trim_end_matches('\0')
-            .to_owned()
+        Self::subtag(&buf)
     }
 
     fn unpack_region(&self, input: [u8; 2]) -> String {
         let (_, buf) = self.unpack_language_or_region(input, b'0');
-
-        std::str::from_utf8(&buf)
-            .expect("can't decode region from given configuration")
-            .trim_end_matches('\0')
-            .to_owned()
+        Self::subtag(&buf)
     }
 
     /// Decode language or region
@@ -1182,10 +1166,8 @@ impl ResTableConfig {
 
         if script_was_provided {
             result.push('+');
-            let script = std::str::from_utf8(&self.locale_script)
-                .expect("can't decode locale_script from given configuration")
-                .trim_end_matches('\0');
-            result.push_str(script);
+            let script = Self::subtag(&self.locale_script);
+            result.push_str(&script);
         }
 
         if country[0] != 0 {
@@ -1196,19 +1178,24 @@ impl ResTableConfig {
 
         if has_variant {
             result.push('+');
-            let variant = std::str::from_utf8(&self.locale_variant)
-                .expect("can't decode locale_variant from given configuration")
-                .trim_end_matches('\0');
-            result.push_str(variant);
+            let variant = Self::subtag(&self.locale_variant);
+            result.push_str(&variant);
         }
 
         if has_numbering_system {
             result.push_str("+u+nu+");
-            let numsys = std::str::from_utf8(&self.locale_numbering_system)
-                .expect("can't decode locale_numbering_system from given configuration")
-                .trim_end_matches('\0');
-            result.push_str(numsys);
+            let numsys = Self::subtag(&self.locale_numbering_system);
+            result.push_str(&numsys);
         }
+    }
+
+    /// Decode a C-string-like UTF-8 BCP-47 subtag (script / variant / numbering
+    /// system). Malformed bytes must not panic (resource tables are attacker
+    /// controlled on malware samples); `from_utf8_lossy` degrades to U+FFFD.
+    fn subtag(bytes: &[u8]) -> String {
+        String::from_utf8_lossy(bytes)
+            .trim_end_matches('\0')
+            .to_owned()
     }
 
     /// Represent resource config as readable string
@@ -1238,7 +1225,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&gender.to_string());
+            let _ = write!(result, "{gender}");
         }
 
         let (screen_layout, ui_mode, smallest_screen_width_dp) =
@@ -1249,7 +1236,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&layout_dir.to_string());
+            let _ = write!(result, "{layout_dir}");
         }
 
         if smallest_screen_width_dp != 0 {
@@ -1281,7 +1268,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&screensize.to_string());
+            let _ = write!(result, "{screensize}");
         }
 
         let screenlong = ScreenLong::from(screen_layout);
@@ -1289,24 +1276,25 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&screenlong.to_string());
+            let _ = write!(result, "{screenlong}");
         }
 
-        let screenround = ScreenRound::from(screen_layout);
+        let (screen_layout2, color_mode) = self.get_screen_layout_2_color_mode();
+
+        let screenround = ScreenRound::from(screen_layout2);
         if !matches!(screenround, ScreenRound::Any(_)) {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&screenround.to_string());
+            let _ = write!(result, "{screenround}");
         }
 
-        let (_, color_mode) = self.get_screen_layout_2_color_mode();
         let wide_color_gamut = WideColorGamut::from(color_mode);
         if !matches!(wide_color_gamut, WideColorGamut::Any(_)) {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&wide_color_gamut.to_string());
+            let _ = write!(result, "{wide_color_gamut}");
         }
 
         let hdr = Hdr::from(color_mode);
@@ -1314,7 +1302,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&hdr.to_string());
+            let _ = write!(result, "{hdr}");
         }
 
         let (orientation, touchscreen, density) = self.get_orientation_touchscreen_density();
@@ -1323,7 +1311,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&orientation.to_string());
+            let _ = write!(result, "{orientation}");
         }
 
         let ui_mode_type = UIMode::from(ui_mode);
@@ -1331,7 +1319,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&ui_mode_type.to_string());
+            let _ = write!(result, "{ui_mode_type}");
         }
 
         let ui_mode_night = UIModeNight::from(ui_mode);
@@ -1339,7 +1327,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&ui_mode_night.to_string());
+            let _ = write!(result, "{ui_mode_night}");
         }
 
         let density = Density::from(density);
@@ -1347,7 +1335,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&density.to_string());
+            let _ = write!(result, "{density}");
         }
 
         let touchscreen = Touchscreen::from(touchscreen);
@@ -1355,7 +1343,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&touchscreen.to_string());
+            let _ = write!(result, "{touchscreen}");
         }
 
         let (keyboard, navigation, input_flags) = self.get_keyboard_navigation_input_flags();
@@ -1365,7 +1353,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&keyshidden.to_string());
+            let _ = write!(result, "{keyshidden}");
         }
 
         let keyboard = Keyboard::from(keyboard);
@@ -1373,7 +1361,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&keyboard.to_string());
+            let _ = write!(result, "{keyboard}");
         }
 
         let navhidden = NavHidden::from(input_flags);
@@ -1381,7 +1369,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&navhidden.to_string());
+            let _ = write!(result, "{navhidden}");
         }
 
         let navigation = Navigation::from(navigation);
@@ -1389,7 +1377,7 @@ impl ResTableConfig {
             if !result.is_empty() {
                 result.push('-');
             }
-            result.push_str(&navigation.to_string());
+            let _ = write!(result, "{navigation}");
         }
 
         if self.screen_size != 0 {
@@ -1491,52 +1479,576 @@ impl Ord for ResTableConfig {
 mod test {
     use super::*;
 
-    fn p32(s: &str) -> u32 {
-        assert!(s.len() <= 4, "expected str length between 0 and 4 symbols");
+    #[test]
+    fn test_screen_round_from_screen_layout_2() {
+        // screensize=small (0x01 in screenLayout low nibble), round=yes (0x02 in screenLayout2).
+        let config = ResTableConfig {
+            // screenLayout[0]=0x01 (SCREENSIZE_SMALL), uiMode=0, smallestWidthDp=0
+            screen_config: 0x00000001,
+            // screenLayout2[0]=0x02 (SCREENROUND_YES), colorMode=0
+            screen_config_2: 0x00000002,
+            ..Default::default()
+        };
+        assert_eq!("small-round", config.as_string());
 
-        s.bytes().fold(0u32, |acc, b| (acc << 8) | b as u32)
+        // Same screenLayout, but no round set -> nothing emitted for it.
+        let config = ResTableConfig {
+            screen_config: 0x00000001,
+            screen_config_2: 0x00000000,
+            ..Default::default()
+        };
+        assert_eq!("small", config.as_string());
+    }
+
+    /// Serialize a config exactly as it is laid out on disk (little-endian).
+    fn push_u32(v: &mut Vec<u8>, x: u32) {
+        v.extend_from_slice(&x.to_le_bytes());
+    }
+
+    fn bytes_of(c: &ResTableConfig) -> Vec<u8> {
+        let mut v = Vec::with_capacity(64);
+        // Real on-disk configs carry size=64; a test literal defaulting to 0
+        // still parses as a full config.
+        push_u32(&mut v, if c.size == 0 { 64 } else { c.size });
+        push_u32(&mut v, c.imsi);
+        push_u32(&mut v, c.locale);
+        push_u32(&mut v, c.screen_type);
+        push_u32(&mut v, c.generic_purpose_field);
+        push_u32(&mut v, c.screen_size);
+        push_u32(&mut v, c.version);
+        push_u32(&mut v, c.screen_config);
+        push_u32(&mut v, c.screen_size_dp);
+        v.extend_from_slice(&c.locale_script);
+        v.extend_from_slice(&c.locale_variant);
+        push_u32(&mut v, c.screen_config_2);
+        v.push(c.locale_script_was_computed as u8);
+        v.extend_from_slice(&c.locale_numbering_system);
+        v.extend_from_slice(&c.end_padding);
+        v
     }
 
     #[test]
-    fn test_mcc_mnc_1() {
-        let config = ResTableConfig {
-            imsi: p32("\x00\x14\x01\x4e"),
+    fn test_parse_roundtrip_full() {
+        let config = full_config();
+        let buf = bytes_of(&config);
+        assert_eq!(buf.len(), 64, "on-disk ResTable_config is 64 bytes");
+
+        let mut input = &buf[..];
+        let parsed = ResTableConfig::parse(&mut input).expect("full config parses");
+        assert!(input.is_empty(), "all 64 bytes consumed");
+        assert_eq!(parsed, config);
+    }
+
+    #[test]
+    fn test_parse_truncated_sizes() {
+        // Every supported `size` from 0 up to the full 64 must parse without
+        // panicking, consuming exactly `size` bytes. Fields past the declared
+        // size stay at their default (any) value.
+        let config = full_config();
+        let full = bytes_of(&config);
+        // sizes 0..=64 (64 valid sub-ranges incl. the mandatory first 16)
+        for size in [
+            16u32, 17, 20, 24, 28, 32, 36, 40, 48, 52, 53, 60, 61, 63, 64,
+        ] {
+            let mut buf = full.clone();
+            buf[..4].copy_from_slice(&size.to_le_bytes());
+            let mut input = &buf[..];
+            let parsed = ResTableConfig::parse(&mut input).expect("truncated size parses");
+            assert_eq!(
+                parsed.size, size,
+                "size field round-tripped for size={size}"
+            );
+            assert_eq!(
+                input.len(),
+                buf.len() - size as usize,
+                "consumed size={size} bytes"
+            );
+        }
+    }
+
+    #[test]
+    fn test_parse_random_never_panics() {
+        // Deterministic xorshift PRNG so the test is reproducible/flaky-free.
+        let mut state = 0x1234_5678_9abc_def0u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..2000 {
+            let mut buf = [0u8; 64];
+            for b in buf.iter_mut() {
+                *b = (next() & 0xff) as u8;
+            }
+            // Pretend every buffer is a full valid config by stamping a sane size.
+            let size = [64u32, 20, 36, 61, 40, 52][(next() % 6) as usize];
+            buf[..4].copy_from_slice(&size.to_le_bytes());
+            let mut input = &buf[..];
+            if let Ok(config) = ResTableConfig::parse(&mut input) {
+                // Must never panic and must produce a plain string.
+                let _ = config.as_string();
+            }
+        }
+    }
+
+    #[test]
+    fn test_getters_field_extraction() {
+        let c = ResTableConfig {
+            imsi: 0x0104_0136,                  // mcc=310, mnc=260
+            locale: 0x5355_6e65,                // "en-US"
+            screen_type: 0x01e0_0302,           // orientation=2, touchscreen=3, density=480
+            generic_purpose_field: 0x020b_0202, // keyboard=2, nav=2, flags=0x0b, gender=2
+            screen_size: 0x0500_02d0,           // w=720, h=1280
+            version: 0x0000_001e,               // sdk=30, minor=0
+            screen_config: 0x0320_2663,         // layout=0x63, uiMode=0x26, sw=800
+            screen_size_dp: 0x0320_01e0,        // wdp=480, hdp=800
+            screen_config_2: 0x0000_0a02,       // screenLayout2=0x02, colorMode=0x0a
             ..Default::default()
         };
 
-        let (mcc, mnc) = config.get_mcc_mnc();
-
-        assert_eq!(mcc, 334);
-        assert_eq!(mnc, 20);
-
-        assert_eq!("mcc334-mnc20", config.as_string())
+        assert_eq!(c.get_mcc_mnc(), (310, 260));
+        assert_eq!(c.get_orientation_touchscreen_density(), (2, 3, 480));
+        assert_eq!(c.get_keyboard_navigation_input_flags(), (2, 2, 0x0b));
+        // 24-bit ``input`` union view + the high-byte grammatical inflection.
+        assert_eq!(c.get_input(), 0x000b_0202);
+        assert_eq!(c.get_grammatical_inflection(), 2);
+        assert_eq!(c.get_screen_width_height(), (720, 1280));
+        assert_eq!(c.get_sdk_minor_version(), (30, 0));
+        assert_eq!(c.get_screen_layout_ui_smallest_width(), (0x63, 0x26, 800));
+        assert_eq!(c.get_screen_width_height_dp(), (480, 800));
+        assert_eq!(c.get_screen_layout_2_color_mode(), (0x02, 0x0a));
     }
 
     #[test]
-    fn test_mcc_mnc_2() {
-        let config = ResTableConfig {
-            imsi: p32("\x00\x01\x00\x01"),
+    fn test_set_density_roundtrip() {
+        let mut c = ResTableConfig {
+            screen_type: 0x0112_0203, // orientation=3, touchscreen=2, density=274
             ..Default::default()
         };
+        c.set_density(Density::XXHigh);
+        // orientation/touchscreen must be preserved; density replaced.
+        assert_eq!(c.get_orientation_touchscreen_density(), (3, 2, 480));
 
-        let (mcc, mnc) = config.get_mcc_mnc();
-
-        assert_eq!(mcc, 1);
-        assert_eq!(mnc, 1);
-
-        assert_eq!("mcc1-mnc1", config.as_string())
+        c.set_density(Density::Unknown(123));
+        assert_eq!(c.get_orientation_touchscreen_density(), (3, 2, 123));
     }
 
     #[test]
-    fn test_config_density() {
-        let mut config = ResTableConfig::default();
-        config.set_density(Density::Low);
-        assert_eq!("ldpi", config.as_string());
+    fn test_unpack_language_or_region() {
+        let c = ResTableConfig::default();
+        // two ASCII letters
+        assert_eq!(c.unpack_language_or_region(*b"en", b'a'), (2, *b"en\0\0"));
+        // high bit set => packed 3-letter code, e.g. "fil"
+        assert_eq!(
+            c.unpack_language_or_region([0xad, 0x05], b'a'),
+            (3, *b"fil\0")
+        );
+        // empty
+        assert_eq!(c.unpack_language_or_region([0, 0], b'a'), (0, [0; 4]));
+        // packed 3-digit UN M.49 region "419" (base '0')
+        assert_eq!(
+            c.unpack_language_or_region([0xa4, 0x24], b'0'),
+            (3, *b"419\0")
+        );
+    }
 
-        config.set_density(Density::XXXHigh);
-        assert_eq!("xxxhdpi", config.as_string());
+    #[test]
+    fn test_locale_legacy_variants() {
+        // legacy 2-letter language
+        let c = ResTableConfig {
+            locale: 0x0000_6661,
+            ..Default::default()
+        }; // 'a','f'
+        assert_eq!(c.as_string(), "af");
+        // 2-letter language + region
+        let c = ResTableConfig {
+            locale: 0x5541_6e65,
+            ..Default::default()
+        }; // 'en','AU'
+        assert_eq!(c.as_string(), "en-rAU");
+        // 3-letter language packed (English-like "fil")
+        let c = ResTableConfig {
+            locale: 0x0000_05ad,
+            ..Default::default()
+        };
+        assert_eq!(c.as_string(), "fil");
+        // packed 3-digit region -> -r419
+        let c = ResTableConfig {
+            locale: 0x24a4_7365,
+            ..Default::default()
+        }; // 'es', 419
+        assert_eq!(c.as_string(), "es-r419");
+    }
 
-        config.set_density(Density::Unknown(123));
-        assert_eq!("123dpi", config.as_string());
+    #[test]
+    fn test_locale_new_format_script_variant_numsys() {
+        // script forces the modified-BCP47 syntax, e.g. "sr" + script "Latn"
+        let c = ResTableConfig {
+            locale: 0x0000_7273, // 'sr'
+            locale_script: *b"Latn",
+            ..Default::default()
+        };
+        assert_eq!(c.as_string(), "b+sr+Latn");
+
+        // script + variant
+        let c = ResTableConfig {
+            locale: 0x0000_7273, // 'sr'
+            locale_script: *b"Latn",
+            locale_variant: *b"rBS\0\0\0\0\0",
+            ..Default::default()
+        };
+        assert_eq!(c.as_string(), "b+sr+Latn+rBS");
+
+        // variant alone also switches to the new format
+        let c = ResTableConfig {
+            locale: 0x0000_6e65, // 'en'
+            locale_variant: *b"POSIX\0\0\0",
+            ..Default::default()
+        };
+        assert_eq!(c.as_string(), "b+en+POSIX");
+
+        // numbering system (BCP-47 ``-u-nu-``), here on "ur"
+        let c = ResTableConfig {
+            locale: 0x0000_7275, // 'ur'
+            locale_numbering_system: *b"latn\0\0\0\0",
+            ..Default::default()
+        };
+        assert_eq!(c.as_string(), "b+ur+u+nu+latn");
+
+        // a computed script must NOT count as provided -> legacy path again
+        let c = ResTableConfig {
+            locale: 0x0000_7273, // 'sr'
+            locale_script: *b"Latn",
+            locale_script_was_computed: true,
+            ..Default::default()
+        };
+        assert_eq!(c.as_string(), "sr");
+    }
+
+    /// A config that sets *every* supported field, in a known AOSP order.
+    fn full_config() -> ResTableConfig {
+        ResTableConfig {
+            size: 64,
+            imsi: 0x0104_0136,                  // mcc310-mnc260
+            locale: 0x5355_6e65,                // en-US
+            screen_type: 0x01e0_0302,           // land | finger | xxhdpi
+            generic_purpose_field: 0x020b_0202, // qwerty | dpad | keyssoft+navhidden | feminine
+            screen_size: 0x0500_02d0,           // 720x1280
+            version: 0x0000_001e,               // v30
+            screen_config: 0x0320_2663,         // ldltr | large | long | watch | night | sw800dp
+            screen_size_dp: 0x0320_01e0,        // w480dp-h800dp
+            screen_config_2: 0x0000_0a02,       // round | widecg | highdr
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_as_string_full_ordering() {
+        let s = full_config().as_string();
+        assert_eq!(
+            s,
+            "mcc310-mnc260-en-rUS-feminine-ldltr-sw800dp-w480dp-h800dp-\
+             large-long-round-widecg-highdr-land-watch-night-xxhdpi-finger-\
+             keyssoft-qwerty-navhidden-dpad-720x1280-v30"
+        );
+    }
+
+    #[test]
+    fn test_enum_display_strings() {
+        // Grammatical genders
+        assert_eq!(GrammaticalGender::from(0).to_string(), "");
+        assert_eq!(GrammaticalGender::from(1).to_string(), "neuter");
+        assert_eq!(GrammaticalGender::from(2).to_string(), "feminine");
+        assert_eq!(GrammaticalGender::from(3).to_string(), "masculine");
+
+        // Layout direction (2 high bits of screenLayout)
+        assert_eq!(LayoutDir::from(0x00).to_string(), "layoutDir=0"); // Any -> skipped in as_string anyway
+        assert_eq!(LayoutDir::from(0x40).to_string(), "ldltr");
+        assert_eq!(LayoutDir::from(0x80).to_string(), "ldrtl");
+
+        // Screen size / long / round
+        for (v, want) in [(1u8, "small"), (2, "normal"), (3, "large"), (4, "xlarge")] {
+            assert_eq!(ScreenSize::from(v).to_string(), want);
+        }
+        assert_eq!(ScreenLong::from(0x10).to_string(), "notlong");
+        assert_eq!(ScreenLong::from(0x20).to_string(), "long");
+        assert_eq!(ScreenRound::from(0x01).to_string(), "notround");
+        assert_eq!(ScreenRound::from(0x02).to_string(), "round");
+
+        // Wide gamut / HDR
+        assert_eq!(WideColorGamut::from(0x01).to_string(), "nowidecg");
+        assert_eq!(WideColorGamut::from(0x02).to_string(), "widecg");
+        assert_eq!(Hdr::from(0x04).to_string(), "lowdr");
+        assert_eq!(Hdr::from(0x08).to_string(), "highdr");
+
+        // Orientation / touchscreen
+        assert_eq!(Orientation::from(1).to_string(), "port");
+        assert_eq!(Orientation::from(2).to_string(), "land");
+        assert_eq!(Orientation::from(3).to_string(), "square");
+        assert_eq!(Touchscreen::from(1).to_string(), "notouch");
+        assert_eq!(Touchscreen::from(2).to_string(), "stylus");
+        assert_eq!(Touchscreen::from(3).to_string(), "finger");
+
+        // Keyboard / navigation / hidden flags
+        assert_eq!(Keyboard::from(1).to_string(), "nokeys");
+        assert_eq!(Keyboard::from(2).to_string(), "qwerty");
+        assert_eq!(Keyboard::from(3).to_string(), "12key");
+        assert_eq!(Navigation::from(1).to_string(), "nonav");
+        assert_eq!(Navigation::from(2).to_string(), "dpad");
+        assert_eq!(Navigation::from(3).to_string(), "trackball");
+        assert_eq!(Navigation::from(4).to_string(), "wheel");
+        assert_eq!(KeysHidden::from(1).to_string(), "keysexposed");
+        assert_eq!(KeysHidden::from(2).to_string(), "keyshidden");
+        assert_eq!(KeysHidden::from(3).to_string(), "keyssoft");
+        assert_eq!(NavHidden::from(0x04).to_string(), "navexposed");
+        assert_eq!(NavHidden::from(0x08).to_string(), "navhidden");
+
+        // UI mode + night
+        for (v, want) in [
+            (2u8, "desk"),
+            (3, "car"),
+            (4, "television"),
+            (5, "appliance"),
+            (6, "watch"),
+            (7, "vrheadset"),
+        ] {
+            assert_eq!(UIMode::from(v).to_string(), want);
+        }
+        assert_eq!(UIModeNight::from(0x10).to_string(), "notnight");
+        assert_eq!(UIModeNight::from(0x20).to_string(), "night");
+
+        // Density (named, special any/none, and raw fallback)
+        assert_eq!(Density::from(120).to_string(), "ldpi");
+        assert_eq!(Density::from(160).to_string(), "mdpi");
+        assert_eq!(Density::from(213).to_string(), "tvdpi");
+        assert_eq!(Density::from(240).to_string(), "hdpi");
+        assert_eq!(Density::from(320).to_string(), "xhdpi");
+        assert_eq!(Density::from(480).to_string(), "xxhdpi");
+        assert_eq!(Density::from(640).to_string(), "xxxhdpi");
+        assert_eq!(Density::from(0xfffe).to_string(), "anydpi");
+        assert_eq!(Density::from(0xffff).to_string(), "nodpi");
+        assert_eq!(Density::from(123).to_string(), "123dpi");
+        assert_eq!(Density::from(0).to_string(), "");
+    }
+
+    #[test]
+    fn test_real_configs() {
+        let cases: &[(ResTableConfig, &str)] = &[
+            (ResTableConfig::default(), ""),
+            (
+                ResTableConfig {
+                    locale: 0x0000_6661,
+                    ..Default::default()
+                },
+                "af",
+            ),
+            (
+                ResTableConfig {
+                    locale: 0x5541_6e65,
+                    ..Default::default()
+                },
+                "en-rAU",
+            ),
+            (
+                ResTableConfig {
+                    locale: 0x4e43_687a,
+                    ..Default::default()
+                },
+                "zh-rCN",
+            ),
+            (
+                ResTableConfig {
+                    locale: 0x5754_687a,
+                    ..Default::default()
+                },
+                "zh-rTW",
+            ),
+            (
+                ResTableConfig {
+                    locale: 0x24a4_7365,
+                    ..Default::default()
+                },
+                "es-r419",
+            ),
+            (
+                ResTableConfig {
+                    locale: 0x0000_05ad,
+                    ..Default::default()
+                },
+                "fil",
+            ),
+            (
+                ResTableConfig {
+                    locale: 0x0000_726f,
+                    ..Default::default()
+                },
+                "or",
+            ), // Oriya
+            (
+                ResTableConfig {
+                    locale: 0x0000_7273,
+                    locale_script: *b"Latn",
+                    ..Default::default()
+                },
+                "b+sr+Latn",
+            ),
+            (
+                ResTableConfig {
+                    screen_type: 0x0000_0001,
+                    ..Default::default()
+                },
+                "port",
+            ),
+            (
+                ResTableConfig {
+                    screen_type: 0x0000_0002,
+                    ..Default::default()
+                },
+                "land",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0000_2000,
+                    ..Default::default()
+                },
+                "night",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0258_0000,
+                    ..Default::default()
+                },
+                "sw600dp",
+            ),
+            (
+                ResTableConfig {
+                    screen_size_dp: 0x02d0_0000,
+                    ..Default::default()
+                },
+                "h720dp",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0000_0040,
+                    ..Default::default()
+                },
+                "ldltr",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0000_0080,
+                    screen_type: 0x00a0_0000,
+                    ..Default::default()
+                },
+                "ldrtl-mdpi",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0000_0003,
+                    ..Default::default()
+                },
+                "large",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0000_0004,
+                    ..Default::default()
+                },
+                "xlarge",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0000_0600,
+                    ..Default::default()
+                },
+                "watch",
+            ),
+            (
+                ResTableConfig {
+                    screen_type: 0xffff_0000,
+                    ..Default::default()
+                },
+                "nodpi",
+            ),
+            (
+                ResTableConfig {
+                    screen_type: 0x0078_0000,
+                    version: 0x0000_0017,
+                    ..Default::default()
+                },
+                "ldpi-v23",
+            ),
+            (
+                ResTableConfig {
+                    screen_config: 0x0000_2000,
+                    version: 0x0000_001d,
+                    ..Default::default()
+                },
+                "night-v29",
+            ),
+            (
+                ResTableConfig {
+                    screen_type: 0xfffe_0000,
+                    version: 0x0000_001a,
+                    ..Default::default()
+                },
+                "anydpi-v26",
+            ),
+            (
+                ResTableConfig {
+                    screen_type: 0x00a0_0000,
+                    ..Default::default()
+                },
+                "mdpi",
+            ),
+            (
+                ResTableConfig {
+                    screen_type: 0x00f0_0000,
+                    ..Default::default()
+                },
+                "hdpi",
+            ),
+        ];
+
+        for (config, want) in cases {
+            assert_eq!(&config.as_string(), want, "config: {config:?}");
+            // No qualifier is ever allowed to start or end with a stray '-'
+            let s = config.as_string();
+            let parts: Vec<&str> = s.split('-').collect();
+            assert!(
+                s.is_empty() || parts.iter().all(|p| !p.is_empty()),
+                "empty qualifier segment in {s:?} for {config:?}"
+            );
+        }
+    }
+
+    /// `parse` must reproduce the exact real configs too.
+    #[test]
+    fn test_parse_real_configs() {
+        for config in [
+            ResTableConfig {
+                size: 64,
+                screen_config: 0x0000_2000,
+                version: 0x0000_001d,
+                ..Default::default()
+            },
+            ResTableConfig {
+                size: 64,
+                locale: 0x24a4_7365,
+                ..Default::default()
+            },
+            ResTableConfig {
+                size: 64,
+                locale: 0x0000_7273,
+                locale_script: *b"Latn",
+                ..Default::default()
+            },
+        ] {
+            let buf = bytes_of(&config);
+            let mut input = &buf[..];
+            let parsed = ResTableConfig::parse(&mut input).unwrap();
+            assert_eq!(parsed, config);
+        }
     }
 }

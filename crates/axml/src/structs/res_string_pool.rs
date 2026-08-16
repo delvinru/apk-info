@@ -199,21 +199,21 @@ impl StringPool {
 
             Ok(Self::get_utf16_string(content, real_len))
         } else {
-            // utf-8 strings contains two lengths, as they might differ
-            let (length1, length2) = (le_u8, le_u8).parse_next(input)?;
+            // UTF-8 strings carry two independent varint-style lengths: first the
+            // character (UTF-16 code unit) count, then the UTF-8 byte count. Each is
+            // one byte, extended to two bytes when its high bit is set. We must take
+            // `byte_len` bytes - using the char count would truncate multibyte text.
+            let mut _char_len = le_u8(input)? as usize;
+            if _char_len & 0x80 != 0 {
+                _char_len = ((_char_len & 0x7f) << 8) | le_u8(input)? as usize;
+            }
+            let mut byte_len = le_u8(input)? as usize;
+            if byte_len & 0x80 != 0 {
+                byte_len = ((byte_len & 0x7f) << 8) | le_u8(input)? as usize;
+            }
 
-            let real_length = if length1 & 0x80 != 0 {
-                let length = ((length1 as u16 & !0x80) << 8) | length2 as u16;
-                // read and skip another 2 bytes (idk why, need research)
-                let _ = le_u16(input)?;
-
-                length as u32
-            } else {
-                length2 as u32
-            };
-
-            let content = take(real_length).parse_next(input)?;
-            // skip last byte
+            let content = take(byte_len).parse_next(input)?;
+            // skip trailing null byte
             let _ = le_u8(input)?;
 
             let s = match std::str::from_utf8(content) {

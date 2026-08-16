@@ -57,6 +57,15 @@ enum Commands {
         /// Print progress for every extracted file
         #[arg(short, long, default_value_t = false)]
         verbose: bool,
+
+        /// Decode resources apktool-style: binary XML resources and the manifest
+        /// become readable XML, and resources.arsc is decoded into res/values*
+        ///
+        /// For split/container APKs (xapk/apkm) the resources of the inner base
+        /// AND every config split are decoded into the same res/ tree, so all
+        /// locale/configuration string variations are available in one place.
+        #[arg(short, long, default_value_t = false)]
+        resources: bool,
     },
     /// Read and pretty-print binary AndroidManifest.xml
     Axml {
@@ -103,7 +112,8 @@ fn main() {
             output,
             files,
             verbose,
-        }) => command_extract(paths, output, files, *verbose),
+            resources,
+        }) => command_extract(paths, output, files, *verbose, *resources),
         Some(Commands::Axml { path }) => command_axml(path),
         Some(Commands::Repack { paths, output }) => command_repack(paths, output),
         Some(Commands::Completion { shell }) => {
