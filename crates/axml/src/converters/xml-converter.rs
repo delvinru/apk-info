@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::process::exit;
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
+use quick_xml::{Reader, XmlVersion};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -60,7 +60,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .to_string();
 
                                 let value = a
-                                    .decode_and_unescape_value(reader.decoder())
+                                    .decoded_and_normalized_value(
+                                        XmlVersion::Implicit1_0,
+                                        reader.decoder(),
+                                    )
                                     .expect("can't get value")
                                     .to_string();
 

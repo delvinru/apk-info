@@ -3,9 +3,9 @@ use std::fs::File;
 use std::io::Write;
 use std::process::exit;
 
-use quick_xml::Reader;
 use quick_xml::events::Event;
 use quick_xml::name::QName;
+use quick_xml::{Reader, XmlVersion};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -48,7 +48,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut attr_name = String::new();
                     for a in e.attributes().flatten() {
                         if a.key.as_ref() == b"name" {
-                            attr_name = a.unescape_value()?.to_string();
+                            attr_name = a
+                                .decoded_and_normalized_value(
+                                    XmlVersion::Implicit1_0,
+                                    reader.decoder(),
+                                )?
+                                .to_string();
                         }
                     }
                     current_attr_name = Some(attr_name);
@@ -63,10 +68,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let mut value_str = String::new();
 
                         for a in e.attributes().flatten() {
-                            match a.key.as_ref() {
-                                b"name" => item_name = a.unescape_value()?.to_string(),
-                                b"value" => value_str = a.unescape_value()?.to_string(),
-                                _ => {}
+                            if a.key.as_ref() == b"name" {
+                                item_name = a
+                                    .decoded_and_normalized_value(
+                                        XmlVersion::Implicit1_0,
+                                        reader.decoder(),
+                                    )?
+                                    .to_string();
+                            } else if a.key.as_ref() == b"value" {
+                                value_str = a
+                                    .decoded_and_normalized_value(
+                                        XmlVersion::Implicit1_0,
+                                        reader.decoder(),
+                                    )?
+                                    .to_string();
                             }
                         }
 
