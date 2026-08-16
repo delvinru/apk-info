@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use apk_info_xml::Element;
 use log::warn;
@@ -9,8 +10,8 @@ use winnow::token::take;
 use crate::ARSC;
 use crate::errors::AXMLError;
 use crate::structs::{
-    ResChunkHeader, ResourceHeaderType, StringPool, XMLHeader, XMLResourceMap, XmlCData,
-    XmlEndElement, XmlNamespace, XmlParse, XmlStartElement, attrs_manifest,
+    ResChunkHeader, ResourceHeaderType, ResourceValueType, StringPool, XMLHeader, XMLResourceMap,
+    XmlCData, XmlEndElement, XmlNamespace, XmlParse, XmlStartElement, attrs_manifest,
 };
 
 /// Default android namespace
@@ -25,6 +26,11 @@ pub const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android"
 #[derive(Debug)]
 pub struct AXML {
     pub root: Element,
+
+    /// Raw resource id of reference-typed attributes, keyed by `(element, attr)`.
+    /// Lets [`AXML::get_attribute_value`] resolve a reference by its exact id instead of a
+    /// (potentially ambiguous/redacted) resource name.
+    reference_ids: HashMap<(String, String), u32>,
 }
 
 impl AXML {
@@ -56,10 +62,13 @@ impl AXML {
         let xml_resource = XMLResourceMap::parse(input).map_err(|_| AXMLError::ResourceMapError)?;
 
         // parse and get xml tree
-        let root = Self::get_xml_tree(input, arsc, &string_pool, &xml_resource)
+        let (root, reference_ids) = Self::get_xml_tree(input, arsc, &string_pool, &xml_resource)
             .ok_or(AXMLError::MissingRoot)?;
 
-        Ok(AXML { root })
+        Ok(AXML {
+            root,
+            reference_ids,
+        })
     }
 
     fn get_xml_tree<'a>(
@@ -67,8 +76,9 @@ impl AXML {
         arsc: Option<&ARSC>,
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
-    ) -> Option<Element> {
+    ) -> Option<(Element, HashMap<(String, String), u32>)> {
         let mut stack: Vec<Element> = Vec::with_capacity(16);
+        let mut reference_ids: HashMap<(String, String), u32> = HashMap::new();
 
         loop {
             let chunk_header = match ResChunkHeader::parse(input) {
@@ -161,6 +171,16 @@ impl AXML {
                             Cow::Owned(attribute.typed_value.to_string(string_pool, arsc))
                         });
 
+                        if matches!(
+                            attribute.typed_value.data_type,
+                            ResourceValueType::Reference | ResourceValueType::DynamicReference
+                        ) {
+                            reference_ids.insert(
+                                (name.to_string(), attribute_name.to_string()),
+                                attribute.typed_value.data,
+                            );
+                        }
+
                         element.set_attribute_with_prefix(ns_prefix, attribute_name, &value_str);
                     }
 
@@ -183,7 +203,8 @@ impl AXML {
             }
         }
 
-        (!stack.is_empty()).then(|| stack.remove(0))
+        // returns root of the tree plus (element, attr) -> resource id
+        (!stack.is_empty()).then(|| (stack.remove(0), reference_ids))
     }
 
     /// Returns the pretty-printed XML as a string.
@@ -221,9 +242,17 @@ impl AXML {
             // resolve reference we found
             Some(v) if v.starts_with('@') => {
                 if let Some(arsc) = arsc {
-                    // safe slice, checked before
-                    let name = &v[1..];
-                    arsc.get_resource_value_by_name(name)
+                    // stripped resource name of the reference, e.g. "string/(name removed)"
+                    let stripped = &v[1..];
+
+                    // resolve by exact id first: by-name may be ambiguous (redacted names
+                    // shared by many resources), picking the wrong entry
+                    if let Some(id) = self.reference_ids.get(&(tag.to_string(), name.to_string())) {
+                        arsc.get_resource_value(*id)
+                            .or_else(|| arsc.get_resource_value_by_name(stripped))
+                    } else {
+                        arsc.get_resource_value_by_name(stripped)
+                    }
                 } else {
                     Some(v.to_string())
                 }
