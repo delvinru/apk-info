@@ -286,7 +286,7 @@ impl ZipEntry {
                     FlushDecompress::Finish,
                 );
 
-                // check if decompression was actually successfull
+                // check if decompression was actually successful
                 let is_valid = decompressor.total_in() == compressed_data.len() as u64;
                 match status {
                     Ok(Status::Ok) | Ok(Status::StreamEnd) if is_valid => {
@@ -341,7 +341,7 @@ impl ZipEntry {
     /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/stamp/SourceStampConstants.java#24>
     pub const V2_SOURCE_STAMP_BLOCK_ID: u32 = 0x6dff800d;
 
-    /// Used to increase the size of the signing block (including the length and magic) to a mulitple 4096
+    /// Used to increase the size of the signing block (including the length and magic) to a multiple 4096
     ///
     /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/ApkSigningBlockUtils.java#100>
     pub const VERITY_PADDING_BLOCK_ID: u32 = 0x42726577;
@@ -506,7 +506,7 @@ impl ZipEntry {
     #[allow(unused)]
     fn parse_digest<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
-            // digest_block_length, signature_algorith_id, digest_length, digest
+            // digest_block_length, signature_algorithm_id, digest_length, digest
             let (_, signature_algorithm_id, digest) =
                 (le_u32, le_u32, length_take(le_u32)).parse_next(input)?;
 
@@ -604,7 +604,7 @@ impl ZipEntry {
             // 1.1.1 - parse digests
             let mut _digests_data = length_take(le_u32).parse_next(&mut signed_data)?;
             // uncomment this block if actually need parse digests
-            // let digets: Vec<(u32, &[u8])> =
+            // let digests: Vec<(u32, &[u8])> =
             //     repeat(0.., Self::parse_digest()).parse_next(&mut digests_data)?;
 
             // 1.1.2 - parse certificates
@@ -701,7 +701,7 @@ impl ZipEntry {
 
                     let certificate = Self::parse_certificate().parse_next(input)?;
 
-                    // i don't think that it is usefull information
+                    // i don't think that it is useful information
                     let _signed_data = length_take(le_u32).parse_next(input)?;
 
                     certificate
@@ -714,13 +714,13 @@ impl ZipEntry {
                     let _stamp_block_prefix = le_u32.parse_next(input)?;
                     let certificate = Self::parse_certificate().parse_next(input)?;
 
-                    // i don't think that it is usefull information
+                    // i don't think that it is useful information
                     let _signed_digests_data = length_take(le_u32).parse_next(input)?;
 
-                    // i don't think that it is usefull information
+                    // i don't think that it is useful information
                     let _encoded_stamp_attributes = length_take(le_u32).parse_next(input)?;
 
-                    // i don't think that it is usefull information
+                    // i don't think that it is useful information
                     let _signed_attributes = length_take(le_u32).parse_next(input)?;
 
                     certificate

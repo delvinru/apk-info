@@ -53,7 +53,7 @@ impl ResTableHeader {
     }
 }
 
-/// A collection of resource data types withing a package
+/// A collection of resource data types within a package
 ///
 /// Followed by one or more [ResTableType] and [ResTableTypeSpec] structures containing the entry values for each resource type
 ///
@@ -338,7 +338,7 @@ impl ResTableMapEntry {
     }
 }
 
-/// A compact entry is indicated by [ResTableFlag::FLAG_COMPACT] with falgs at the same offset as normal entry.
+/// A compact entry is indicated by [ResTableFlag::FLAG_COMPACT] with flags at the same offset as normal entry.
 ///
 /// This is only for simple data values.
 ///
@@ -501,7 +501,7 @@ impl ResTableType {
         // https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/TypeWrappers.cpp#79
         let offset_size = if Self::is_offset16(flags) { 2u32 } else { 4u32 };
         if offset_size.saturating_mul(entry_count) > header.content_size() {
-            warn!("type's entry indices extend beyound its boundaries");
+            warn!("type's entry indices extend beyond its boundaries");
 
             // consume input until next chunk
             let already_read = (start_chunk - input.len()) as u32;
@@ -683,7 +683,7 @@ impl ResTableLibrary {
     }
 }
 
-/// Specifies the set of resourcers that are explicitly allowd to be overlaid by RPOs
+/// Specifies the set of resourcers that are explicitly allowed to be overlaid by RPOs
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1834>
 pub struct ResTableOverlayble {

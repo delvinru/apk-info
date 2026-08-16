@@ -144,7 +144,7 @@ pub enum ResourceValueType {
     /// The `data` holds a complex number encoding a fraction of a container.
     Fraction = 0x06,
 
-    /// The `data` holds a dynamic ResTabe_ref, which needs to be resolved
+    /// The `data` holds a dynamic ResTable_ref, which needs to be resolved
     /// before it can be used like a [ResourceValueType::Reference].
     DynamicReference = 0x07,
 

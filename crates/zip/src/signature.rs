@@ -44,7 +44,7 @@ pub enum Signature {
     #[serde(rename = "v4")]
     V4,
 
-    /// Some usefull information from apk channel block
+    /// Some useful information from apk channel block
     #[serde(rename = "apk_channel_block")]
     ApkChannelBlock(String),
 

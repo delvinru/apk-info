@@ -176,7 +176,7 @@ fn extract(path: &PathBuf, out_dir: &PathBuf, files: &[String], verbose: bool) -
             || file_name.ends_with(".so");
 
         if show_line {
-            // highligt interesting files
+            // highlight interesting files
             if file_name == "AndroidManifest.xml" || file_name == "resources.arsc" {
                 print!(
                     "[*] extracted \"{}\" ",

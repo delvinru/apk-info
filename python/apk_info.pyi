@@ -38,7 +38,9 @@ class APK:
             If the parsing failed
         """
 
-    def read(self, filename: str) -> tuple[
+    def read(
+        self, filename: str
+    ) -> tuple[
         bytes,
         Literal[
             "stored",
@@ -169,7 +171,7 @@ class APK:
 
         ```python
         apk = APK("./file")
-        print(apk.get_all_atribute_values("uses-permission", "name"))
+        print(apk.get_all_attribute_values("uses-permission", "name"))
         ```
         """
 
@@ -318,7 +320,7 @@ class APK:
         Returns
         -------
         auto
-            Let the system decie ideal install location
+            Let the system decide ideal install location
         internalOnly
             Explicitly request to be installed on internal phone storage only
         preferExternal
@@ -757,7 +759,7 @@ class APK:
         Returns
         -------
         list[Activity]
-            A list of found activites
+            A list of found activities
         """
 
     def get_activity_aliases(self) -> list[ActivityAlias]:
@@ -949,7 +951,7 @@ class Signature:
     @dataclass(frozen=True)
     class ApkChannelBlock:
         """
-        Some usefull information from apk channel block
+        Some useful information from apk channel block
         """
 
         value: str

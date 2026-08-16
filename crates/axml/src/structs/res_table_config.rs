@@ -173,7 +173,7 @@ impl Display for LayoutDir {
     }
 }
 
-/// Scren size configuration
+/// Screen size configuration
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#226>
 #[derive(Debug, Clone, Copy)]
@@ -291,7 +291,7 @@ impl Display for ScreenRound {
     }
 }
 
-/// Wide color variantions
+/// Wide color variations
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/native/include/android/configuration.h?fi=ACONFIGURATION_VERSION#276>
 #[derive(Debug, Clone, Copy)]
@@ -900,7 +900,7 @@ pub struct ResTableConfig {
     pub locale_script: [u8; 4],
 
     /// A single BCP-47 variant subrtag.
-    /// Will vary in length between 4 and 8 cahrs
+    /// Will vary in length between 4 and 8 chars
     /// Interpreted in conjunction with the locale field
     pub locale_variant: [u8; 8],
 
@@ -1260,7 +1260,7 @@ impl ResTableConfig {
             let _ = write!(result, "sw{}dp", smallest_screen_width_dp);
         }
 
-        let (screen_width_dp, screen_heigh_dp) = self.get_screen_width_height_dp();
+        let (screen_width_dp, screen_height_dp) = self.get_screen_width_height_dp();
         if screen_width_dp != 0 {
             if !result.is_empty() {
                 result.push('-');
@@ -1268,12 +1268,12 @@ impl ResTableConfig {
 
             let _ = write!(result, "w{}dp", screen_width_dp);
         }
-        if screen_heigh_dp != 0 {
+        if screen_height_dp != 0 {
             if !result.is_empty() {
                 result.push('-');
             }
 
-            let _ = write!(result, "h{}dp", screen_heigh_dp);
+            let _ = write!(result, "h{}dp", screen_height_dp);
         }
 
         let screensize = ScreenSize::from(screen_layout);

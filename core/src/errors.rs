@@ -23,7 +23,7 @@ pub enum APKError {
     #[error("got error while parsing AndroidManifest.xml: {0}")]
     ManifestError(#[from] AXMLError),
 
-    /// Error occured while parsing `resources.arsc`
+    /// Error occurred while parsing `resources.arsc`
     #[error("got error while parsing resources.arsc: {0}")]
     ResourceError(#[from] ARCSError),
 

@@ -232,10 +232,10 @@ impl XmlParse for XmlStartElement {
         )
         .parse_next(input)?;
 
-        let readed_bytes = start - input.len();
+        let read_bytes = start - input.len();
 
-        // consume garbage data after readed chunk
-        let tampered_chunk_size = header.content_size().saturating_sub(readed_bytes as u32);
+        // consume garbage data after read chunk
+        let tampered_chunk_size = header.content_size().saturating_sub(read_bytes as u32);
         if tampered_chunk_size != 0 {
             debug!("skip garbage bytes in chunk: {}", tampered_chunk_size);
             let _ = take(tampered_chunk_size).parse_next(input)?;
@@ -266,7 +266,7 @@ pub struct XmlEndElement {
     /// String of the full namespace of this element.
     pub namespace_uri: u32,
 
-    /// String anme of this node if it as an ELEMENT;
+    /// String name of this node if it is an ELEMENT;
     ///
     /// The raw character data if this is a CDATA node.
     pub name: u32,

@@ -81,14 +81,14 @@ impl ResStringPoolHeader {
     }
 }
 
-/// Convience struct for accessing strings
+/// Convenience struct for accessing strings
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#524>
 #[derive(Debug)]
 pub struct StringPool {
     pub header: ResStringPoolHeader,
 
-    // The raw values of the offests are useless, so we don't save them
+    // The raw values of the offsets are useless, so we don't save them
     // pub(crate) string_offsets: Vec<u32>,
     // pub(crate) style_offsets: Vec<u32>,
     /// List of parsed strings
