@@ -5,42 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.12] - 2026-08-17
 
 ### Added
 
-- `get_container_signatures()` in the Rust and Python APIs. Returns the signature of the outer `xapk`/`apkm` container, separate from the app. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
-- CLI prints the container signature as its own block in `show --sigs` and in `--json` output. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
-- New `repack` command in the CLI ([90f0aeb](https://github.com/delvinru/apk-info/commit/90f0aeb)).
-- Support APKM format for default extraction ([759b39c](https://github.com/delvinru/apk-info/commit/759b39c)).
-- Show supported ABIs in the CLI; renamed function to `get_supported_abis` ([d5da648](https://github.com/delvinru/apk-info/commit/d5da648)).
-- Improved split APK parsing for `xapk`/`apkm` containers ([280ced2](https://github.com/delvinru/apk-info/commit/280ced2)).
-- CLI now ignores errors when reading files from an APK ([6ddec0f](https://github.com/delvinru/apk-info/commit/6ddec0f)).
+- apktool-style resource decode via `extract -r`: decodes the manifest, XML resources, and `resources.arsc` into `res/values*` and `res/<type>[-<cfg>]/` folders; merges resources of the base and every config split for `xapk`/`apkm` containers. ([f22340b](https://github.com/delvinru/apk-info/commit/f22340b))
+- `get_container_signatures()` in the Rust and Python APIs — signature of the outer `xapk`/`apkm` container, separate from the app. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
+- Container signature shown as its own block in `show --sigs` and `--json`. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
+- New `repack` CLI command. ([90f0aeb](https://github.com/delvinru/apk-info/commit/90f0aeb))
+- APKM format support for default extraction. ([759b39c](https://github.com/delvinru/apk-info/commit/759b39c))
+- Show supported ABIs in the CLI; renamed to `get_supported_abis`. ([d5da648](https://github.com/delvinru/apk-info/commit/d5da648))
+- Improved split APK parsing for `xapk`/`apkm` containers. ([280ced2](https://github.com/delvinru/apk-info/commit/280ced2))
+- CLI ignores errors when reading files from an APK. ([6ddec0f](https://github.com/delvinru/apk-info/commit/6ddec0f))
 
 ### Changed
 
-- `get_signatures()` now returns the inner base APK signature for `xapk`/`apkm` containers, so it reflects the real app identity instead of being empty. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
-- ZIP signing verification moved from `openssl` to `x509_cert` ([3563807](https://github.com/delvinru/apk-info/commit/3563807)).
+- `get_signatures()` returns the inner base APK signature for `xapk`/`apkm`, reflecting the real app identity. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
+- ZIP signing verification moved from `openssl` to `x509_cert`. ([3563807](https://github.com/delvinru/apk-info/commit/3563807))
 
 ### Breaking Changes
 
-- Python `APK.read()` now reports the compression mode as a plain string hint (`"stored"`, `"deflated"`, `"stored_tampered"`, `"deflated_tampered"`) instead of the `FileCompressionType` enum. ([476e511](https://github.com/delvinru/apk-info/commit/476e511))
+- Python `APK.read()` reports compression mode as a string hint (`"stored"`, `"deflated"`, `"stored_tampered"`, `"deflated_tampered"`) instead of the `FileCompressionType` enum. ([476e511](https://github.com/delvinru/apk-info/commit/476e511))
 
 ### Performance
 
-- Use `mimalloc` as the global allocator in the CLI and Python bindings. Faster small allocations, roughly 2.6x lower peak memory on batch runs, ~5% faster end-to-end Python parsing, and ~22% less user CPU on large batches. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
-- Decode NUL-terminated UTF-16 package names without an intermediate `Vec<u16>` allocation. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
+- `mimalloc` global allocator in the CLI and Python: ~2.6x lower peak memory, ~5% faster end-to-end Python parsing, ~22% less user CPU on large batches. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
+- NUL-terminated UTF-16 package names decoded without an intermediate `Vec<u16>` allocation. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
 
 ### Fixed
 
-- Parse APKs with prepended data / polyglot containers (self-extracting and slightly-wrong `central_dir_offset` values): prefer the EOCD's declared central-directory offset, falling back to `eocd_offset - central_dir_size` when it does not point at real CD magic. Also fixes archives where a ZIP64 EOCD record sits between the CD and the regular EOCD (`eocd_offset - cd_size` alone was off by the record size). ([13a2103](https://github.com/delvinru/apk-info/commit/13a2103))
-- Trust the central directory for entry compression method and sizes when reading files, matching Android's installer and the ZIP spec. Local file headers may be tampered with to break analysis tools (BadPack); using the CD values reads them correctly while still flagging method mismatches as tampered. ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
-- Tolerate an oversized EOCD `comment_length` (clamp to available bytes) instead of failing the whole parse; some malware declares a comment larger than the file contains. ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
-- Recover from a corrupted `local_header_offset` by scanning (bidirectionally, filename-verified) for the real local file header, so shifted-pointer samples are parsed fully. Recovery is lazy (only for entries actually read). ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
-- Resolve `@string/...` attribute values (e.g. `application label`) deterministically: when a name maps to several resource IDs (obfuscated ARSC), pick the lowest ID instead of a `HashMap`-iteration-order match. ([07f3bc4](https://github.com/delvinru/apk-info/commit/07f3bc4))
-- Some malware was breaking XML output ([770118e](https://github.com/delvinru/apk-info/commit/770118e)).
-- Type in namespace string in AXML ([bd0e954](https://github.com/delvinru/apk-info/commit/bd0e954)).
-- Output serial number as a hex value ([5b631e3](https://github.com/delvinru/apk-info/commit/5b631e3)).
+- Parse prepended-data / polyglot and ZIP64-EOCD archives via robust central-directory offset resolution. ([13a2103](https://github.com/delvinru/apk-info/commit/13a2103))
+- Read entries using the central directory (compression, sizes) for BadPack-safety, still flagging method mismatches as tampered. ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
+- Clamp an oversized EOCD `comment_length` instead of failing the whole parse. ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
+- Recover from a corrupted `local_header_offset` via lazy filename-verified scanning. ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
+- Deterministically resolve `@string/...` references on obfuscated ARSC (lowest-ID match). ([07f3bc4](https://github.com/delvinru/apk-info/commit/07f3bc4))
+- More robust XML output on malicious input. ([770118e](https://github.com/delvinru/apk-info/commit/770118e))
+- Fix AXML namespace-string typo. ([bd0e954](https://github.com/delvinru/apk-info/commit/bd0e954))
+- Output serial number as hex. ([5b631e3](https://github.com/delvinru/apk-info/commit/5b631e3))
 
 ## [1.0.11] - 2026-02-25
 
@@ -146,7 +147,7 @@ Initial release of `apk-info`, a full-featured APK parser.
 - Python bindings.
 - Fuzzing targets.
 
-[Unreleased]: https://github.com/delvinru/apk-info/compare/v1.0.11...HEAD
+[1.0.12]: https://github.com/delvinru/apk-info/compare/v1.0.11...v1.0.12
 [1.0.11]: https://github.com/delvinru/apk-info/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/delvinru/apk-info/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/delvinru/apk-info/compare/v1.0.8...v1.0.9
