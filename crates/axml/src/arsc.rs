@@ -120,11 +120,13 @@ impl ARSC {
 
     /// Retrieves a resource value by its resolved name.
     pub fn get_resource_value_by_name(&self, name: &str) -> Option<String> {
-        let (&id, _) = self
-            .reference_names
-            .borrow()
+        let reference_names = self.reference_names.borrow();
+
+        let id = reference_names
             .iter()
-            .find(|(_, v)| v == &name)?;
+            .filter(|(_, v)| v == &name)
+            .map(|(&id, _)| id)
+            .min()?;
 
         self.get_resource_value(id)
     }
