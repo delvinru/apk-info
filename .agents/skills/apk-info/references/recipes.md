@@ -2,6 +2,27 @@
 
 Copy-paste solutions for common APK analysis tasks. Each recipe is self-contained.
 
+## Contents
+
+- [1. Basic triage](#1-basic-triage)
+- [2. Extract and inspect certificates](#2-extract-and-inspect-certificates)
+- [3. Dump the AndroidManifest.xml](#3-dump-the-androidmanifestxml)
+- [4. Extract the app icon](#4-extract-the-app-icon)
+- [5. List all permissions](#5-list-all-permissions)
+- [6. Find exported components (attack surface)](#6-find-exported-components-attack-surface)
+- [7. Batch-process a folder of APKs](#7-batch-process-a-folder-of-apks)
+- [8. Extract specific files (DEX, native libs, etc.)](#8-extract-specific-files-dex-native-libs-etc)
+- [9. Detect BadPack / tampered compression](#9-detect-badpack--tampered-compression)
+- [10. Check if an APK is launchable](#10-check-if-an-apk-is-launchable)
+- [11. Identify device targets (TV, watch, auto, chromebook)](#11-identify-device-targets-tv-watch-auto-chromebook)
+- [12. Resolve a resource reference](#12-resolve-a-resource-reference)
+- [13. Read a custom manifest attribute](#13-read-a-custom-manifest-attribute)
+- [14. Compare two APKs by signing certificate](#14-compare-two-apks-by-signing-certificate)
+- [15. Process XAPK / APKM bundles](#15-process-xapk--apkm-bundles)
+- [16. Why not just use unzip / 7z?](#16-why-not-just-use-unzip--7z)
+- [17. Repack a BadPack APK so standard tools can open it](#17-repack-a-badpack-apk-so-standard-tools-can-open-it)
+- [18. Decode resources (apktool-style)](#18-decode-resources-apktool-style)
+
 ## 1. Basic triage
 
 Get the essential facts about an APK in one shot.
@@ -24,6 +45,7 @@ print(f"Launchable:   {activities[0] if activities else '(none)'}")
 ```
 
 CLI equivalent:
+
 ```bash
 apk-info show --sigs ./app.apk
 ```
@@ -71,6 +93,7 @@ with open("AndroidManifest.xml", "w") as f:
 ```
 
 CLI equivalent:
+
 ```bash
 apk-info axml ./app.apk > AndroidManifest.xml
 ```
@@ -165,6 +188,7 @@ with open("results.json", "w") as f:
 ```
 
 CLI equivalent (faster, native):
+
 ```bash
 apk-info show --json ./apks/ > results.jsonl
 ```
@@ -189,6 +213,7 @@ print(f"compression: {compression}")
 ```
 
 CLI equivalent:
+
 ```bash
 apk-info extract ./app.apk -f 'classes\d+\.dex' -f 'assets/.*'
 ```
@@ -220,6 +245,7 @@ CLI: `apk-info extract -v` prints tampered compression types in bold red:
 Below is a real BadPack malware sample (a multidex APK impersonating Facebook, signed with a fake "Facebook Corporation" certificate). The `AndroidManifest.xml` entry has its compression method set to `55914` — a nonexistent method. Here's how each tool handles it:
 
 **`unzip`** — skips the manifest entirely, exits 0 (silent data loss):
+
 ```
 $ unzip ./malware.apk -d ./out/
 warning:  filename too long--truncating.        # garbage entries with overlong names
@@ -231,6 +257,7 @@ ls: ./out/AndroidManifest.xml: No such file or directory
 ```
 
 **`7z` / `7zz`** — creates the manifest as a 0-byte file, reports a headers error, exits 0:
+
 ```
 $ 7zz x ./malware.apk -o./out/
 ERROR: Headers Error : AndroidManifest.xml
@@ -241,6 +268,7 @@ $ ls -la ./out/AndroidManifest.xml
 ```
 
 **`apk-info`** — detects the tampered compression, extracts the manifest fully:
+
 ```
 $ apk-info extract -v ./malware.apk -f AndroidManifest.xml
 [*] extracted "AndroidManifest.xml" (StoredTampered)   # BadPack detected, data recovered
@@ -379,7 +407,7 @@ print(apk.get_package_name())
 Standard archive tools fail silently on malware-tampered APKs. apk-info was built specifically for this. Common failure modes seen in real malware:
 
 | Tool | Failure | Consequence |
-|------|---------|-------------|
+| ------ | --------- | ------------- |
 | `unzip` | `unsupported compression method 55914` → skips file | `AndroidManifest.xml` missing, exit 0 (no error signal) |
 | `unzip` | `filename too long--truncating` | Garbage entries with overlong/non-ASCII names truncate silently |
 | `7z` / `7zz` | `Headers Error` on manifest | `AndroidManifest.xml` created as **0 bytes** (empty), exit 0 |
@@ -462,12 +490,14 @@ apk-info repack ./malware-collection/          # repack a whole folder
 ```
 
 **Before** — `unzip` drops the tampered manifest:
+
 ```
 $ unzip -t ./malware.apk
     testing: AndroidManifest.xml     unknown compression method   # ← BadPack
 ```
 
 **After** — the repacked archive validates and extracts cleanly:
+
 ```
 $ apk-info repack ./malware.apk
 [*] repacked "malware.apk" - fixed 1 tampered entry -> "malware.repacked.apk"
@@ -480,3 +510,48 @@ $ apk-info show ./malware.repacked.apk                  # full info works
 ```
 
 > **Note:** the rebuilt archive is **unsigned** — v1 signature files (`META-INF/`) and the APK Signature Block (v2/v3) are not reproduced. Use it for analysis, not for direct sideloading.
+
+## 18. Decode resources (apktool-style)
+
+`extract -r` decodes a package's resources like `apktool`/`jadx`: the binary
+`AndroidManifest.xml` and XML resources become readable XML, and `resources.arsc`
+is exploded into `res/values*/...` (strings, plurals, arrays, colors, styles) and
+canonical `res/<type>[-<config>]/` file-resource folders.
+
+```bash
+# Decode a plain APK → ./app.apk.unp/res/values*/, .../res/<type>-<cfg>/, AndroidManifest.xml
+apk-info extract ./app.apk -r
+
+# Split container (XAPK/APKM): merge base + every config split into one res/ tree,
+# so all locale/configuration string variants are present in a single place
+apk-info extract ./app.xapk -r -o ./out/
+# → base manifest at ./out/app.xapk.unp/AndroidManifest.xml (split manifests are not emitted)
+# → ./out/app.xapk.unp/res/values*/, .../res/<type>-<cfg>/ (strings from base + config.*.apk)
+```
+
+Notes for agents:
+
+- **Arsc-driven, not zip-scan:** only resources registered in the resource table
+  are emitted. Obfuscated flat decoy files under `res/` (e.g. Telegram's random
+  `res/<xxx>.xml`) are skipped, matching apktool/jadx output. If you see many
+  weird flat `res/` files in a raw `extract`, that's the obfuscation — `-r` is the
+  way to get the real resource set.
+- **Cross-tool parity:** the decoded layout is validated against
+  `aapt2 dump configurations` and apktool (folder names + resource content), so it
+  can be trusted as apktool-equivalent.
+- **One known cosmetic divergence:** we write legacy locales (`values-es-r419`)
+  while apktool emits `values-b+es+419`; jadx agrees with us (faithful AOSP
+  `appendDirLocale` port). Both are correct locale forms — don't treat the
+  `-r419` vs `b+es+419` difference as a bug.
+- **Non-resource entries** (dex, libs, assets) are always copied through as-is,
+  even with `-r`.
+
+**Example:** inspect all English string variants of a split app without a full
+apktool decode:
+
+```bash
+apk-info extract ./app.xapk -r -o ./out/
+for f in ./out/app.xapk.unp/res/values-en*/strings.xml; do
+  echo "== $f =="; grep -c '<string name=' "$f"
+done
+```

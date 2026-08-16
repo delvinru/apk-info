@@ -1,6 +1,6 @@
 ---
 name: apk-info
-description: Use this skill whenever a user needs to extract information from Android APK, XAPK, or APKM files - package name, version, SDK levels, main activity, permissions, manifest components (activities, services, receivers, providers), signing certificates, or the decoded AndroidManifest.xml. Covers the apk-info CLI and Python library. Trigger when a user wants to parse or inspect an APK in Python or on the command line; needs an androguard alternative or faster APK parser; encounters unzip or 7z failures on an APK (BadPack technique, unsupported compression method, missing or empty AndroidManifest.xml); needs to inspect APK signatures (v1/v2/v3/v3.1, source stamps, channel blocks); wants to batch-process a folder of APKs; or has a .zip file that is actually an APK. Read-only analysis - does not build, sign, modify, or decompile APKs. Trigger even when the user does not name apk-info explicitly.
+description: Parses and inspects Android APK/XAPK/APKM files, extracting package name, version, SDK levels, main activity, permissions, manifest components (activities, services, receivers, providers), signing certificates (v1/v2/v3/v3.1, source stamps, channel blocks), the decoded AndroidManifest.xml, and apktool-style resources. Ships as a CLI and a Python library; a faster, malware-robust alternative to androguard (handles BadPack and tampered zip headers). Use when analyzing or inspecting an APK/XAPK/APKM, when unzip/7z fail or drop the manifest on an APK (BadPack, unsupported compression, empty manifest), when a .zip is actually an APK, when decoding resources/manifest, or when extracting APK metadata/files programmatically. Read-only analysis - does not build, sign, modify, or decompile APKs.
 license: Apache-2.0
 metadata:
   author: delvinru
@@ -12,6 +12,14 @@ metadata:
 `apk-info` is a fast, malware-friendly, **read-only** APK parser. It extracts information from APK/XAPK/APKM files: package name, version, SDK requirements, main activity, permissions, signatures, manifest components, and individual files. It ships as a CLI (`apk-info`) and a Python library (`apk-info` on PyPI, ≥3.10, with full type stubs).
 
 Its key strength is robustness against malformed/malicious inputs (BadPack technique, tampered zip headers, garbage AXML chunks) where standard parsers like androguard fail or are ~10× slower.
+
+## References (read on demand)
+
+`apk-info` is small — this file is just an overview. Read only the reference relevant to the current task; each is referenced one level deep and loaded only when needed.
+
+- **`references/cli.md`** — Full CLI reference (`show`, `extract`, `axml`, `repack`, `completion`) with all flags and examples.
+- **`references/python-api.md`** — Python API catalog grouped by task; use when writing Python that calls `apk_info`.
+- **`references/recipes.md`** — Copy-paste recipes (extract icon, dump manifest, batch a folder, certificates, BadPack/unzip-vs-apk-info, decode resources).
 
 ## Installation
 
@@ -49,6 +57,10 @@ apk-info extract ./app.apk                 # → ./app.apk.unp/
 
 # Extract only specific files (regex, repeatable)
 apk-info extract ./app.apk -f 'classes\d+\.dex' -f 'AndroidManifest.xml'
+
+# Decode resources apktool-style (manifest + res/values* + res/<type>-<cfg>)
+# merges base + every config split for XAPK/APKM containers
+apk-info extract ./app.apk -r
 ```
 
 > **Why not just `unzip`?** Malware often tampers with zip headers (BadPack technique): the compression method field is set to a bogus value while the data is stored normally. `unzip` silently skips such entries (`unsupported compression method 55914`, exit 0) and `7z` creates empty 0-byte files — you lose `AndroidManifest.xml` without knowing it. `apk-info` detects the tampering, flags it as `StoredTampered`/`DeflatedTampered`, and extracts the data correctly. See `references/recipes.md` §9 and §16 for real-world examples.
@@ -84,12 +96,6 @@ for sig in apk.get_signatures():
                 print(cert.subject, cert.sha256_fingerprint)
 ```
 
-## When to read which reference
-
-- **`references/cli.md`** — Full CLI command reference with all flags and examples. Read when you need details on `show`, `extract`, `axml`, or `completion`.
-- **`references/python-api.md`** — Complete Python API catalog grouped by task. Read when writing Python code that uses `apk_info` or when you need to know which method extracts a specific piece of data.
-- **`references/recipes.md`** — Ready-to-use recipes for common APK analysis tasks (extract icon, dump manifest, batch-process a folder, inspect certificates, handle BadPack, compare with unzip/7z, etc.). Read when you want a copy-paste solution.
-
 ## What apk-info can extract
 
 | Data                                          | CLI           | Python method                                                                  |
@@ -108,6 +114,7 @@ for sig in apk.get_signatures():
 | Pretty-printed manifest                       | `axml`        | `get_xml_string()`                                                             |
 | Raw file from APK                             | `extract`     | `read(filename)`                                                               |
 | File listing                                  | `extract`     | `namelist()`                                                                   |
+| Decoded resources (apktool-style)             | `extract -r`  | —                                                                              |
 | Multidex check                                | —             | `is_multidex()`                                                                |
 | Device-type checks (TV/watch/auto/chromebook) | —             | `is_leanback()` / `is_wearable()` / `is_automotive()` / `is_chromebook()`      |
 | Any manifest attribute                        | —             | `get_attribute_value(tag, name)`                                               |

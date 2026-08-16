@@ -2,6 +2,26 @@
 
 Complete catalog of the `apk_info` Python API (≥3.10, full type stubs included). Import with `from apk_info import APK`. All examples assume `apk = APK("./file.apk")`.
 
+## Contents
+
+- [Setup](#setup)
+- [Basic information](#basic-information)
+- [Shared user ID](#shared-user-id)
+- [Main (launchable) activity](#main-launchable-activity)
+- [Application-level attributes](#application-level-attributes)
+- [Permissions](#permissions)
+- [Features, libraries](#features-libraries)
+- [Device-type checks](#device-type-checks)
+- [Manifest components](#manifest-components)
+- [Signatures & certificates](#signatures--certificates)
+- [Reading files from the APK](#reading-files-from-the-apk)
+- [File listing & multidex](#file-listing--multidex)
+- [Native ABIs](#native-abis)
+- [Pretty-printed manifest](#pretty-printed-manifest)
+- [Generic attribute access](#generic-attribute-access)
+- [Error handling](#error-handling)
+- [Dataclass note](#dataclass-note)
+
 ## Setup
 
 ```bash

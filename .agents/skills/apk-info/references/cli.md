@@ -2,6 +2,16 @@
 
 The `apk-info` CLI has five subcommands. Run `apk-info --help` or `apk-info <command> --help` for built-in help.
 
+## Contents
+
+- [show — basic APK info](#show--basic-apk-info)
+- [extract (alias x) — unpack the APK](#extract-alias-x--unpack-the-apk)
+- [axml — pretty-print AndroidManifest.xml](#axml--pretty-print-androidmanifestxml)
+- [completion — generate shell completions](#completion--generate-shell-completions)
+- [repack — unpack and rebuild a BadPack-damaged APK](#repack--unpack-and-rebuild-a-badpack-damaged-apk)
+- [Exit codes & error behavior](#exit-codes--error-behavior)
+- [Common pipelines](#common-pipelines)
+
 ## `show` — basic APK info
 
 Prints package name, version, SDK versions, main activity, application label, and ABIs. Optionally includes signatures.
@@ -11,6 +21,7 @@ apk-info show <PATH> [<PATH> ...]
 ```
 
 **Options:**
+
 - `-s, --sigs` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers).
 - `-j, --json` — output as JSONL (one JSON object per APK) instead of colored text. Suitable for piping to `jq` or other tools.
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
@@ -33,6 +44,7 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
 ```
 
 **JSONL schema** (from `--json`):
+
 ```json
 {
   "package_name": "com.example.app",
@@ -47,6 +59,7 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
   "signatures": null
 }
 ```
+
 The `signatures` field is `null` unless `--sigs` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`).
 
 ## `extract` (alias `x`) — unpack the APK
@@ -58,9 +71,11 @@ apk-info extract <PATH> [<PATH> ...] [-o <OUTPUT_DIR>] [-f <REGEX> ...]
 ```
 
 **Options:**
+
 - `-o, --output <DIR>` — base output directory. Each APK is extracted to `<DIR>/<filename>.unp/`. If omitted, defaults to `./<filename>.unp/`.
 - `-f, --files <REGEX>` — only extract files whose name matches the regex. Can be repeated to allow multiple patterns. Any match passes.
 - `-v, --verbose` — print progress for every extracted file. By default only "interesting" files are shown: `AndroidManifest.xml`, `resources.arsc`, `.so` libraries, and tampered (BadPack) entries; all other files are printed only in verbose mode.
+- `-r, --resources` — apktool-style resource decode (see below).
 
 **Examples:**
 
@@ -76,6 +91,35 @@ apk-info extract ./app.apk -f 'classes\d+\.dex' -f 'AndroidManifest.xml'
 
 # Extract native libraries only
 apk-info extract ./app.apk -f 'lib/.*\.so'
+
+# Decode resources apktool-style
+apk-info extract ./app.apk -r
+```
+
+### `-r, --resources` — apktool-style resource decode
+
+Decodes the package like `apktool`/`jadx`: the binary `AndroidManifest.xml` and
+XML resources become readable XML, and `resources.arsc` is exploded into
+`res/values*/...` (strings, plurals, arrays, colors, styles, ...) plus canonical
+`res/<type>[-<config>]/` file-resource folders. The decoded entries live alongside
+the raw extraction in `<out>/<file>.unp/` (the manifest, `resources.arsc` and
+`res/*` entries are produced by the decode, not copied as raw files).
+
+- **Arsc-driven, not zip-scan:** only resources registered in the resource table
+  are emitted, so obfuscated flat decoy files under `res/` (e.g. Telegram's
+  random `res/<xxx>.xml`) are skipped — matching apktool/jadx. See
+  `recipes.md` §18.
+- **Split containers (XAPK/APKM):** resources of the inner base *and* every
+  `config.*`/`split_*` APK are merged into one `res/` tree, so all
+  locale/configuration string variants are present in a single place; the base's
+  `AndroidManifest.xml` stays at the output root (split manifests are not emitted).
+
+```bash
+# Decode a plain APK → ./app.apk.unp/res/values*/, .../res/<type>-<cfg>/, AndroidManifest.xml
+apk-info extract ./app.apk -r
+
+# Split container: merge base + config-split string variants
+apk-info extract ./app.xapk -r -o ./out/
 ```
 
 **Output highlighting:** `AndroidManifest.xml` and `resources.arsc` are highlighted in green/bold; `.so` files in magenta; other files are plain. The compression type is shown in parentheses — tampered types (`StoredTampered`/`DeflatedTampered`, indicating the BadPack technique) are shown in bold red. These interesting/tampered entries are shown by default; plain files are printed only with `--verbose`.
@@ -93,6 +137,7 @@ apk-info axml <PATH>
 ```
 
 The path can be either:
+
 - An APK/XAPK/APKM file (the manifest is extracted and decoded from it).
 - A raw binary `AndroidManifest.xml` file (parsed directly).
 
@@ -135,6 +180,7 @@ apk-info repack <PATH> [<PATH> ...] [-o <OUTPUT_DIR>]
 ```
 
 **Options:**
+
 - `-o, --output <DIR>` — write results into `<DIR>/<name>.repacked.apk`. If omitted, the output is written next to the source file as `<name>.repacked.apk` (source stem + `.repacked.apk`).
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
 
