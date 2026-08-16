@@ -38,7 +38,15 @@ class APK:
             If the parsing failed
         """
 
-    def read(self, filename: str) -> tuple[bytes, FileCompressionType]:
+    def read(self, filename: str) -> tuple[
+        bytes,
+        Literal[
+            "stored",
+            "deflated",
+            "stored_tampered",
+            "deflated_tampered",
+        ],
+    ]:
         """
         Read raw data for the filename in the zip archive
 
@@ -459,7 +467,7 @@ class APK:
         if icon:
             # it's not always png, maybe webp or even xml.
             with open("icon.png", "wb") as fd:
-                fd.write(apk.read(icon))
+                fd.write(apk.read(icon)[0])
         ```
 
         Returns
@@ -1526,29 +1534,4 @@ class Attribution:
     A string resource that describes a particular capability.
 
     See: https://developer.android.com/guide/topics/manifest/attribution-element#label
-    """
-
-class FileCompressionType:
-    """
-    Compression mode used for a zip entry
-    """
-
-    STORED = "stored"
-    """
-    The file is stored without compression
-    """
-
-    DEFLATED = "deflated"
-    """
-    The file is compressed using the `Deflate` algorithm.
-    """
-
-    STORED_TAMPERED = "stored_tampered"
-    """
-    The file appears tampered but is actually stored without compression.
-    """
-
-    DEFLATED_TAMPERED = "deflated_tampered"
-    """
-    The file appears tampered but is actually compressed with `Deflate`.
     """

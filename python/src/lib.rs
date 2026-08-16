@@ -190,41 +190,13 @@ impl Signature {
     }
 }
 
-// NOTE: currently pyo3 handle's python enum not very well
-// Maybe upgrade in the future: https://github.com/PyO3/pyo3/issues/2887
-#[pyclass(eq, eq_int, frozen, module = "apk_info._apk_info")]
-#[derive(PartialEq)]
-enum FileCompressionType {
-    #[pyo3(name = "STORED")]
-    Stored,
-    #[pyo3(name = "DEFLATED")]
-    Deflated,
-    #[pyo3(name = "STORED_TAMPERED")]
-    StoredTampered,
-    #[pyo3(name = "DEFLATED_TAMPERED")]
-    DeflatedTampered,
-}
-
-#[pymethods]
-impl FileCompressionType {
-    fn __repr__(&self) -> &'static str {
-        match self {
-            FileCompressionType::Stored => "stored",
-            FileCompressionType::Deflated => "deflated",
-            FileCompressionType::StoredTampered => "stored_tampered",
-            FileCompressionType::DeflatedTampered => "deflated_tampered",
-        }
-    }
-}
-
-impl From<ZipFileCompressionType> for FileCompressionType {
-    fn from(kind: ZipFileCompressionType) -> Self {
-        match kind {
-            ZipFileCompressionType::Stored => FileCompressionType::Stored,
-            ZipFileCompressionType::Deflated => FileCompressionType::Deflated,
-            ZipFileCompressionType::StoredTampered => FileCompressionType::StoredTampered,
-            ZipFileCompressionType::DeflatedTampered => FileCompressionType::DeflatedTampered,
-        }
+/// Maps an internal compression kind to a short descriptive hint.
+fn compression_hint(kind: ZipFileCompressionType) -> &'static str {
+    match kind {
+        ZipFileCompressionType::Stored => "stored",
+        ZipFileCompressionType::Deflated => "deflated",
+        ZipFileCompressionType::StoredTampered => "stored_tampered",
+        ZipFileCompressionType::DeflatedTampered => "deflated_tampered",
     }
 }
 
@@ -786,16 +758,15 @@ impl Apk {
         Ok(Apk { apkrs })
     }
 
-    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<(Vec<u8>, FileCompressionType)> {
-        let filename = match filename.extract::<&str>() {
-            Ok(name) => name,
-            Err(_) => return Err(PyValueError::new_err("bad filename")),
-        };
+    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<(Vec<u8>, String)> {
+        let name: &str = filename
+            .extract()
+            .map_err(|_| PyValueError::new_err("bad filename"))?;
 
-        match self.apkrs.read(filename) {
-            Ok((data, compression)) => Ok((data, FileCompressionType::from(compression))),
-            Err(e) => Err(APKError::new_err(e.to_string())),
-        }
+        self.apkrs
+            .read(name)
+            .map(|(data, compression)| (data, compression_hint(compression).to_owned()))
+            .map_err(|e| APKError::new_err(e.to_string()))
     }
 
     pub fn namelist(&self) -> Vec<&str> {
@@ -1042,7 +1013,6 @@ fn apk_info(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Receiver>()?;
     m.add_class::<Service>()?;
     m.add_class::<Signature>()?;
-    m.add_class::<FileCompressionType>()?;
 
     m.add_class::<Apk>()?;
     Ok(())
