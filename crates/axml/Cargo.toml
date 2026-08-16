@@ -22,6 +22,7 @@ serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
 winnow.workspace = true
+ahash.workspace = true
 
 [build-dependencies]
 phf_codegen.workspace = true

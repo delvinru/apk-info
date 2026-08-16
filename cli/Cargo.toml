@@ -27,6 +27,7 @@ regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 walkdir.workspace = true
+mimalloc.workspace = true
 
 [[bin]]
 name = "apk-info"

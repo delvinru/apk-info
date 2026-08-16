@@ -18,4 +18,5 @@ doc = false
 apk-info-zip.workspace = true
 apk-info.workspace = true
 env_logger.workspace = true
+mimalloc.workspace = true
 pyo3.workspace = true

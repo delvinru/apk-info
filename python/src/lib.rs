@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+#[global_allocator]
+static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use ::apk_info::Apk as ApkRust;
 use ::apk_info::models::{
     Activity as ApkActivity, ActivityAlias as ApkActivityAlias, Attribution as ApkAttribution,

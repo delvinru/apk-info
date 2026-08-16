@@ -47,6 +47,7 @@ flate2 = "1.1.9"
 log = "0.4.33"
 md-5 = "0.11.0"
 memchr = "2.8.3"
+mimalloc = "0.1"
 once_cell = "1.21.4"
 phf = { version = "0.14.0", default-features = false }
 phf_codegen = "0.14.0"

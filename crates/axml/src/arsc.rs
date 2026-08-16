@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 
+use ahash::AHashMap;
 use log::warn;
 use winnow::combinator::repeat;
 use winnow::prelude::*;
@@ -17,10 +17,10 @@ use crate::structs::{
 #[derive(Debug)]
 pub struct ARSC {
     global_string_pool: StringPool,
-    packages: HashMap<u8, ResTablePackage>,
+    packages: AHashMap<u8, ResTablePackage>,
 
     /// Cache for resolved reference names to avoid repeated lookups.
-    reference_names: RefCell<HashMap<u32, String>>,
+    reference_names: RefCell<AHashMap<u32, String>>,
 }
 
 impl ARSC {
@@ -48,38 +48,25 @@ impl ARSC {
                 .map_err(|_| ARCSError::ResourceTableError)?;
 
         // There is often a single package, so we do a little optimization (i think)
-        let packages = match table_packages.len() {
-            0 => HashMap::new(),
-            1 => {
-                let pkg = table_packages
-                    .into_iter()
-                    .next()
-                    .expect("is rust broken? one element must be");
-                HashMap::from([((pkg.header.id & 0xff) as u8, pkg)])
+        let mut packages = AHashMap::with_capacity(table_packages.len().max(1));
+        for pkg in table_packages {
+            let id = (pkg.header.id & 0xff) as u8;
+            if packages.contains_key(&id) {
+                warn!(
+                    "malformed resource packages, duplicate package id - 0x{:02x}, skipped",
+                    id
+                );
+                continue;
             }
-            _ => {
-                let mut packages = HashMap::with_capacity(table_packages.len());
-                for pkg in table_packages {
-                    let id = (pkg.header.id & 0xff) as u8;
-                    if packages.contains_key(&id) {
-                        warn!(
-                            "malformed resource packages, duplicate package id - 0x{:02x}, skipped",
-                            id
-                        );
-                        continue;
-                    }
 
-                    packages.insert(id, pkg);
-                }
-                packages
-            }
-        };
+            packages.insert(id, pkg);
+        }
 
         Ok(ARSC {
             global_string_pool,
             packages,
             // preallocate some space
-            reference_names: RefCell::new(HashMap::with_capacity(32)),
+            reference_names: RefCell::new(AHashMap::with_capacity(32)),
         })
     }
 

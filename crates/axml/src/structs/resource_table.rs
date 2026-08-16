@@ -1,7 +1,8 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::hash::Hash;
 
+use ahash::AHashMap;
 use log::{debug, info, warn};
 use winnow::binary::{le_u16, le_u32, u8};
 use winnow::combinator::repeat;
@@ -17,15 +18,17 @@ use crate::structs::{
 
 /// Decodes a NUL-terminated, little-endian UTF-16 byte slice into a `String`.
 fn utf16_from_bytes(bytes: &[u8]) -> String {
-    let utf16_str: Vec<u16> = bytes
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|chunk| u16::from_le_bytes(*chunk))
-        .take_while(|&c| c != 0)
-        .collect();
-
-    String::from_utf16(&utf16_str).unwrap_or_default()
+    let units = bytes.as_chunks::<2>().0;
+    let mut out = String::with_capacity(units.len());
+    for r in std::char::decode_utf16(
+        units
+            .iter()
+            .map(|c| u16::from_le_bytes(*c))
+            .take_while(|&c| c != 0),
+    ) {
+        out.push(r.unwrap_or(char::REPLACEMENT_CHARACTER));
+    }
+    out
 }
 
 /// Header for a resource table
@@ -858,7 +861,7 @@ pub struct ResTablePackage {
 
     // requires fastloop by resource id => resource
     // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
-    pub resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
+    pub resources: BTreeMap<ResTableConfig, AHashMap<u8, Vec<ResTableEntry>>>,
 }
 
 impl ResTablePackage {
@@ -870,7 +873,7 @@ impl ResTablePackage {
         )
             .parse_next(input)?;
 
-        let mut resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>> =
+        let mut resources: BTreeMap<ResTableConfig, AHashMap<u8, Vec<ResTableEntry>>> =
             BTreeMap::new();
 
         loop {

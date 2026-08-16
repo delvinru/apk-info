@@ -5,6 +5,9 @@ use clap_complete::{Shell, generate};
 
 use crate::commands::{command_axml, command_extract, command_repack, command_show};
 
+#[global_allocator]
+static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 mod commands;
 
 #[derive(Parser)]
