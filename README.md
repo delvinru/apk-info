@@ -118,10 +118,10 @@ container_signatures = apk.get_container_signatures()
 
 Environment:
 
-- OS: macOS Tahoe 26.0.1 arm64
+- OS: macOS Tahoe 26.6.1 arm64
 - CPU: Apple M3 Pro (12) @ 4.06 GHz
 
-The [script](examples/bench.py):
+The [script](examples/benchmark/bench.py):
 
 1. Extract all available signatures from a file;
 2. Extract the package name;
@@ -152,24 +152,22 @@ test case (clean collection):
 
 test case (malware collection):
 
-- 3084 apk files;
-- Total size - 23GB;
+- 13374 apk files (from the [VirusShare Android APK collection](https://vx-underground.org/Samples/Virusshare%20Collection/Downloadable%20Releases));
+- Total size - 68GB;
 - Logging mode - warning;
 
-> [!IMPORTANT]
-> There are a lot of malicious samples in this set that androguard simply cannot parse.
+> [!NOTE]
+> The collection has 14026 downloaded samples. 652 of them are completely broken (not valid ZIP/APK archives) and rejected by both tools, so they are excluded from the benchmark — leaving 13374.
 
 | #   | **apk-info**                                | **androguard**                                  |
 | --- | ------------------------------------------- | ----------------------------------------------- |
-| 1   | 2.49s user 4.74s system 73% cpu 9.840 total | 141.29s user 6.86s system 98% cpu 2:31.09 total |
-| 2   | 2.50s user 4.77s system 75% cpu 9.641 total | 138.04s user 6.32s system 97% cpu 2:27.33 total |
-| 3   | 2.49s user 4.78s system 75% cpu 9.650 total | 139.33s user 6.65s system 98% cpu 2:28.87 total |
+| 1   | 5.15s user 12.53s system 66% cpu 26.990 total | 152.85s user 15.56s system 95% cpu 2:58.01 total |
+| 2   | 5.41s user 13.08s system 69% cpu 27.010 total | 151.84s user 15.08s system 95% cpu 2:56.74 total |
+| 3   | 5.25s user 12.76s system 68% cpu 26.610 total | 152.26s user 15.26s system 95% cpu 2:57.20 total |
 
 ---
 
-On average, the speed gain is about x10.
-
-The main advantage is that `apk-info` can parse many more malicious files than `androguard`.
+On average, the speed gain is about x6.6 on this corpus.
 
 ## FAQ
 
