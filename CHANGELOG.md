@@ -9,31 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `get_container_signatures()` in the Rust and Python APIs. Returns the signature of the outer `xapk`/`apkm` container, separate from the app.
-- CLI prints the container signature as its own block in `show --sigs` and in `--json` output.
-
-### Changed
-
-- `get_signatures()` now returns the inner base APK signature for `xapk`/`apkm` containers, so it reflects the real app identity instead of being empty.
-- Python `APK.read()` now reports the compression mode as a plain string hint (`"stored"`, `"deflated"`, `"stored_tampered"`, `"deflated_tampered"`) instead of the `FileCompressionType` enum.
-
-### Performance
-
-- Use `mimalloc` as the global allocator in the CLI and Python bindings. Faster small allocations, roughly 2.6x lower peak memory on batch runs, ~5% faster end-to-end Python parsing, and ~22% less user CPU on large batches.
-- Decode NUL-terminated UTF-16 package names without an intermediate `Vec<u16>` allocation.
-
-### Fixed
-
-- Parse APKs with prepended data / polyglot containers (self-extracting and slightly-wrong `central_dir_offset` values): prefer the EOCD's declared central-directory offset, falling back to `eocd_offset - central_dir_size` when it does not point at real CD magic. Also fixes archives where a ZIP64 EOCD record sits between the CD and the regular EOCD (`eocd_offset - cd_size` alone was off by the record size).
-- Trust the central directory for entry compression method and sizes when reading files, matching Android's installer and the ZIP spec. Local file headers may be tampered with to break analysis tools (BadPack); using the CD values reads them correctly while still flagging method mismatches as tampered.
-- Tolerate an oversized EOCD `comment_length` (clamp to available bytes) instead of failing the whole parse; some malware declares a comment larger than the file contains.
-- Recover from a corrupted `local_header_offset` by scanning (bidirectionally, filename-verified) for the real local file header, so shifted-pointer samples like `com.z4mod.z4root` parse fully. Recovery is lazy (only for entries actually read).
-- Resolve `@string/...` attribute values (e.g. `application label`) deterministically: when a name maps to several resource IDs (obfuscated ARSC), pick the lowest ID instead of a `HashMap`-iteration-order match.
-
-## [1.0.12] - 2026-08-14
-
-### Added
-
+- `get_container_signatures()` in the Rust and Python APIs. Returns the signature of the outer `xapk`/`apkm` container, separate from the app. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
+- CLI prints the container signature as its own block in `show --sigs` and in `--json` output. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
 - New `repack` command in the CLI ([90f0aeb](https://github.com/delvinru/apk-info/commit/90f0aeb)).
 - Support APKM format for default extraction ([759b39c](https://github.com/delvinru/apk-info/commit/759b39c)).
 - Show supported ABIs in the CLI; renamed function to `get_supported_abis` ([d5da648](https://github.com/delvinru/apk-info/commit/d5da648)).
@@ -42,10 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `get_signatures()` now returns the inner base APK signature for `xapk`/`apkm` containers, so it reflects the real app identity instead of being empty. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
 - ZIP signing verification moved from `openssl` to `x509_cert` ([3563807](https://github.com/delvinru/apk-info/commit/3563807)).
+
+### Breaking Changes
+
+- Python `APK.read()` now reports the compression mode as a plain string hint (`"stored"`, `"deflated"`, `"stored_tampered"`, `"deflated_tampered"`) instead of the `FileCompressionType` enum. ([476e511](https://github.com/delvinru/apk-info/commit/476e511))
+
+### Performance
+
+- Use `mimalloc` as the global allocator in the CLI and Python bindings. Faster small allocations, roughly 2.6x lower peak memory on batch runs, ~5% faster end-to-end Python parsing, and ~22% less user CPU on large batches. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
+- Decode NUL-terminated UTF-16 package names without an intermediate `Vec<u16>` allocation. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
 
 ### Fixed
 
+- Parse APKs with prepended data / polyglot containers (self-extracting and slightly-wrong `central_dir_offset` values): prefer the EOCD's declared central-directory offset, falling back to `eocd_offset - central_dir_size` when it does not point at real CD magic. Also fixes archives where a ZIP64 EOCD record sits between the CD and the regular EOCD (`eocd_offset - cd_size` alone was off by the record size). ([13a2103](https://github.com/delvinru/apk-info/commit/13a2103))
+- Trust the central directory for entry compression method and sizes when reading files, matching Android's installer and the ZIP spec. Local file headers may be tampered with to break analysis tools (BadPack); using the CD values reads them correctly while still flagging method mismatches as tampered. ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
+- Tolerate an oversized EOCD `comment_length` (clamp to available bytes) instead of failing the whole parse; some malware declares a comment larger than the file contains. ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
+- Recover from a corrupted `local_header_offset` by scanning (bidirectionally, filename-verified) for the real local file header, so shifted-pointer samples are parsed fully. Recovery is lazy (only for entries actually read). ([834f079](https://github.com/delvinru/apk-info/commit/834f079))
+- Resolve `@string/...` attribute values (e.g. `application label`) deterministically: when a name maps to several resource IDs (obfuscated ARSC), pick the lowest ID instead of a `HashMap`-iteration-order match. ([07f3bc4](https://github.com/delvinru/apk-info/commit/07f3bc4))
 - Some malware was breaking XML output ([770118e](https://github.com/delvinru/apk-info/commit/770118e)).
 - Type in namespace string in AXML ([bd0e954](https://github.com/delvinru/apk-info/commit/bd0e954)).
 - Output serial number as a hex value ([5b631e3](https://github.com/delvinru/apk-info/commit/5b631e3)).
@@ -154,8 +146,7 @@ Initial release of `apk-info`, a full-featured APK parser.
 - Python bindings.
 - Fuzzing targets.
 
-[Unreleased]: https://github.com/delvinru/apk-info/compare/v1.0.12...HEAD
-[1.0.12]: https://github.com/delvinru/apk-info/compare/v1.0.11...v1.0.12
+[Unreleased]: https://github.com/delvinru/apk-info/compare/v1.0.11...HEAD
 [1.0.11]: https://github.com/delvinru/apk-info/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/delvinru/apk-info/compare/v1.0.9...v1.0.10
 [1.0.9]: https://github.com/delvinru/apk-info/compare/v1.0.8...v1.0.9
