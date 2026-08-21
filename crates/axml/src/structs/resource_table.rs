@@ -967,6 +967,21 @@ impl ResTablePackage {
         None
     }
 
+    pub fn find_all_entries(&self, type_id: u8, entry_id: u16) -> Vec<&ResTableEntry> {
+        let mut results = Vec::new();
+
+        for type_map in self.resources.values() {
+            if let Some(entries) = type_map.get(&type_id)
+                && let Some(entry) = entries.get(entry_id as usize)
+                && !matches!(entry, ResTableEntry::NoEntry)
+            {
+                results.push(entry);
+            }
+        }
+
+        results
+    }
+
     /// Constructs the full name of the resource with the type
     #[inline]
     pub fn get_entry_full_name(&self, entry: &ResTableEntry, type_id: u8) -> Option<String> {
