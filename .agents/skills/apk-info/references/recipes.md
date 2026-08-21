@@ -222,22 +222,22 @@ apk-info extract ./app.apk -f 'classes\d+\.dex' -f 'assets/.*'
 
 BadPack malware tampers with zip headers to break standard parsers. The most common trick: set the compression method field to a bogus value (e.g. `55914`) while the data is actually stored or deflated normally. Standard tools like `unzip` and `7z` refuse to extract such entries; apk-info detects the mismatch and decompresses correctly.
 
-Check the compression type returned by `read()`:
+Check the compression type returned by `read()` — a short string hint such as `"stored_tampered"`:
 
 ```python
-from apk_info import APK, FileCompressionType
+from apk_info import APK
 
 apk = APK("./suspicious.apk")
 for name in apk.namelist():
     _, compression = apk.read(name)
-    if compression in (FileCompressionType.STORED_TAMPERED, FileCompressionType.DEFLATED_TAMPERED):
+    if compression in ("stored_tampered", "deflated_tampered"):
         print(f"TAMPERED: {name} ({compression})")
 ```
 
 CLI: `apk-info extract -v` prints tampered compression types in bold red:
 
 ```
-[*] extracted "AndroidManifest.xml" (StoredTampered)
+[~] extracted "AndroidManifest.xml" (StoredTampered)
 ```
 
 ### Real-world example: standard tools fail on BadPack
@@ -271,12 +271,13 @@ $ ls -la ./out/AndroidManifest.xml
 
 ```
 $ apk-info extract -v ./malware.apk -f AndroidManifest.xml
-[*] extracted "AndroidManifest.xml" (StoredTampered)   # BadPack detected, data recovered
+[~] extracted "AndroidManifest.xml" (StoredTampered)   # BadPack detected, data recovered
 
 $ apk-info show ./malware.apk
 Package Name: com.example.myapplication
 Main Activity: com.example.myapplication/.MainActivity
 Min SDK Version: 28
+Max SDK Version: -
 Target SDK Version: 33
 Application Label: PENNY
 ```
@@ -284,13 +285,13 @@ Application Label: PENNY
 The same analysis in Python:
 
 ```python
-from apk_info import APK, Signature, FileCompressionType
+from apk_info import APK, Signature
 
 apk = APK("./malware.apk")
 
 # The manifest is extractable — apk-info handles BadPack
 data, compression = apk.read("AndroidManifest.xml")
-print(compression)  # FileCompressionType.STORED_TAMPERED
+print(compression)  # "stored_tampered"
 print(len(data))    # 6604 — full manifest recovered
 
 # Quick triage
@@ -428,13 +429,13 @@ apk-info extract ./malware.apk -f 'AndroidManifest.xml' -f 'classes\d+\.dex' -f 
 ```
 
 ```python
-from apk_info import APK, FileCompressionType
+from apk_info import APK
 
 apk = APK("./malware.apk")
 
 # Read a file that unzip/7z couldn't extract
 data, compression = apk.read("AndroidManifest.xml")
-if compression in (FileCompressionType.STORED_TAMPERED, FileCompressionType.DEFLATED_TAMPERED):
+if compression in ("stored_tampered", "deflated_tampered"):
     print(f"warning: {compression} — BadPack technique detected")
 # data is always correctly decompressed regardless of compression type
 
@@ -470,7 +471,7 @@ print(f"unzip listed entries:          {unzip_listed}")
 tampered = []
 for name in apk.namelist():
     _, comp = apk.read(name)
-    if "TAMPERED" in repr(comp):
+    if "tampered" in comp:
         tampered.append(name)
 
 if tampered:

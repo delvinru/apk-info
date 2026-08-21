@@ -299,7 +299,7 @@ class APK:
             The sdk version as a string if present, otherwise None
         """
 
-    def get_comnpile_sdk_version_codename(self) -> str | None:
+    def get_compile_sdk_version_codename(self) -> str | None:
         """
         Retrieves the `compileSdkVersionCodename` from the `<manifest>` element.
 

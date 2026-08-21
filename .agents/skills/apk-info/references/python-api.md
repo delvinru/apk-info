@@ -30,7 +30,7 @@ uv pip install apk-info
 ```
 
 ```python
-from apk_info import APK, APKError, Signature, CertificateInfo, FileCompressionType
+from apk_info import APK, APKError, Signature, CertificateInfo
 ```
 
 ## Basic information
@@ -198,13 +198,16 @@ for sig in apk.get_signatures():
 ```python
 data, compression = apk.read("classes.dex")
 # data: bytes
-# compression: FileCompressionType — STORED | DEFLATED | STORED_TAMPERED | DEFLATED_TAMPERED
+# compression: str — "stored" | "deflated" | "stored_tampered" | "deflated_tampered"
 
 with open("out.bin", "wb") as f:
     f.write(data)
 ```
 
-`STORED_TAMPERED` / `DEFLATED_TAMPERED` indicate the BadPack technique — the declared compression method didn't match reality, but the data was still correctly decompressed.
+`read(filename: str) -> tuple[bytes, str]` reports the compression mode as a short
+string hint. `"stored_tampered"` / `"deflated_tampered"` indicate the BadPack
+technique — the declared compression method didn't match reality, but the data
+was still correctly decompressed.
 
 ## File listing & multidex
 

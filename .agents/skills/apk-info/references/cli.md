@@ -22,7 +22,7 @@ apk-info show <PATH> [<PATH> ...]
 
 **Options:**
 
-- `-s, --sigs` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers).
+- `-s, --sigs` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers). For `xapk`/`apkm` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
 - `-j, --json` — output as JSONL (one JSON object per APK) instead of colored text. Suitable for piping to `jq` or other tools.
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
 
@@ -56,11 +56,12 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
   "target_sdk_version": "34",
   "application_label": "Example App",
   "abis": ["arm64-v8a", "armeabi-v7a"],
-  "signatures": null
+  "signatures": null,
+  "container_signatures": null
 }
 ```
 
-The `signatures` field is `null` unless `--sigs` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`).
+The `signatures` field is `null` unless `--sigs` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also `null` unless `--sigs` is passed *and* the outer `xapk`/`apkm` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
 
 ## `extract` (alias `x`) — unpack the APK
 
