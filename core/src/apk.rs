@@ -42,9 +42,13 @@ pub struct Apk {
 impl Apk {
     fn get_arsc(zip: &ZipEntry) -> Result<Option<ARSC>, APKError> {
         match zip.read(RESOURCE_TABLE_PATH) {
-            Ok((data, _)) => Ok(Some(
-                ARSC::new(&mut &data[..]).map_err(APKError::ResourceError)?,
-            )),
+            // A present-but-corrupt `resources.arsc` is a known static-analysis
+            // evasion trick. The table is only needed to resolve reference-typed
+            // values, so a parse failure is treated the same as a missing table
+            // (`None`) rather than rejecting the whole APK — the manifest, DEX
+            // and signatures can still be analyzed. This matches how androguard
+            // and apkInspector ignore a broken resource table.
+            Ok((data, _)) => Ok(ARSC::new(&mut &data[..]).ok()),
             Err(_) => Ok(None),
         }
     }
@@ -907,6 +911,7 @@ impl Apk {
 #[cfg(test)]
 mod tests {
     use super::Apk;
+    use apk_info_zip::ZipEntry;
 
     #[test]
     fn valid_dex_names_are_accepted() {
@@ -967,5 +972,84 @@ mod tests {
         ] {
             assert!(!Apk::is_dex_name(invalid), "{invalid:?} should be rejected");
         }
+    }
+
+    /// Builds a minimal, well-formed zip archive with a single stored
+    /// (uncompressed) entry. Enough for [`Apk::get_arsc`] to locate and read
+    /// `resources.arsc` without pulling in the zip writer's test helpers.
+    fn single_stored_zip(name: &[u8], data: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+
+        // local file header
+        out.extend_from_slice(&0x04034b50u32.to_le_bytes());
+        out.extend_from_slice(&20u16.to_le_bytes()); // version needed
+        out.extend_from_slice(&0u16.to_le_bytes()); // flags
+        out.extend_from_slice(&0u16.to_le_bytes()); // method: stored
+        out.extend_from_slice(&0u16.to_le_bytes()); // mod time
+        out.extend_from_slice(&0x21u16.to_le_bytes()); // mod date
+        out.extend_from_slice(&0u32.to_le_bytes()); // crc (unchecked for stored)
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // csize
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // usize
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes()); // extra len
+        out.extend_from_slice(name);
+        out.extend_from_slice(data);
+
+        // central directory file header
+        let cd_offset = out.len() as u32;
+        out.extend_from_slice(&0x02014b50u32.to_le_bytes());
+        out.extend_from_slice(&20u16.to_le_bytes()); // version made by
+        out.extend_from_slice(&20u16.to_le_bytes()); // version needed
+        out.extend_from_slice(&0u16.to_le_bytes()); // flags
+        out.extend_from_slice(&0u16.to_le_bytes()); // method: stored
+        out.extend_from_slice(&0u16.to_le_bytes()); // mod time
+        out.extend_from_slice(&0x21u16.to_le_bytes()); // mod date
+        out.extend_from_slice(&0u32.to_le_bytes()); // crc
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // csize
+        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // usize
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes()); // extra len
+        out.extend_from_slice(&0u16.to_le_bytes()); // comment len
+        out.extend_from_slice(&0u16.to_le_bytes()); // disk number start
+        out.extend_from_slice(&0u16.to_le_bytes()); // internal attrs
+        out.extend_from_slice(&0u32.to_le_bytes()); // external attrs
+        out.extend_from_slice(&0u32.to_le_bytes()); // local header offset
+        out.extend_from_slice(name);
+        let cd_size = out.len() as u32 - cd_offset;
+
+        // end of central directory
+        out.extend_from_slice(&0x06054b50u32.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes()); // disk number
+        out.extend_from_slice(&0u16.to_le_bytes()); // cd start disk
+        out.extend_from_slice(&1u16.to_le_bytes()); // entries this disk
+        out.extend_from_slice(&1u16.to_le_bytes()); // total entries
+        out.extend_from_slice(&cd_size.to_le_bytes());
+        out.extend_from_slice(&cd_offset.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes()); // comment len
+
+        out
+    }
+
+    /// A present-but-corrupt `resources.arsc` (a static-analysis evasion trick)
+    /// must not be fatal: the whole APK is still parsed, `get_arsc` just yields
+    /// `None`, exactly as it does for a missing table.
+    #[test]
+    fn corrupt_arsc_is_non_fatal() {
+        let zip = ZipEntry::new(single_stored_zip(b"resources.arsc", b"NOT A VALID ARSC TABLE"))
+            .expect("test zip should parse");
+
+        let arsc = Apk::get_arsc(&zip).expect("corrupt resources.arsc must not be fatal");
+        assert!(arsc.is_none(), "corrupt resources.arsc should resolve to None");
+    }
+
+    /// Control: an archive without `resources.arsc` also yields `None`, so the
+    /// corrupt case is indistinguishable from the missing case downstream.
+    #[test]
+    fn missing_arsc_is_none() {
+        let zip = ZipEntry::new(single_stored_zip(b"AndroidManifest.xml", b"<manifest/>"))
+            .expect("test zip should parse");
+
+        let arsc = Apk::get_arsc(&zip).expect("missing resources.arsc must not be fatal");
+        assert!(arsc.is_none(), "missing resources.arsc should resolve to None");
     }
 }

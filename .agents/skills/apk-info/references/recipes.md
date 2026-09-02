@@ -414,6 +414,7 @@ Standard archive tools fail silently on malware-tampered APKs. apk-info was buil
 | `7z` / `7zz` | `Headers Error` on manifest | `AndroidManifest.xml` created as **0 bytes** (empty), exit 0 |
 | `7z` / `7zz` | `File name too long` (errno=63) | Garbage entries skipped, but exit 0 hides the partial extraction |
 | `jar` / Python `zipfile` | `BadZipFile` or unsupported compression | Entire archive rejected — no data extracted at all |
+| `apktool` / androguard (strict) | Parse error on a corrupt `resources.arsc` | Whole APK rejected — no manifest, DEX or signature analysis |
 
 The critical problem is **exit code 0** — scripts and pipelines that check `$?` will assume success and proceed with incomplete data.
 
