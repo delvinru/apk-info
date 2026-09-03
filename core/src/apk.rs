@@ -1035,11 +1035,17 @@ mod tests {
     /// `None`, exactly as it does for a missing table.
     #[test]
     fn corrupt_arsc_is_non_fatal() {
-        let zip = ZipEntry::new(single_stored_zip(b"resources.arsc", b"NOT A VALID ARSC TABLE"))
-            .expect("test zip should parse");
+        let zip = ZipEntry::new(single_stored_zip(
+            b"resources.arsc",
+            b"NOT A VALID ARSC TABLE",
+        ))
+        .expect("test zip should parse");
 
         let arsc = Apk::get_arsc(&zip).expect("corrupt resources.arsc must not be fatal");
-        assert!(arsc.is_none(), "corrupt resources.arsc should resolve to None");
+        assert!(
+            arsc.is_none(),
+            "corrupt resources.arsc should resolve to None"
+        );
     }
 
     /// Control: an archive without `resources.arsc` also yields `None`, so the
@@ -1050,6 +1056,9 @@ mod tests {
             .expect("test zip should parse");
 
         let arsc = Apk::get_arsc(&zip).expect("missing resources.arsc must not be fatal");
-        assert!(arsc.is_none(), "missing resources.arsc should resolve to None");
+        assert!(
+            arsc.is_none(),
+            "missing resources.arsc should resolve to None"
+        );
     }
 }
