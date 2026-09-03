@@ -910,8 +910,9 @@ impl Apk {
 
 #[cfg(test)]
 mod tests {
-    use super::Apk;
     use apk_info_zip::ZipEntry;
+
+    use super::Apk;
 
     #[test]
     fn valid_dex_names_are_accepted() {
