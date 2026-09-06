@@ -1,3 +1,4 @@
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::hash::Hash;
@@ -30,6 +31,16 @@ fn utf16_from_bytes(bytes: &[u8]) -> String {
     out
 }
 
+/// AOSP `offset_from16`: `0xffff` is `NO_ENTRY`, otherwise the offset is stored divided by 4.
+#[inline]
+fn offset_from16(off: u16) -> u32 {
+    if off == u16::MAX {
+        u32::MAX
+    } else {
+        u32::from(off) << 2
+    }
+}
+
 /// Header for a resource table
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#906>
@@ -42,7 +53,6 @@ pub struct ResTableHeader {
 }
 
 impl ResTableHeader {
-    #[inline(always)]
     pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTableHeader> {
         (ResChunkHeader::parse, le_u32)
             .map(|(header, package_count)| ResTableHeader {
@@ -64,7 +74,7 @@ pub struct ResTablePackageHeader {
     /// If this is a base package, its ID.
     ///
     /// Package IDs start at 1(corresponding to the value of the package bits in a resource identifier)
-    /// 0 meands this is not a base package
+    /// 0 means this is not a base package
     pub id: u32,
 
     /// Actual name of this package, \0-terminated
@@ -107,30 +117,27 @@ impl ResTablePackageHeader {
 
         let name = name.try_into().expect("expected 256 bytes for name field");
         let header_size = header.header_size;
-        let expected_size = Self::size_of() as u16;
+        let expected_size = Self::HEADER_SIZE as u16;
 
-        let mut type_id_offset = 0;
+        let type_id_offset = if header_size == expected_size {
+            // new structure, with type_id_offset
+            le_u32.parse_next(input)?
+        } else if header_size == expected_size - 4 {
+            // old structure, without type_id_offset
+            0
+        } else {
+            // malformed structure
+            let type_id_offset = le_u32.parse_next(input)?;
 
-        match header_size {
-            s if s == expected_size => {
-                // new structure, with type_id_offset
-                type_id_offset = le_u32.parse_next(input)?;
-            }
-            s if s == expected_size - 4 => {
-                // old structure, without type_id_offset
-            }
-            _ => {
-                // malformed structure
-                type_id_offset = le_u32.parse_next(input)?;
+            let skipped = header_size.saturating_sub(expected_size);
+            let _ = take(skipped as usize).parse_next(input)?;
+            info!(
+                "malformed resource table package, skipped {} bytes",
+                skipped
+            );
 
-                let skipped = header_size.saturating_sub(expected_size);
-                let _ = take(skipped as usize).parse_next(input)?;
-                info!(
-                    "malformed resource table package, skipped {} bytes",
-                    skipped
-                );
-            }
-        }
+            type_id_offset
+        };
 
         Ok(ResTablePackageHeader {
             header,
@@ -149,19 +156,15 @@ impl ResTablePackageHeader {
         utf16_from_bytes(&self.name)
     }
 
-    /// Get size in bytes of this structure
-    #[inline(always)]
-    pub const fn size_of() -> usize {
-        // header - ResChunkHeader
-        // 4 bytes - string_count
-        // 256 bytes - name
-        // 4 bytes - type_strings
-        // 4 bytes - last_public_type
-        // 4 bytes - key_strings
-        // 4 bytes - last_public_key
-        // 4 bytes - type_id_offset
-        ResChunkHeader::size_of() + 4 + 256 + 4 + 4 + 4 + 4 + 4
-    }
+    /// Size in bytes of this structure
+    pub const HEADER_SIZE: usize = ResChunkHeader::size_of() // chunk header
+        + 4   // id
+        + 256 // name
+        + 4   // type_strings
+        + 4   // last_public_type
+        + 4   // key_strings
+        + 4   // last_public_key
+        + 4; // type_id_offset
 }
 
 impl fmt::Debug for ResTablePackageHeader {
@@ -211,7 +214,6 @@ pub struct ResTableTypeSpec {
 }
 
 impl ResTableTypeSpec {
-    #[inline]
     pub(crate) fn parse(
         header: ResChunkHeader,
         input: &mut &[u8],
@@ -317,7 +319,6 @@ pub struct ResTableMapEntry {
 }
 
 impl ResTableMapEntry {
-    #[inline(always)]
     pub(crate) fn parse(
         size: u16,
         flags: u16,
@@ -418,7 +419,6 @@ impl ResTableEntry {
     }
 
     #[inline(always)]
-    // TODO: don't know how to handle this flag for now
     pub fn is_weak(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_WEAK)
     }
@@ -429,7 +429,6 @@ impl ResTableEntry {
     }
 
     #[inline(always)]
-    // TODO: don't know how to handle this flag for now
     pub fn uses_feature_flags(flags: u16) -> bool {
         ResTableFlag::from_bits_truncate(flags).contains(ResTableFlag::FLAG_USES_FEATURE_FLAGS)
     }
@@ -442,7 +441,7 @@ bitflags::bitflags! {
         /// and a binary search is used to find the key. Only available on platforms >= O.
         /// Mark any types that use this with a v26 qualifier to prevent runtime issues on older
         /// platforms.
-        const SPARCE   = 0x01;
+        const SPARSE = 0x01;
 
         /// If set, the offsets to the entries are encoded in 16-bit, real_offset = offset * 4u
         /// An 16-bit offset of 0xffffu means a NO_ENTRY
@@ -483,7 +482,9 @@ pub struct ResTableType {
     /// This always must be last.
     pub config: ResTableConfig,
 
-    pub entry_offsets: Vec<u32>,
+    /// Sparse tables only: entry id per position in [`ResTableType::entries`];
+    /// `None` for dense/offset16, where id == position.
+    pub(crate) entry_ids: Option<Vec<u16>>,
 
     /// Defined entries in this type
     pub entries: Vec<ResTableEntry>,
@@ -517,45 +518,41 @@ impl ResTableType {
                 entry_count,
                 entries_start,
                 config,
-                entry_offsets: Vec::new(),
+                entry_ids: None,
                 entries: Vec::new(),
             });
         }
 
-        // handle sparse flag based on jadx code
+        // Entry index array, following jadx:
         // https://github.com/skylot/jadx/blob/master/jadx-core/src/main/java/jadx/core/xmlgen/ResTableBinaryParser.java#L276
-        let entry_offsets: Vec<u32> = if Self::is_sparse(flags) {
-            repeat(
-                entry_count as usize,
-                (le_u16, le_u16).map(|(_, x)| {
-                    if x == u16::MAX {
-                        u32::MAX
-                    } else {
-                        u32::from(x) << 2
-                    }
-                }),
-            )
-            .parse_next(input)?
+        // Dense/offset16: id == position, ids not stored (`None`). Sparse: {idx, offset}
+        // per entry (AOSP `ResTable_sparseTypeEntry`), idx maps an id to its packed position.
+        let (entry_ids, entry_offsets): (Option<Vec<u16>>, Vec<u32>) = if Self::is_sparse(flags) {
+            let pairs: Vec<(u16, u16)> =
+                repeat(entry_count as usize, (le_u16, le_u16)).parse_next(input)?;
+
+            // AOSP has no NO_ENTRY sentinel in sparse entries; jadx treats 0xffff
+            // as one anyway, so do the same.
+            let (ids, offsets): (Vec<u16>, Vec<u32>) = pairs
+                .into_iter()
+                .map(|(idx, offset)| (idx, offset_from16(offset)))
+                .unzip();
+            (Some(ids), offsets)
         } else if Self::is_offset16(flags) {
-            repeat(
-                entry_count as usize,
-                le_u16.map(|x| {
-                    if x == u16::MAX {
-                        u32::MAX
-                    } else {
-                        u32::from(x) << 2
-                    }
-                }),
-            )
-            .parse_next(input)?
+            let offsets =
+                repeat(entry_count as usize, le_u16.map(offset_from16)).parse_next(input)?;
+            (None, offsets)
         } else {
-            repeat(entry_count as usize, le_u32).parse_next(input)?
+            (
+                None,
+                repeat(entry_count as usize, le_u32).parse_next(input)?,
+            )
         };
 
-        // whatsapp is doing some kind of crap with offsets, so we need to make a slice on this particular piece of data
-        // da8963f347c26ede58c1087690f1af8ef308cd778c5aaf58094eeb57b6962b21
-        // also sometimes 2 bytes are missing - wtf? a kind of alignment, not found anywhere?
-        // jeb, jadx - they just skip it, so and i
+        // WhatsApp (da8963f347c26ede58c1087690f1af8ef308cd778c5aaf58094eeb57b6962b21)
+        // declares offsets past the chunk, so the entries region is sliced from the
+        // remaining input. Some APKs lack up to 2 alignment bytes here; JEB and jadx
+        // skip them, so do we.
         let alignment_bytes = start_chunk.saturating_sub(input.len()) & 0x3;
         if alignment_bytes != 0 {
             debug!("skipping {} alignment bytes", alignment_bytes);
@@ -595,14 +592,14 @@ impl ResTableType {
             entry_count,
             entries_start,
             config,
-            entry_offsets,
+            entry_ids,
             entries,
         })
     }
 
     #[inline(always)]
     pub fn is_sparse(flags: u8) -> bool {
-        ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::SPARCE)
+        ResTableTypeFlags::from_bits_truncate(flags).contains(ResTableTypeFlags::SPARSE)
     }
 
     #[inline(always)]
@@ -615,7 +612,7 @@ impl ResTableType {
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1798>
 pub struct ResTableLibraryEntry {
-    /// The package-i this shared library was assigned at build time
+    /// The package-id this shared library was assigned at build time
     ///
     /// We use a uint32 to keep the structure aligned on a uint32 boundary
     pub package_id: u32,
@@ -670,7 +667,6 @@ pub struct ResTableLibrary {
 }
 
 impl ResTableLibrary {
-    #[inline(always)]
     pub(crate) fn parse(header: ResChunkHeader, input: &mut &[u8]) -> ModalResult<ResTableLibrary> {
         let count = le_u32.parse_next(input)?;
         let entries = repeat(count as usize, ResTableLibraryEntry::parse).parse_next(input)?;
@@ -683,13 +679,13 @@ impl ResTableLibrary {
     }
 }
 
-/// Specifies the set of resourcers that are explicitly allowed to be overlaid by RPOs
+/// Specifies the set of resources that are explicitly allowed to be overlaid by RPOs
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1834>
 pub struct ResTableOverlayble {
     pub header: ResChunkHeader,
 
-    /// The name of the overlaybalbe set of resources that overlays target.
+    /// The name of the overlayable set of resources that overlays target.
     pub name: [u8; 512],
 
     /// The component responsible for enabling and disabling overlays targeting this chunk.
@@ -697,7 +693,6 @@ pub struct ResTableOverlayble {
 }
 
 impl ResTableOverlayble {
-    #[inline(always)]
     pub(crate) fn parse(
         header: ResChunkHeader,
         input: &mut &[u8],
@@ -778,7 +773,6 @@ pub struct ResTableOverlayblePolicy {
 }
 
 impl ResTableOverlayblePolicy {
-    #[inline(always)]
     pub(crate) fn parse(
         header: ResChunkHeader,
         input: &mut &[u8],
@@ -822,7 +816,7 @@ impl ResTableStagedAliasEntry {
     }
 }
 
-/// A map that allows rewriting staged (non-finalized) resource ids to therir finalized counterparts
+/// A map that allows rewriting staged (non-finalized) resource ids to their finalized counterparts
 ///
 /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/libs/androidfw/include/androidfw/ResourceTypes.h#1811>
 #[derive(Debug)]
@@ -836,7 +830,6 @@ pub struct ResTableStagedAlias {
 }
 
 impl ResTableStagedAlias {
-    #[inline(always)]
     pub(crate) fn parse(
         header: ResChunkHeader,
         input: &mut &[u8],
@@ -852,15 +845,50 @@ impl ResTableStagedAlias {
     }
 }
 
+/// The stored entry set for a single `(config, type)` pair.
+#[derive(Debug)]
+pub struct ResTableTypeEntries {
+    /// Real entry id per position in [`ResTableTypeEntries::entries`]; `None` for
+    /// dense/offset16 tables where the id is the position itself.
+    pub entry_ids: Option<Vec<u16>>,
+
+    /// The parsed entries, in file order.
+    pub entries: Vec<ResTableEntry>,
+}
+
+impl ResTableTypeEntries {
+    /// Resolves `entry_id` to its stored entry.
+    ///
+    /// Dense/offset16: id == position. Sparse: explicit id per packed entry, sorted
+    /// (AOSP `ResTable_sparseTypeEntry`), so binary search; unsorted (tampered)
+    /// tables get a linear scan.
+    pub fn find(&self, entry_id: u16) -> Option<&ResTableEntry> {
+        let position = match &self.entry_ids {
+            // dense/offset16: position is the id
+            None => entry_id as usize,
+            // sparse: ids are sorted, binary search
+            Some(ids) => match ids.binary_search(&entry_id) {
+                Ok(position) => position,
+                // missed by the binary search: ids may be unsorted
+                Err(_) => ids.iter().position(|&id| id == entry_id)?,
+            },
+        };
+
+        self.entries
+            .get(position)
+            .filter(|entry| !matches!(entry, ResTableEntry::NoEntry))
+    }
+}
+
 #[derive(Debug)]
 pub struct ResTablePackage {
     pub header: ResTablePackageHeader,
     pub type_strings: StringPool,
     pub key_strings: StringPool,
 
-    // requires fastloop by resource id => resource
-    // for example: 0x7f010000 => anim/abc_fade_in or res/anim/abc_fade_in.xml type=XML
-    pub resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>>,
+    /// Entries indexed by config, then type id, for lookup by resource id
+    /// (e.g. `0x7f010000` → `anim/abc_fade_in`)
+    pub resources: BTreeMap<ResTableConfig, HashMap<u8, ResTableTypeEntries>>,
 }
 
 impl ResTablePackage {
@@ -872,7 +900,7 @@ impl ResTablePackage {
         )
             .parse_next(input)?;
 
-        let mut resources: BTreeMap<ResTableConfig, HashMap<u8, Vec<ResTableEntry>>> =
+        let mut resources: BTreeMap<ResTableConfig, HashMap<u8, ResTableTypeEntries>> =
             BTreeMap::new();
 
         loop {
@@ -893,20 +921,29 @@ impl ResTablePackage {
 
             match header.type_ {
                 ResourceHeaderType::TableTypeSpec => {
-                    // idk what should i do with this value
+                    // parsed, but the data is not used yet
                     let _ = ResTableTypeSpec::parse(header, input)?;
                 }
                 ResourceHeaderType::TableType => {
-                    let type_type = ResTableType::parse(header, input)?;
+                    let type_chunk = ResTableType::parse(header, input)?;
 
-                    resources
-                        .entry(type_type.config)
-                        .or_default()
-                        .entry(type_type.id)
-                        .or_insert_with(|| type_type.entries);
+                    let ResTableType {
+                        id,
+                        config,
+                        entry_ids,
+                        entries,
+                        ..
+                    } = type_chunk;
+
+                    let type_map = resources.entry(config).or_default();
+                    if let Entry::Vacant(slot) = type_map.entry(id) {
+                        slot.insert(ResTableTypeEntries { entry_ids, entries });
+                    } else {
+                        debug!("skipped a duplicate type chunk (id {})", id);
+                    }
                 }
                 ResourceHeaderType::TableLibrary => {
-                    // idk what should i do with this value
+                    // parsed, but the data is not used yet
                     let _ = ResTableLibrary::parse(header, input)?;
                 }
                 ResourceHeaderType::TableOverlayable => {
@@ -937,34 +974,30 @@ impl ResTablePackage {
         type_id: u8,
         entry_id: u16,
     ) -> Option<&ResTableEntry> {
-        // fast track? (exact config)
-        match self
+        fn lookup(
+            type_map: &HashMap<u8, ResTableTypeEntries>,
+            type_id: u8,
+            entry_id: u16,
+        ) -> Option<&ResTableEntry> {
+            type_map
+                .get(&type_id)
+                .and_then(|entries| entries.find(entry_id))
+        }
+
+        // exact configuration first
+        if let Some(entry) = self
             .resources
             .get(config)
-            .and_then(|type_map| type_map.get(&type_id))
-            .and_then(|entries| entries.get(entry_id as usize))
+            .and_then(|type_map| lookup(type_map, type_id, entry_id))
         {
-            Some(entry) if !matches!(entry, ResTableEntry::NoEntry) => return Some(entry),
-            _ => {}
+            return Some(entry);
         }
 
-        for (other_config, type_map) in &self.resources {
-            // skip original config
-            if other_config == config {
-                continue;
-            }
-
-            match type_map
-                .get(&type_id)
-                .and_then(|entries| entries.get(entry_id as usize))
-            {
-                Some(entry) if !matches!(entry, ResTableEntry::NoEntry) => return Some(entry),
-                _ => {}
-            }
-        }
-
-        // can't find anything - gg
-        None
+        // then any other configuration
+        self.resources
+            .iter()
+            .filter(|(other_config, _)| *other_config != config)
+            .find_map(|(_, type_map)| lookup(type_map, type_id, entry_id))
     }
 
     /// Constructs the full name of the resource with the type
@@ -979,12 +1012,177 @@ impl ResTablePackage {
 
     /// Allows you to get the name of a resource depending on its type.
     #[inline]
-    fn get_entry_key(&self, entry: &ResTableEntry) -> Option<&String> {
+    fn get_entry_key(&self, entry: &ResTableEntry) -> Option<&str> {
         match entry {
-            ResTableEntry::Compact(e) => self.key_strings.get(e.data),
-            ResTableEntry::Complex(e) => self.key_strings.get(e.index),
-            ResTableEntry::Default(e) => self.key_strings.get(e.index),
+            ResTableEntry::Compact(e) => self.key_strings.get(u32::from(e.key)).map(String::as_str),
+            ResTableEntry::Complex(e) => self.key_strings.get(e.index).map(String::as_str),
+            ResTableEntry::Default(e) => self.key_strings.get(e.index).map(String::as_str),
             ResTableEntry::NoEntry => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::structs::{ResStringPoolHeader, ResourceValueType};
+
+    fn get_string_pool(strings: &[&str]) -> StringPool {
+        StringPool {
+            header: ResStringPoolHeader {
+                header: ResChunkHeader::default(),
+                string_count: strings.len() as u32,
+                style_count: 0,
+                flags: 0,
+                strings_start: 0,
+                styles_start: 0,
+            },
+            strings: strings.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn default_entry(key_index: u32) -> ResTableEntry {
+        ResTableEntry::Default(ResTableEntryDefault {
+            size: 8,
+            flags: 0,
+            index: key_index,
+            value: ResourceValue {
+                size: 8,
+                res: 0,
+                data_type: ResourceValueType::String,
+                data: 0,
+            },
+        })
+    }
+
+    fn pkg(entries_map: HashMap<u8, ResTableTypeEntries>) -> ResTablePackage {
+        let mut resources = BTreeMap::new();
+        resources.insert(ResTableConfig::default(), entries_map);
+
+        ResTablePackage {
+            header: ResTablePackageHeader {
+                header: ResChunkHeader::default(),
+                id: 0x7f,
+                name: [0; 256],
+                type_strings: 0,
+                last_public_type: 0,
+                key_strings: 0,
+                last_public_key: 0,
+                type_id_offset: 0,
+            },
+            type_strings: get_string_pool(&["string"]),
+            key_strings: get_string_pool(&[
+                "application_name",
+                "common_google_play_services_try_again_text",
+            ]),
+            resources,
+        }
+    }
+
+    /// Reproduces the Gemini base.apk case: a SPARSE string type where the real
+    /// entry id 0x24 (application_name) lives at vector position 21, and entry
+    /// id 0x51 (common_google_play_services_try_again_text) lives at position 36.
+    ///
+    /// Before the fix, `find_entry` indexed the entries vector by `entry_id`, so a
+    /// lookup of 0x24 returned position 36 — the wrong resource.
+    #[test]
+    fn sparse_find_entry_uses_real_entry_id() {
+        let mut entry_ids: Vec<u16> = (0..37).map(|i| i as u16).collect();
+        entry_ids[21] = 0x0024;
+        entry_ids[36] = 0x0051;
+
+        let mut entries: Vec<ResTableEntry> = (0..37).map(|_| ResTableEntry::NoEntry).collect();
+        entries[21] = default_entry(0); // application_name
+        entries[36] = default_entry(1); // common_google_play_services_try_again_text
+
+        let mut type_map = HashMap::new();
+        type_map.insert(
+            1u8, // type id of "string" (index 0)
+            ResTableTypeEntries {
+                entry_ids: Some(entry_ids),
+                entries,
+            },
+        );
+
+        let pkg = pkg(type_map);
+        let config = ResTableConfig::default();
+
+        // 0x7f130024 => application_name, sitting at position 21, not 36.
+        let e24 = pkg.find_entry(&config, 1, 0x0024).expect("entry 0x24");
+        assert_eq!(
+            pkg.get_entry_full_name(e24, 1).as_deref(),
+            Some("string/application_name")
+        );
+
+        // 0x7f130051 => common_google_play_services_try_again_text at position 36.
+        let e51 = pkg.find_entry(&config, 1, 0x0051).expect("entry 0x51");
+        assert_eq!(
+            pkg.get_entry_full_name(e51, 1).as_deref(),
+            Some("string/common_google_play_services_try_again_text")
+        );
+
+        // undeclared ids resolve to nothing
+        assert!(pkg.find_entry(&config, 1, 0x9999).is_none());
+    }
+
+    /// Dense/offset16 tables are indexed by position: `None` ids mean `entry_id` is
+    /// the vector index, and no identity sequence is ever allocated.
+    #[test]
+    fn dense_find_entry_indexes_by_position() {
+        let mut entries: Vec<ResTableEntry> = (0..3).map(|_| ResTableEntry::NoEntry).collect();
+        entries[2] = default_entry(0); // application_name at id 2 == position 2
+
+        let mut type_map = HashMap::new();
+        type_map.insert(
+            1u8,
+            ResTableTypeEntries {
+                entry_ids: None,
+                entries,
+            },
+        );
+
+        let pkg = pkg(type_map);
+        let config = ResTableConfig::default();
+
+        // id == position: entry 2 is found at index 2
+        let e = pkg.find_entry(&config, 1, 0x0002).expect("entry 2");
+        assert_eq!(
+            pkg.get_entry_full_name(e, 1).as_deref(),
+            Some("string/application_name")
+        );
+        // out-of-range entries don't resolve
+        assert!(pkg.find_entry(&config, 1, 0x0007).is_none());
+    }
+
+    /// A tampered sparse table can break the by-id sort order AOSP relies on;
+    /// the fallback scan must still find packed entries.
+    #[test]
+    fn sparse_find_entry_falls_back_to_linear_scan_for_unsorted_ids() {
+        // deliberately unsorted: 0x24 packed after larger ids
+        let entry_ids = vec![0x0051, 0x0099, 0x0024];
+        let entries = vec![
+            default_entry(1), // common_google_play_services_try_again_text
+            ResTableEntry::NoEntry,
+            default_entry(0), // application_name
+        ];
+
+        let mut type_map = HashMap::new();
+        type_map.insert(
+            1u8,
+            ResTableTypeEntries {
+                entry_ids: Some(entry_ids),
+                entries,
+            },
+        );
+
+        let pkg = pkg(type_map);
+        let config = ResTableConfig::default();
+
+        // the binary search misses 0x24 here; the fallback finds it at position 2
+        let e24 = pkg.find_entry(&config, 1, 0x0024).expect("entry 0x24");
+        assert_eq!(
+            pkg.get_entry_full_name(e24, 1).as_deref(),
+            Some("string/application_name")
+        );
     }
 }

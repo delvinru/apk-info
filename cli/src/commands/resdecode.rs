@@ -69,7 +69,7 @@ pub(crate) fn decode_arsc(out_dir: &Path, bytes: &[u8]) -> Result<()> {
             let file_map = files.entry(folder).or_default();
 
             for (type_id, entries) in type_map {
-                for entry in entries {
+                for entry in &entries.entries {
                     if matches!(entry, ResTableEntry::NoEntry) {
                         continue;
                     }
@@ -211,7 +211,7 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
             };
 
             for (type_id, entries) in type_map {
-                for entry in entries {
+                for entry in &entries.entries {
                     if matches!(entry, ResTableEntry::NoEntry) {
                         continue;
                     }
