@@ -66,6 +66,11 @@ enum Commands {
         /// locale/configuration string variations are available in one place.
         #[arg(short, long, default_value_t = false)]
         resources: bool,
+
+        /// List archive contents (sizes, compression method, tampered entries)
+        /// instead of extracting
+        #[arg(short, long, default_value_t = false)]
+        list: bool,
     },
     /// Read and pretty-print binary AndroidManifest.xml
     Axml {
@@ -113,7 +118,8 @@ fn main() {
             files,
             verbose,
             resources,
-        }) => command_extract(paths, output, files, *verbose, *resources),
+            list,
+        }) => command_extract(paths, output, files, *verbose, *resources, *list),
         Some(Commands::Axml { path }) => command_axml(path),
         Some(Commands::Repack { paths, output }) => command_repack(paths, output),
         Some(Commands::Completion { shell }) => {

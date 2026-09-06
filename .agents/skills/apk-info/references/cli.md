@@ -68,7 +68,7 @@ The `signatures` field is `null` unless `--sigs` is passed, in which case it con
 Extracts files from the APK's zip archive to disk.
 
 ```bash
-apk-info extract <PATH> [<PATH> ...] [-o <OUTPUT_DIR>] [-f <REGEX> ...]
+apk-info extract <PATH> [<PATH> ...] [-o <OUTPUT_DIR>] [-f <REGEX> ...] [-l]
 ```
 
 **Options:**
@@ -77,6 +77,7 @@ apk-info extract <PATH> [<PATH> ...] [-o <OUTPUT_DIR>] [-f <REGEX> ...]
 - `-f, --files <REGEX>` — only extract files whose name matches the regex. Can be repeated to allow multiple patterns. Any match passes.
 - `-v, --verbose` — print progress for every extracted file. By default only "interesting" files are shown: `AndroidManifest.xml`, `resources.arsc`, `.so` libraries, and tampered (BadPack) entries; all other files are printed only in verbose mode.
 - `-r, --resources` — apktool-style resource decode (see below).
+- `-l, --list` — list archive contents instead of extracting: name, uncompressed/compressed size and compression method per entry, sorted alphabetically. Honors `-f` filters, writes nothing to disk (`-o`, `-v`, `-r` are ignored). Tampered entries (local header ≠ central directory, BadPack) are marked with `!` and shown in red.
 
 **Examples:**
 
@@ -95,6 +96,12 @@ apk-info extract ./app.apk -f 'lib/.*\.so'
 
 # Decode resources apktool-style
 apk-info extract ./app.apk -r
+
+# List archive contents without extracting
+apk-info extract -l ./app.apk
+
+# List only DEX entries
+apk-info extract -l -f 'classes\d*\.dex' ./app.apk
 ```
 
 ### `-r, --resources` — apktool-style resource decode

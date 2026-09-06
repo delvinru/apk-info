@@ -25,13 +25,78 @@ pub(crate) fn command_extract(
     files: &[String],
     verbose: bool,
     resources: bool,
+    list: bool,
 ) -> Result<()> {
     let all_files = get_all_files(paths);
+
+    if list {
+        let regexes = compile_regexes(files)?;
+        return all_files
+            .into_iter()
+            .try_for_each(|path| list_archive(&path, &regexes));
+    }
 
     all_files.into_iter().try_for_each(|path| {
         let out_dir = make_output_dir(&path, output);
         extract(&path, &out_dir, files, verbose, resources)
     })
+}
+
+fn compile_regexes(files: &[String]) -> Result<Vec<Regex>> {
+    files
+        .iter()
+        .map(|file| Regex::new(file).with_context(|| format!("invalid regex: {:?}", file)))
+        .collect()
+}
+
+/// `--list` mode: prints the archive contents without extracting anything.
+///
+/// Names are sorted: the central directory is stored in a hash map, so its
+/// iteration order is random per process.
+fn list_archive(path: &Path, regexes: &[Regex]) -> Result<()> {
+    let buf = std::fs::read(path).with_context(|| format!("can't open file: {:?}", path))?;
+    let zip = ZipEntry::new(buf)?;
+
+    let mut names: Vec<&str> = zip
+        .namelist()
+        .filter(|name| regexes.is_empty() || regexes.iter().any(|re| re.is_match(name)))
+        .collect();
+    names.sort_unstable();
+
+    println!(
+        "[*] listing {} entries of \"{}\"",
+        names.len(),
+        path.display()
+    );
+    println!("{:>10}  {:<12}{:>10}  name", "size", "method", "csize");
+
+    for name in &names {
+        let Some(info) = zip.entry_info(name) else {
+            println!("[-] can't read entry metadata of {:?}", name);
+            continue;
+        };
+
+        let mut method = match info.compression_method {
+            0 => "Stored".to_string(),
+            8 => "Deflate".to_string(),
+            other => format!("Other({other})"),
+        };
+        if info.tampered {
+            method.push('!');
+        }
+
+        let row = format!(
+            "{:>10}  {:<12}{:>10}  {}",
+            info.uncompressed_size, method, info.compressed_size, name
+        );
+        if info.tampered {
+            println!("{}", row.red());
+        } else {
+            println!("{row}");
+        }
+    }
+
+    Ok(())
 }
 
 fn make_output_dir(path: &Path, output: &Option<PathBuf>) -> PathBuf {
@@ -188,10 +253,7 @@ fn extract(
     std::fs::create_dir_all(out_dir)
         .with_context(|| format!("can't create output directory {:?}", out_dir))?;
 
-    let regexes: Vec<Regex> = files
-        .iter()
-        .map(|file| Regex::new(file).with_context(|| format!("invalid regex: {:?}", file)))
-        .collect::<Result<Vec<_>>>()?;
+    let regexes = compile_regexes(files)?;
 
     if resources && let Err(e) = decode_resources(out_dir, &zip) {
         println!("[-] can't decode resources - {}", e.to_string().red());

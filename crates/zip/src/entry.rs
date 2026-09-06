@@ -51,6 +51,22 @@ pub struct ZipEntry {
     local_headers: AHashMap<Arc<str>, LocalFileHeader>,
 }
 
+/// Metadata of a single archive entry, without reading its data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntryInfo {
+    /// Compression method declared in the central directory (`0` = stored, `8` = deflate)
+    pub compression_method: u16,
+
+    /// Compressed size, in bytes
+    pub compressed_size: u32,
+
+    /// Uncompressed size, in bytes
+    pub uncompressed_size: u32,
+
+    /// The local header's compression method disagrees with the central directory's
+    pub tampered: bool,
+}
+
 /// Implementation of basic methods
 impl ZipEntry {
     /// Recovers the real local file header offset for an entry whose
@@ -176,6 +192,47 @@ impl ZipEntry {
     /// ```
     pub fn namelist(&self) -> impl Iterator<Item = &str> + '_ {
         self.central_directory.entries.keys().map(|x| x.as_ref())
+    }
+
+    /// Returns metadata of `filename` (sizes, compression method, tamper flag)
+    /// without reading or decompressing its data.
+    ///
+    /// The tamper flag mirrors the detection of [`ZipEntry::read`]: the entry is
+    /// marked tampered when its local header's compression method disagrees with
+    /// the central directory's.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use apk_info_zip::ZipEntry;
+    /// # let zip_data = std::fs::read("archive.zip").unwrap();
+    /// # let zip = ZipEntry::new(zip_data).unwrap();
+    /// let info = zip.entry_info("example.txt").expect("failed to get entry info");
+    /// println!("{} bytes, tampered: {}", info.uncompressed_size, info.tampered);
+    /// ```
+    pub fn entry_info(&self, filename: &str) -> Option<EntryInfo> {
+        let entry = self.central_directory.entries.get(filename)?;
+
+        let local_method = match self.local_headers.get(filename) {
+            Some(header) => header.compression_method,
+            // index miss = corrupt claim; lazily recover this one entry
+            None => {
+                let offset = self.find_local_header_offset(
+                    entry.local_header_offset as usize,
+                    entry.file_name.as_bytes(),
+                )?;
+                LocalFileHeader::parse(&self.input, offset)
+                    .ok()?
+                    .compression_method
+            }
+        };
+
+        Some(EntryInfo {
+            compression_method: entry.compression_method,
+            compressed_size: entry.compressed_size,
+            uncompressed_size: entry.uncompressed_size,
+            tampered: local_method != entry.compression_method,
+        })
     }
 
     /// Reads the contents of a file from the ZIP archive.
