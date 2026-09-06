@@ -148,25 +148,44 @@ impl CentralDirectoryEntry {
 #[derive(Debug)]
 pub(crate) struct CentralDirectory {
     pub(crate) entries: AHashMap<Arc<str>, CentralDirectoryEntry>,
+
+    /// Entry names in central directory record order (first occurrence wins).
+    ///
+    /// Iteration over the hash map is random per process; extraction and repack
+    /// follow the file's own order instead, so it is preserved here.
+    pub(crate) ordered_names: Vec<Arc<str>>,
 }
 
 impl CentralDirectory {
-    #[inline(always)]
     pub(crate) fn parse(input: &[u8], cd_offset: usize) -> ModalResult<CentralDirectory> {
         let mut input = input
             .get(cd_offset..)
             .ok_or(ErrMode::Incomplete(Needed::Unknown))?;
 
-        let entries = repeat::<_, CentralDirectoryEntry, Vec<CentralDirectoryEntry>, _, _>(
+        let parsed = repeat::<_, CentralDirectoryEntry, Vec<CentralDirectoryEntry>, _, _>(
             0..,
             CentralDirectoryEntry::parse,
         )
-        .parse_next(&mut input)?
-        .into_iter()
-        .map(|entry| (Arc::clone(&entry.file_name), entry))
-        .collect();
+        .parse_next(&mut input)?;
 
-        Ok(CentralDirectory { entries })
+        // `read` looks names up in the map, so a duplicated name keeps the last
+        // record's data; `ordered_names` keeps the first record's position.
+        let mut entries = AHashMap::with_capacity(parsed.len());
+        let mut ordered_names = Vec::with_capacity(parsed.len());
+        for entry in parsed {
+            let name = Arc::clone(&entry.file_name);
+            if entries
+                .insert(Arc::clone(&entry.file_name), entry)
+                .is_none()
+            {
+                ordered_names.push(name);
+            }
+        }
+
+        Ok(CentralDirectory {
+            entries,
+            ordered_names,
+        })
     }
 }
 

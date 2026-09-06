@@ -178,7 +178,12 @@ impl ZipEntry {
         })
     }
 
-    /// Returns an iterator over the names of all files in the ZIP archive.
+    /// Returns an iterator over the names of all files in the ZIP archive,
+    /// in central directory record order.
+    ///
+    /// The order comes straight from the archive, so repeated parses of the
+    /// same file yield the same sequence (unlike hash map iteration, which is
+    /// random per process).
     ///
     /// # Examples
     ///
@@ -191,7 +196,10 @@ impl ZipEntry {
     /// }
     /// ```
     pub fn namelist(&self) -> impl Iterator<Item = &str> + '_ {
-        self.central_directory.entries.keys().map(|x| x.as_ref())
+        self.central_directory
+            .ordered_names
+            .iter()
+            .map(|x| x.as_ref())
     }
 
     /// Returns metadata of `filename` (sizes, compression method, tamper flag)
@@ -979,6 +987,23 @@ mod tests {
         assert_eq!(zip.namelist().count(), 2);
         assert_eq!(zip.read("a.txt").unwrap().0, b"a");
         assert_eq!(zip.read("b.txt").unwrap().0, b"bb");
+    }
+
+    #[test]
+    fn namelist_follows_central_directory_order() {
+        let entries: Vec<(&str, &[u8])> = ["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"]
+            .iter()
+            .map(|n| (*n, n.as_bytes()))
+            .collect();
+        let (data, _) = build_archive(&entries);
+
+        // two independent parses: hash map iteration is random per instance, so
+        // both matching the archive order proves the names come from the CD records
+        let zip1 = ZipEntry::new(data.clone()).unwrap();
+        let zip2 = ZipEntry::new(data).unwrap();
+        let expected = vec!["a.txt", "b.txt", "c.txt", "d.txt", "e.txt"];
+        assert_eq!(zip1.namelist().collect::<Vec<_>>(), expected);
+        assert_eq!(zip2.namelist().collect::<Vec<_>>(), expected);
     }
 
     #[test]

@@ -31,15 +31,25 @@ pub(crate) fn command_extract(
 
     if list {
         let regexes = compile_regexes(files)?;
-        return all_files
-            .into_iter()
-            .try_for_each(|path| list_archive(&path, &regexes));
+        for path in all_files {
+            if let Err(e) = list_archive(&path, &regexes) {
+                println!("[-] can't list {:?} - {}", path, e.to_string().red().bold());
+            }
+        }
+        return Ok(());
     }
 
-    all_files.into_iter().try_for_each(|path| {
+    for path in all_files {
         let out_dir = make_output_dir(&path, output);
-        extract(&path, &out_dir, files, verbose, resources)
-    })
+        if let Err(e) = extract(&path, &out_dir, files, verbose, resources) {
+            println!(
+                "[-] can't extract {:?} - {}",
+                path,
+                e.to_string().red().bold()
+            );
+        }
+    }
+    Ok(())
 }
 
 fn compile_regexes(files: &[String]) -> Result<Vec<Regex>> {
@@ -231,8 +241,14 @@ fn write_bytes(path: &Path, contents: &[u8]) -> Result<()> {
         return Ok(());
     }
 
-    let mut f =
-        std::fs::File::create(path).with_context(|| format!("can't create file {:?}", path))?;
+    let mut f = match std::fs::File::create(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::IsADirectory => {
+            println!("[-] can't create file {:?} - occupied by a directory", path);
+            return Ok(());
+        }
+        Err(e) => return Err(e).with_context(|| format!("can't create file {:?}", path)),
+    };
     f.write_all(contents)
         .with_context(|| format!("can't write to {:?}", path))
 }

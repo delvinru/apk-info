@@ -136,6 +136,8 @@ Path-traversal and placeholder entries (paths starting with `..` or `/`, empty n
 
 Malicious/broken paths are extracted safely: if a single component or the full output path is too long for the filesystem (`File name too long`, e.g. deeply nested garbage names used to break `unzip`/`7z`), apk-info prints a warning and saves the data under an **md5 hash** of the original name instead of the broken path, so nothing is lost and extraction never aborts.
 
+A single broken sample never aborts a batch: a truncated APK or an unreadable archive is reported with `[-] can't extract ...` and the run continues. Entries whose name collides with an already extracted file or directory (e.g. a `classes.dex` file plus `classes.dex/…` entries, packed by some malware) are skipped the same way, and extraction order follows the archive's own central directory order, making the output deterministic across runs.
+
 ## `axml` — pretty-print AndroidManifest.xml
 
 Decodes the binary AndroidManifest.xml into human-readable XML and prints it.

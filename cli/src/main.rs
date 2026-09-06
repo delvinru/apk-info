@@ -19,7 +19,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Show basic information about apk file
+    /// Show basic information about the APK file
     Show {
         /// One or more paths to APK files to inspect
         #[arg(required = true)]
