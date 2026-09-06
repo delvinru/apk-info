@@ -9,9 +9,6 @@ classifiers = [
 ]
 dynamic = ["version", "license", "keywords", "description"]
 
-[project.optional-dependencies]
-tests = ["pytest"]
-
 [tool.maturin]
 profile = "release"
 features = ["pyo3/extension-module"]
@@ -22,9 +19,13 @@ requires = ["maturin>=1.14.1,<2.0"]
 build-backend = "maturin"
 
 [dependency-groups]
+tests = ["pytest"]
 docs = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.7.7",
     "mkdocstrings-python>=2.0.6",
     "mkdocstrings[python]>=1.0.6",
 ]
+
+[tool.uv]
+default-groups = ["tests"]
