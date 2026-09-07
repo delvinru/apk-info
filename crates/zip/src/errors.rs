@@ -34,6 +34,19 @@ pub enum ZipError {
     /// A general error occurred while parsing the ZIP archive.
     #[error("got error while parsing zip archive")]
     ParseError,
+
+    /// An I/O error occurred while reading from the underlying stream of a
+    /// lazily-read archive.
+    #[error("io error while reading zip: {0:?}")]
+    IoError(std::io::ErrorKind),
+}
+
+/// Lets `?` convert I/O results straight into a [ZipError], keeping only the
+/// [ErrorKind](std::io::ErrorKind) (the enum is `PartialEq`, unlike `io::Error`).
+impl From<std::io::Error> for ZipError {
+    fn from(e: std::io::Error) -> Self {
+        ZipError::IoError(e.kind())
+    }
 }
 
 /// Represents all errors that can occur while handling certificates.

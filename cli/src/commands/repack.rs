@@ -36,8 +36,8 @@ fn make_output_path(path: &Path, output: &Option<PathBuf>) -> PathBuf {
 }
 
 fn repack(path: &PathBuf, out_path: &PathBuf) -> Result<()> {
-    let buf = std::fs::read(path).with_context(|| format!("can't open file: {:?}", path))?;
-    let zip = ZipEntry::new(buf)?;
+    // the archive is opened lazily, without reading the whole file into memory
+    let zip = ZipEntry::open(path).with_context(|| format!("can't open file: {:?}", path))?;
 
     let mut tampered = 0usize;
     for name in zip.namelist() {

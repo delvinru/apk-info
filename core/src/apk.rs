@@ -2,8 +2,9 @@
 
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{self, BufReader, Read};
+use std::io::{self, Cursor};
 use std::path::Path;
+use std::sync::OnceLock;
 
 use apk_info_axml::{ARSC, AXML};
 use apk_info_xml::Element;
@@ -28,6 +29,9 @@ const APKM_BASE_APK: &str = "base.apk";
 const RESOURCE_TABLE_PATH: &str = "resources.arsc";
 
 /// The main structure that represents the `apk` file.
+///
+/// Reads lazily: only the manifest, the resource table and the entries
+/// actually requested are decompressed into memory.
 #[derive(Debug)]
 pub struct Apk {
     zip: ZipEntry,
@@ -36,6 +40,12 @@ pub struct Apk {
 
     /// The name of the app entry inside a `xapk`/`apkm` container.
     base_apk_name: Option<String>,
+
+    /// Cache of the parsed inner `base.apk` of a `xapk`/`apkm` container,
+    /// seeded during [`Apk::new`] so queries never re-decompress it.
+    /// Outer `None`: not a container. Inner `None`: the inner apk failed
+    /// to parse.
+    inner_zip: OnceLock<Option<ZipEntry>>,
 }
 
 /// Implementation of internal methods
@@ -62,25 +72,47 @@ impl Apk {
     }
 
     /// Helper function for reading apk files
-    fn init(p: &Path) -> Result<(ZipEntry, Option<String>, AXML, Option<ARSC>), APKError> {
+    fn init(
+        p: &Path,
+    ) -> Result<
+        (
+            ZipEntry,
+            Option<String>,
+            AXML,
+            Option<ARSC>,
+            OnceLock<Option<ZipEntry>>,
+        ),
+        APKError,
+    > {
         let file = File::open(p).map_err(APKError::IoError)?;
-        let mut reader = BufReader::with_capacity(1024 * 1024, file);
-        let mut input = Vec::new();
-        reader.read_to_end(&mut input).map_err(APKError::IoError)?;
-
-        if input.is_empty() {
+        if file.metadata().map_err(APKError::IoError)?.len() == 0 {
             return Err(APKError::InvalidInput("got empty file"));
         }
 
-        let zip = ZipEntry::new(input).map_err(APKError::ZipError)?;
+        // only the central directory is loaded now; the manifest, resource
+        // table and requested entries follow on demand
+        let zip = ZipEntry::from_reader(file).map_err(APKError::ZipError)?;
 
         // apk
         if let Ok((manifest, _)) = zip.read(ANDROID_MANIFEST_PATH) {
             let arsc = Self::get_arsc(&zip)?;
             let axml = Self::get_axml(&manifest, arsc.as_ref())?;
 
-            return Ok((zip, None, axml, arsc));
+            return Ok((zip, None, axml, arsc, OnceLock::new()));
         }
+
+        // helper to parse an inner apk out of the container and seed its cache
+        let parse_inner = |data: Vec<u8>| -> Result<(AXML, Option<ARSC>, ZipEntry), APKError> {
+            let inner_apk = ZipEntry::from_reader(Cursor::new(data)).map_err(APKError::ZipError)?;
+            let (inner_manifest, _) = inner_apk
+                .read(ANDROID_MANIFEST_PATH)
+                .map_err(APKError::ZipError)?;
+
+            let arsc = Self::get_arsc(&inner_apk)?;
+            let axml = Self::get_axml(&inner_manifest, arsc.as_ref())?;
+
+            Ok((axml, arsc, inner_apk))
+        };
 
         // xapk
         if let Ok((manifest_json_data, _)) = zip.read(XAPK_MANIFEST_PATH) {
@@ -89,28 +121,23 @@ impl Apk {
 
             let package_name = format!("{}.apk", manifest_json.package_name);
             let (inner_apk_data, _) = zip.read(&package_name).map_err(APKError::ZipError)?;
-            let inner_apk = ZipEntry::new(inner_apk_data).map_err(APKError::ZipError)?;
-            let (inner_manifest, _) = inner_apk
-                .read(ANDROID_MANIFEST_PATH)
-                .map_err(APKError::ZipError)?;
+            let (axml, arsc, inner_apk) = parse_inner(inner_apk_data)?;
 
-            let arsc = Self::get_arsc(&inner_apk)?;
-            let axml = Self::get_axml(&inner_manifest, arsc.as_ref())?;
+            // the apk is parsed already; keeping it makes later queries free
+            let inner_zip = OnceLock::new();
+            inner_zip.get_or_init(|| Some(inner_apk));
 
-            return Ok((zip, Some(package_name), axml, arsc));
+            return Ok((zip, Some(package_name), axml, arsc, inner_zip));
         }
 
         // apkm
         if let Ok((inner_apk_data, _)) = zip.read(APKM_BASE_APK) {
-            let inner_apk = ZipEntry::new(inner_apk_data).map_err(APKError::ZipError)?;
-            let (inner_manifest, _) = inner_apk
-                .read(ANDROID_MANIFEST_PATH)
-                .map_err(APKError::ZipError)?;
+            let (axml, arsc, inner_apk) = parse_inner(inner_apk_data)?;
 
-            let arsc = Self::get_arsc(&inner_apk)?;
-            let axml = Self::get_axml(&inner_manifest, arsc.as_ref())?;
+            let inner_zip = OnceLock::new();
+            inner_zip.get_or_init(|| Some(inner_apk));
 
-            return Ok((zip, Some(APKM_BASE_APK.to_owned()), axml, arsc));
+            return Ok((zip, Some(APKM_BASE_APK.to_owned()), axml, arsc, inner_zip));
         }
 
         Err(APKError::InvalidInput("is it apk/xapk/apkm?"))
@@ -171,13 +198,14 @@ impl Apk {
             )));
         }
 
-        let (zip, base_apk_name, axml, arsc) = Self::init(path)?;
+        let (zip, base_apk_name, axml, arsc, inner_zip) = Self::init(path)?;
 
         Ok(Apk {
             zip,
             axml,
             arsc,
             base_apk_name,
+            inner_zip,
         })
     }
 
@@ -213,28 +241,21 @@ impl Apk {
 
     /// Checks if the APK has multiple `classes.dex` files or not.
     pub fn is_multidex(&self) -> bool {
-        // regular apk
-        let Some(base) = &self.base_apk_name else {
-            return self
-                .zip
-                .namelist()
-                .filter(|name| Self::is_dex_name(name))
-                .count()
-                > 1;
+        let entries = match self.base_apk_name.as_deref() {
+            // regular apk
+            None => &self.zip,
+            // split container (xapk/apkm): the inner apk is cached, no re-reading
+            Some(_) => match self.get_inner_zip() {
+                Ok(inner) => inner,
+                Err(_) => return false,
+            },
         };
 
-        // split container (xapk/apkm)
-        if let Ok((data, _)) = self.zip.read(base)
-            && let Ok(inner_apk) = ZipEntry::new(data)
-        {
-            return inner_apk
-                .namelist()
-                .filter(|name| Self::is_dex_name(name))
-                .count()
-                > 1;
-        }
-
-        false
+        entries
+            .namelist()
+            .filter(|name| Self::is_dex_name(name))
+            .count()
+            > 1
     }
 
     /// An auxiliary method that allows you to get a value from a reference to a resource.
@@ -825,14 +846,28 @@ impl Apk {
         Ok(signatures)
     }
 
-    /// Returns the base APK inside a `xapk`/`apkm` container as a parsed ZIP archive.
-    fn get_inner_zip(&self) -> Result<ZipEntry, APKError> {
-        let name = self
-            .base_apk_name
-            .as_deref()
-            .ok_or(APKError::InvalidInput("not a container"))?;
-        let (data, _) = self.zip.read(name).map_err(APKError::ZipError)?;
-        ZipEntry::new(data).map_err(APKError::ZipError)
+    /// Returns the base APK inside a `xapk`/`apkm` container as a parsed ZIP
+    /// archive, cached from [`Apk::new`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [APKError::InvalidInput] for a plain apk, or [APKError::ZipError]
+    /// when the container's base apk cannot be read or parsed.
+    pub fn get_inner_zip(&self) -> Result<&ZipEntry, APKError> {
+        let Some(name) = self.base_apk_name.as_deref() else {
+            return Err(APKError::InvalidInput("not a container"));
+        };
+
+        self.inner_zip
+            .get_or_init(|| {
+                // deterministic on fixed bytes, so caching a failure is safe
+                self.zip
+                    .read(name)
+                    .ok()
+                    .and_then(|(data, _)| ZipEntry::from_reader(Cursor::new(data)).ok())
+            })
+            .as_ref()
+            .ok_or(APKError::ZipError(ZipError::ParseError))
     }
 
     /// Returns the app signatures (v1, v2, v3, v3.1, etc).
@@ -845,7 +880,7 @@ impl Apk {
     pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
         if self.base_apk_name.is_some() {
             let inner = self.get_inner_zip()?;
-            return Self::collect_signatures(&inner);
+            return Self::collect_signatures(inner);
         }
         Self::collect_signatures(&self.zip)
     }
@@ -866,31 +901,9 @@ impl Apk {
     pub fn get_supported_abis(&self) -> Vec<String> {
         let mut native_codes_set: HashSet<String> = HashSet::new();
 
-        // regular apk
-        for filename in self.zip.namelist() {
-            // native libs inside the app itself (regular apk)
-            if let Some((abi, lib)) = filename
-                .strip_prefix("lib/")
-                .and_then(|rest| rest.split_once('/'))
-                && lib.ends_with(".so")
-                && !abi.is_empty()
-            {
-                native_codes_set.insert(abi.to_owned());
-                continue;
-            }
-
-            // ABI split apk inside a xapk/apkm container, e.g. `config.armeabi_v7a.apk` or `split_config.arm64_v8a.apk`.
-            if let Some(abi) = Self::split_abi_from_name(filename) {
-                native_codes_set.insert(abi);
-            }
-        }
-
-        // split (xapk/apkm)
-        if let Some(base) = &self.base_apk_name
-            && let Ok((data, _)) = self.zip.read(base)
-            && let Ok(inner_apk) = ZipEntry::new(data)
-        {
-            for filename in inner_apk.namelist() {
+        let mut collect = |zip: &ZipEntry| {
+            for filename in zip.namelist() {
+                // native libs inside the app itself (regular apk)
                 if let Some((abi, lib)) = filename
                     .strip_prefix("lib/")
                     .and_then(|rest| rest.split_once('/'))
@@ -898,8 +911,21 @@ impl Apk {
                     && !abi.is_empty()
                 {
                     native_codes_set.insert(abi.to_owned());
+                    continue;
+                }
+
+                // ABI split apk inside a xapk/apkm container, e.g. `config.armeabi_v7a.apk` or `split_config.arm64_v8a.apk`.
+                if let Some(abi) = Self::split_abi_from_name(filename) {
+                    native_codes_set.insert(abi);
                 }
             }
+        };
+
+        collect(&self.zip);
+
+        // split (xapk/apkm): the inner apk is cached, no re-reading
+        if let Ok(inner) = self.get_inner_zip() {
+            collect(inner);
         }
 
         let mut native_codes: Vec<String> = native_codes_set.into_iter().collect();

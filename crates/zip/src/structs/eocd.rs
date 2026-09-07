@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use memchr::memmem;
 use winnow::binary::{le_u16, le_u32};
 use winnow::prelude::*;
 use winnow::token::take;
@@ -78,24 +77,6 @@ impl EndOfCentralDirectory {
             comment: Arc::from(comment),
         })
     }
-
-    /// Search EOCD magic from the end of the file
-    pub(crate) fn find_eocd(input: &[u8], chunk_size: usize) -> Option<usize> {
-        let mut end = input.len();
-
-        while end > 0 {
-            let start = end.saturating_sub(chunk_size);
-            let chunk = &input[start..end];
-
-            if let Some(pos) = memmem::rfind(chunk, &Self::MAGIC) {
-                return Some(start + pos);
-            }
-
-            end = start;
-        }
-
-        None
-    }
 }
 
 #[cfg(test)]
@@ -171,38 +152,6 @@ mod tests {
 
         let result = EndOfCentralDirectory::parse(&mut input);
         assert!(result.is_err(), "expected parse error for invalid magic");
-    }
-
-    #[test]
-    fn test_find_eocd_basic() {
-        let eocd = make_eocd(&[]);
-        let mut file_data = vec![0x00; 100];
-        let offset = 42;
-        file_data.splice(offset..offset, eocd.clone());
-
-        let found = EndOfCentralDirectory::find_eocd(&file_data, 64);
-        assert_eq!(found, Some(offset));
-    }
-
-    #[test]
-    fn test_find_eocd_not_found() {
-        let data = vec![0x00; 128];
-        let found = EndOfCentralDirectory::find_eocd(&data, 32);
-        assert_eq!(found, None);
-    }
-
-    #[test]
-    fn test_find_eocd_multiple_matches() {
-        // Two EOCD-like sections, expect the last one
-        let eocd = make_eocd(&[]);
-        let mut data = Vec::new();
-        data.extend_from_slice(&eocd);
-        data.extend_from_slice(&[0x11; 10]);
-        let last_offset = data.len();
-        data.extend_from_slice(&eocd);
-
-        let found = EndOfCentralDirectory::find_eocd(&data, 64);
-        assert_eq!(found, Some(last_offset));
     }
 
     #[test]

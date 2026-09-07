@@ -64,8 +64,8 @@ fn compile_regexes(files: &[String]) -> Result<Vec<Regex>> {
 /// Names are sorted: the central directory is stored in a hash map, so its
 /// iteration order is random per process.
 fn list_archive(path: &Path, regexes: &[Regex]) -> Result<()> {
-    let buf = std::fs::read(path).with_context(|| format!("can't open file: {:?}", path))?;
-    let zip = ZipEntry::new(buf)?;
+    // the archive is opened lazily, without reading the whole file into memory
+    let zip = ZipEntry::open(path).with_context(|| format!("can't open file: {:?}", path))?;
 
     let mut names: Vec<&str> = zip
         .namelist()
@@ -263,8 +263,8 @@ fn extract(
     verbose: bool,
     resources: bool,
 ) -> Result<()> {
-    let buf = std::fs::read(path).with_context(|| format!("can't open file: {:?}", path))?;
-    let zip = ZipEntry::new(buf)?;
+    // the archive is opened lazily, without reading the whole file into memory
+    let zip = ZipEntry::open(path).with_context(|| format!("can't open file: {:?}", path))?;
 
     std::fs::create_dir_all(out_dir)
         .with_context(|| format!("can't create output directory {:?}", out_dir))?;

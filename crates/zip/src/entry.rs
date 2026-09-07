@@ -1,9 +1,9 @@
 //! Describes a `zip` archive
 
 use std::fmt::Write;
-use std::sync::Arc;
+use std::io::Cursor;
+use std::path::Path;
 
-use ahash::AHashMap;
 use cms::cert::CertificateChoices;
 use cms::content_info::ContentInfo;
 use cms::signed_data::SignedData;
@@ -23,8 +23,11 @@ use x509_cert::der::oid::db::DB;
 use x509_cert::der::{Decode, Encode};
 
 use crate::signature::{CertificateInfo, Signature};
-use crate::structs::{CentralDirectory, EndOfCentralDirectory, LocalFileHeader};
-use crate::{CertificateError, FileCompressionType, ZipError};
+use crate::source::Source;
+use crate::structs::{
+    CentralDirectory, CentralDirectoryEntry, EndOfCentralDirectory, LocalFileHeader,
+};
+use crate::{CertificateError, FileCompressionType, ReadSeek, ZipError};
 
 /// Maximum allowed uncompressed size for a file entry.
 const MAX_UNCOMPRESSED_SIZE: usize = u32::MAX as usize;
@@ -35,20 +38,42 @@ const SELF_HEAL_MAX_SCAN: usize = 1 << 20;
 /// How far back from a claimed offset to search; corrupt offsets shift by a few bytes.
 const SELF_HEAL_BACKWARD: usize = 1 << 16;
 
+/// Window size for the backward EOCD signature search from the end of the stream.
+const EOCD_SEARCH_WINDOW: usize = 4096;
+
+/// Fixed part of a local file header: `4 (magic) + 26 (fields)`.
+const LOCAL_HEADER_FIXED_LEN: usize = 30;
+
+/// Upper bound for the APK Signing Block region read out of the source.
+///
+/// Real signing blocks are at most a few megabytes (certificates plus verity
+/// padding to a 4096 multiple); anything larger is malformed data that must
+/// not be pulled into memory.
+const MAX_SIGNING_BLOCK_SIZE: usize = 64 * 1024 * 1024;
+
 /// Represents a parsed ZIP archive.
-#[derive(Debug)]
+///
+/// Reads lazily from a seekable source: only the central directory is kept
+/// in memory; local file headers and entry data are fetched on demand.
 pub struct ZipEntry {
-    /// Owned zip data
-    input: Vec<u8>,
+    /// Lazily-read backing source.
+    source: Source,
 
     /// Absolute offset of the central directory.
     central_dir_offset: usize,
 
     /// Central directory structure
     central_directory: CentralDirectory,
+}
 
-    /// Information about local headers
-    local_headers: AHashMap<Arc<str>, LocalFileHeader>,
+impl std::fmt::Debug for ZipEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ZipEntry")
+            .field("len", &self.source.len())
+            .field("central_dir_offset", &self.central_dir_offset)
+            .field("entries", &self.central_directory.ordered_names.len())
+            .finish_non_exhaustive()
+    }
 }
 
 /// Metadata of a single archive entry, without reading its data.
@@ -69,50 +94,95 @@ pub struct EntryInfo {
 
 /// Implementation of basic methods
 impl ZipEntry {
-    /// Recovers the real local file header offset for an entry whose
-    /// `local_header_offset` is corrupt: tries the claim, then scans a bounded,
-    /// filename-verified window for a matching `PK\x03\x04`.
-    fn find_local_header_offset(&self, claim: usize, expected_name: &[u8]) -> Option<usize> {
-        let input = &self.input;
-        let central_dir_offset = self.central_dir_offset;
+    /// Parses the local file header at `offset`, reading it lazily from the source.
+    ///
+    /// Two bounded reads: the fixed part first (to learn the name and extra
+    /// field lengths), then the variable part. The entry data offset is
+    /// always computed from the local header's own lengths, which may
+    /// legitimately differ from the central directory copy.
+    fn read_local_header_at(&self, offset: usize) -> Result<LocalFileHeader, ZipError> {
+        let mut fixed = [0u8; LOCAL_HEADER_FIXED_LEN];
+        self.source.read_exact_at(offset, &mut fixed)?;
 
-        // 1. exact claimed offset
-        if let Ok(header) = LocalFileHeader::parse(input, claim)
+        // name and extra lengths live at the tail of the fixed part
+        let name_len = u16::from_le_bytes([fixed[26], fixed[27]]) as usize;
+        let extra_len = u16::from_le_bytes([fixed[28], fixed[29]]) as usize;
+
+        // one buffer: the fixed part, with the variable part read into its tail
+        let total = LOCAL_HEADER_FIXED_LEN + name_len + extra_len;
+        let mut raw = Vec::with_capacity(total);
+        raw.extend_from_slice(&fixed);
+        raw.resize(total, 0);
+        self.source.read_exact_at(
+            offset + LOCAL_HEADER_FIXED_LEN,
+            &mut raw[LOCAL_HEADER_FIXED_LEN..],
+        )?;
+
+        let mut header = LocalFileHeader::parse(&raw, 0).map_err(|_| ZipError::ParseError)?;
+        // `parse` sees only the freshly-read slice, so patch in the real stream offset
+        header.offset = offset;
+        Ok(header)
+    }
+
+    /// Parses the entry's local file header: the claimed offset when it hosts
+    /// a header with a matching filename, otherwise the self-healing scan.
+    fn read_local_header_verified(
+        &self,
+        entry: &CentralDirectoryEntry,
+    ) -> Result<LocalFileHeader, ZipError> {
+        let claim = entry.local_header_offset as usize;
+        let expected_name = entry.file_name.as_bytes();
+
+        if let Ok(header) = self.read_local_header_at(claim)
             && header.file_name.as_ref() == expected_name
         {
-            return Some(claim);
+            return Ok(header);
         }
 
-        // 2. bounded scan for a matching local header, verified by filename.
+        let offset = self
+            .find_local_header_offset(claim, expected_name)
+            .ok_or(ZipError::FileNotFound)?;
+        self.read_local_header_at(offset)
+            .map_err(|_| ZipError::FileNotFound)
+    }
+
+    /// Recovers the real local file header offset for an entry whose
+    /// `local_header_offset` is corrupt: scans a bounded, filename-verified
+    /// window for a matching `PK\x03\x04`.
+    ///
+    /// Skips the claimed offset; the caller has already tried it.
+    fn find_local_header_offset(&self, claim: usize, expected_name: &[u8]) -> Option<usize> {
+        // bounded scan for a matching local header, verified by filename.
         let start = claim.saturating_sub(SELF_HEAL_BACKWARD);
-        let end = input
+        let end = self
+            .source
             .len()
-            .min(central_dir_offset)
+            .min(self.central_dir_offset)
             .min(claim.saturating_add(SELF_HEAL_MAX_SCAN));
-        let mut pos = start;
-        while pos < end {
-            match memmem::find(&input[pos..end], b"PK\x03\x04") {
-                Some(rel) => {
-                    let candidate = pos + rel;
-                    if candidate == claim {
-                        // same offset as the failed first attempt; move on
-                        pos = candidate + 1;
-                        continue;
-                    }
-                    if let Ok(header) = LocalFileHeader::parse(input, candidate)
-                        && header.file_name.as_ref() == expected_name
-                    {
-                        return Some(candidate);
-                    }
-                    pos = candidate + 1;
-                }
-                None => break,
+        if end <= start {
+            return None;
+        }
+
+        // read the scan window once, then walk it
+        let window = self.source.read_bytes_at(start, end - start).ok()?;
+        let mut pos = 0;
+        while let Some(rel) = memmem::find(&window[pos..], b"PK\x03\x04") {
+            let candidate = start + pos + rel;
+            if candidate != claim
+                && let Ok(header) = self.read_local_header_at(candidate)
+                && header.file_name.as_ref() == expected_name
+            {
+                return Some(candidate);
             }
+            pos += rel + 1;
         }
         None
     }
 
-    /// Creates a new `ZipEntry` from raw ZIP data.
+    /// Creates a new `ZipEntry` from raw in-memory ZIP data.
+    ///
+    /// Wraps the bytes in a [`Cursor`] and delegates to [`ZipEntry::from_reader`],
+    /// so in-memory and file-backed archives share the same lazy reading path.
     ///
     /// # Errors
     ///
@@ -123,22 +193,71 @@ impl ZipEntry {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// # use apk_info_zip::{ZipEntry, ZipError};
     /// let data = std::fs::read("archive.zip").unwrap();
     /// let zip = ZipEntry::new(data).expect("failed to parse ZIP archive");
     /// ```
     pub fn new(input: Vec<u8>) -> Result<ZipEntry, ZipError> {
+        Self::from_reader(Cursor::new(input))
+    }
+
+    /// Creates a new `ZipEntry` that lazily reads a ZIP archive from any
+    /// seekable source, for example a [`std::fs::File`]. Only the central
+    /// directory is loaded into memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [ZipError] if:
+    /// - The stream is too short or does not start with a valid ZIP signature [ZipError::InvalidHeader];
+    /// - The End of Central Directory cannot be found [ZipError::NotFoundEOCD];
+    /// - Parsing of the EOCD or central directory fails [ZipError::ParseError].
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use apk_info_zip::{ZipEntry, ZipError};
+    /// let file = std::fs::File::open("app.apk").unwrap();
+    /// let zip = ZipEntry::from_reader(file).expect("failed to parse ZIP archive");
+    /// ```
+    pub fn from_reader(reader: impl ReadSeek + 'static) -> Result<ZipEntry, ZipError> {
+        Self::parse(Source::new(Box::new(reader))?)
+    }
+
+    /// Opens a file on disk and parses it lazily; the file is never fully
+    /// read into memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [ZipError] if the file cannot be opened
+    /// ([ZipError::IoError]), or anything [`ZipEntry::from_reader`] reports.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use apk_info_zip::{ZipEntry, ZipError};
+    /// let zip = ZipEntry::open("app.apk").expect("failed to parse ZIP archive");
+    /// ```
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<ZipEntry, ZipError> {
+        let file = std::fs::File::open(path)?;
+        Self::from_reader(file)
+    }
+
+    fn parse(source: Source) -> Result<ZipEntry, ZipError> {
         // perform basic sanity check
-        if !input.starts_with(b"PK\x03\x04") {
+        let mut magic = [0u8; 4];
+        source.read_exact_at(0, &mut magic)?;
+        if magic != *b"PK\x03\x04" {
             return Err(ZipError::InvalidHeader);
         }
 
-        let eocd_offset =
-            EndOfCentralDirectory::find_eocd(&input, 4096).ok_or(ZipError::NotFoundEOCD)?;
+        let eocd_offset = Self::find_eocd_offset(&source).ok_or(ZipError::NotFoundEOCD)?;
 
-        let eocd = EndOfCentralDirectory::parse(&mut &input[eocd_offset..])
-            .map_err(|_| ZipError::ParseError)?;
+        // the EOCD record plus up to a maximum-size archive comment
+        let eocd_len = (source.len() - eocd_offset).min(22 + u16::MAX as usize);
+        let eocd_bytes = source.read_bytes_at(eocd_offset, eocd_len)?;
+        let eocd =
+            EndOfCentralDirectory::parse(&mut &eocd_bytes[..]).map_err(|_| ZipError::ParseError)?;
 
         // Prefer the EOCD's declared CD offset;
         // derive it (`eocd - cd_size`) only when prepended/polyglot data left it stale.
@@ -147,35 +266,57 @@ impl ZipEntry {
             .checked_sub(eocd.central_dir_size as usize)
             .ok_or(ZipError::ParseError)?;
 
-        let central_dir_offset = if input
-            .get(declared..)
-            .is_some_and(|s| s.starts_with(b"PK\x01\x02"))
+        let mut cd_magic = [0u8; 4];
+        let central_dir_offset = if source
+            .read_exact_at(declared, &mut cd_magic)
+            .is_ok_and(|_| cd_magic == *b"PK\x01\x02")
         {
             declared
         } else {
             derived
         };
 
-        let central_directory = CentralDirectory::parse(&input, central_dir_offset)
-            .map_err(|_| ZipError::ParseError)?;
-
-        let local_headers = central_directory
-            .entries
-            .iter()
-            .filter_map(|(filename, entry)| {
-                let header =
-                    LocalFileHeader::parse(&input, entry.local_header_offset as usize).ok()?;
-                (header.file_name.as_ref() == entry.file_name.as_bytes())
-                    .then(|| (Arc::clone(filename), header))
-            })
-            .collect();
+        // Read the central directory to the end of the stream: `central_dir_size`
+        // may understate the real record area in a tampered archive, and the
+        // parser stops at the first non-CDH magic anyway.
+        let cd_bytes =
+            source.read_bytes_at(central_dir_offset, source.len() - central_dir_offset)?;
+        let central_directory =
+            CentralDirectory::parse(&cd_bytes, 0).map_err(|_| ZipError::ParseError)?;
 
         Ok(ZipEntry {
-            input,
+            source,
             central_dir_offset,
             central_directory,
-            local_headers,
         })
+    }
+
+    /// Searches backwards from the end of the stream for the EOCD signature.
+    ///
+    /// Reads 4KB windows instead of the whole tail. Adjacent windows overlap
+    /// by 3 bytes so a signature straddling a window edge is not missed.
+    fn find_eocd_offset(source: &Source) -> Option<usize> {
+        const MAGIC: &[u8; 4] = b"PK\x05\x06";
+
+        // one reusable window for the whole backward scan
+        let mut window = vec![0u8; EOCD_SEARCH_WINDOW];
+        let mut end = source.len();
+        loop {
+            let start = end.saturating_sub(EOCD_SEARCH_WINDOW);
+            let len = end - start;
+            source.read_exact_at(start, &mut window[..len]).ok()?;
+
+            if let Some(pos) = memmem::rfind(&window[..len], MAGIC) {
+                return Some(start + pos);
+            }
+
+            if start == 0 {
+                return None;
+            }
+
+            // step back, overlapping by 3 bytes
+            end = start + MAGIC.len() - 1;
+        }
     }
 
     /// Returns an iterator over the names of all files in the ZIP archive,
@@ -187,7 +328,7 @@ impl ZipEntry {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// # use apk_info_zip::ZipEntry;
     /// # let zip_data = std::fs::read("archive.zip").unwrap();
     /// # let zip = ZipEntry::new(zip_data).unwrap();
@@ -211,7 +352,7 @@ impl ZipEntry {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```no_run
     /// # use apk_info_zip::ZipEntry;
     /// # let zip_data = std::fs::read("archive.zip").unwrap();
     /// # let zip = ZipEntry::new(zip_data).unwrap();
@@ -221,19 +362,12 @@ impl ZipEntry {
     pub fn entry_info(&self, filename: &str) -> Option<EntryInfo> {
         let entry = self.central_directory.entries.get(filename)?;
 
-        let local_method = match self.local_headers.get(filename) {
-            Some(header) => header.compression_method,
-            // index miss = corrupt claim; lazily recover this one entry
-            None => {
-                let offset = self.find_local_header_offset(
-                    entry.local_header_offset as usize,
-                    entry.file_name.as_bytes(),
-                )?;
-                LocalFileHeader::parse(&self.input, offset)
-                    .ok()?
-                    .compression_method
-            }
-        };
+        // local header is read lazily; a corrupt claimed offset falls back
+        // to the bounded self-healing scan, and an unhealable entry is a miss
+        let local_method = self
+            .read_local_header_verified(entry)
+            .ok()?
+            .compression_method;
 
         Some(EntryInfo {
             compression_method: entry.compression_method,
@@ -260,7 +394,7 @@ impl ZipEntry {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```no_run
     /// # use apk_info_zip::{ZipEntry, ZipError, FileCompressionType};
     /// # let zip_data = std::fs::read("archive.zip").unwrap();
     /// # let zip = ZipEntry::new(zip_data).unwrap();
@@ -277,19 +411,9 @@ impl ZipEntry {
             .get(filename)
             .ok_or(ZipError::FileNotFound)?;
 
-        // Index miss = corrupt claim; lazily recover this one entry.
-        let local_header = match self.local_headers.get(filename) {
-            Some(header) => header.clone(),
-            None => {
-                let offset = self
-                    .find_local_header_offset(
-                        central_directory_entry.local_header_offset as usize,
-                        central_directory_entry.file_name.as_bytes(),
-                    )
-                    .ok_or(ZipError::FileNotFound)?;
-                LocalFileHeader::parse(&self.input, offset).map_err(|_| ZipError::FileNotFound)?
-            }
-        };
+        // Parse the local file header lazily; a corrupt claimed offset falls
+        // back to the bounded self-healing scan.
+        let local_header = self.read_local_header_verified(central_directory_entry)?;
 
         let method = central_directory_entry.compression_method;
         let compressed_size = central_directory_entry.compressed_size as usize;
@@ -300,28 +424,31 @@ impl ZipEntry {
             return Err(ZipError::FileTooLarge);
         }
 
+        // data offset is derived from the local header's own lengths
         let offset = local_header.offset + local_header.size();
-        let get_slice = |start: usize, end: usize| self.input.get(start..end).ok_or(ZipError::EOF);
+        // read lengths come from the central directory: local sizes are
+        // zeroed under the data-descriptor flag
+        let read_data = |len: usize| self.source.read_bytes_at(offset, len);
 
         match (method, compressed_size == uncompressed_size) {
             (0, _) => {
                 // stored (no compression)
-                let slice = get_slice(offset, offset + uncompressed_size)?;
+                let data = read_data(uncompressed_size)?;
                 let compression = if tampered {
                     FileCompressionType::StoredTampered
                 } else {
                     FileCompressionType::Stored
                 };
-                Ok((slice.to_vec(), compression))
+                Ok((data, compression))
             }
             (8, _) => {
                 // deflate default
-                let compressed_data = get_slice(offset, offset + compressed_size)?;
+                let compressed_data = read_data(compressed_size)?;
                 let mut uncompressed_data = Vec::with_capacity(uncompressed_size);
 
                 Decompress::new(false)
                     .decompress_vec(
-                        compressed_data,
+                        &compressed_data,
                         &mut uncompressed_data,
                         FlushDecompress::Finish,
                     )
@@ -336,17 +463,17 @@ impl ZipEntry {
             }
             (_, true) => {
                 // unknown method but stored-sized
-                let slice = get_slice(offset, offset + uncompressed_size)?;
-                Ok((slice.to_vec(), FileCompressionType::StoredTampered))
+                let data = read_data(uncompressed_size)?;
+                Ok((data, FileCompressionType::StoredTampered))
             }
             (_, false) => {
                 // unknown method: try deflate, then fall back to stored
-                let compressed_data = get_slice(offset, offset + compressed_size)?;
+                let compressed_data = read_data(compressed_size)?;
                 let mut uncompressed_data = Vec::with_capacity(uncompressed_size);
                 let mut decompressor = Decompress::new(false);
 
                 let status = decompressor.decompress_vec(
-                    compressed_data,
+                    &compressed_data,
                     &mut uncompressed_data,
                     FlushDecompress::Finish,
                 );
@@ -359,8 +486,8 @@ impl ZipEntry {
                     }
                     _ => {
                         // fallback to stored tampered
-                        let slice = get_slice(offset, offset + uncompressed_size)?;
-                        Ok((slice.to_vec(), FileCompressionType::StoredTampered))
+                        let data = read_data(uncompressed_size)?;
+                        Ok((data, FileCompressionType::StoredTampered))
                     }
                 }
             }
@@ -451,12 +578,14 @@ impl ZipEntry {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```no_run
     /// # use apk_info_zip::{ZipEntry, Signature};
+    /// # let zip_data = std::fs::read("archive.zip").unwrap();
     /// # let archive = ZipEntry::new(zip_data).unwrap();
     /// match archive.get_signature_v1() {
     ///     Ok(Signature::V1(certs)) => println!("Found {} certificates", certs.len()),
     ///     Ok(Signature::Unknown) => println!("No v1 signature found"),
+    ///     Ok(_) => println!("v1 call returned a non-v1 signature"),
     ///     Err(err) => eprintln!("Error parsing signature: {:?}", err),
     /// }
     /// ```
@@ -516,10 +645,18 @@ impl ZipEntry {
     /// </div>
     pub fn get_signatures_other(&self) -> Result<Vec<Signature>, CertificateError> {
         let offset = self.central_dir_offset;
-        let mut slice = match self.input.get(offset.saturating_sub(24)..offset) {
-            Some(v) => v,
-            None => return Ok(Vec::new()),
-        };
+
+        // The APK Signing Block ends exactly 24 bytes before the central
+        // directory: `u64` block size + 16 bytes of magic. Only this bounded
+        // region is read out of the source.
+        if offset < 24 {
+            return Err(CertificateError::ParseError);
+        }
+        let tail = self
+            .source
+            .read_bytes_at(offset - 24, 24)
+            .map_err(|_| CertificateError::ParseError)?;
+        let mut slice: &[u8] = &tail;
 
         let size_of_block = le_u64::<&[u8], ContextError>
             .parse_next(&mut slice)
@@ -534,14 +671,24 @@ impl ZipEntry {
             return Ok(Vec::new());
         }
 
+        // the block spans [offset - (size_of_block + 8), offset - 24):
         // size of block (full) - 8 bytes (size of block - start) - 24 (end signature)
-        slice = match self
-            .input
-            .get(offset.saturating_sub((size_of_block + 8) as usize)..offset.saturating_sub(24))
-        {
-            Some(v) => v,
-            None => return Ok(Vec::new()),
-        };
+        let total = size_of_block
+            .checked_add(8)
+            .and_then(|v| usize::try_from(v).ok())
+            .ok_or(CertificateError::ParseError)?;
+
+        // does not fit before the central directory, or absurdly large
+        // (real signing blocks are at most a few megabytes): treat as absent
+        if !(24..=MAX_SIGNING_BLOCK_SIZE).contains(&total) || total > offset {
+            return Ok(Vec::new());
+        }
+
+        let block = self
+            .source
+            .read_bytes_at(offset - total, total - 24)
+            .map_err(|_| CertificateError::ParseError)?;
+        let mut slice: &[u8] = &block;
 
         let size_of_block_start = le_u64::<&[u8], ContextError>
             .parse_next(&mut slice)
@@ -877,6 +1024,10 @@ impl From<Certificate> for CertificateInfo {
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Read, Seek, SeekFrom};
+
+    use ahash::AHashMap;
+
     use super::*;
 
     /// Builds a minimal, well-formed two-file STORED zip archive and returns it
@@ -1067,5 +1218,130 @@ mod tests {
         let (data, _) = build_archive(&[("a.txt", b"hello")]);
         let zip = ZipEntry::new(data).unwrap();
         assert_eq!(zip.read("nope.txt").unwrap_err(), ZipError::FileNotFound);
+    }
+    /// A `ReadSeek` wrapper that counts how many bytes were actually read from
+    /// the source, to prove that parsing stays lazy.
+    struct CountingSource {
+        inner: Cursor<Vec<u8>>,
+        counter: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl CountingSource {
+        fn new(data: Vec<u8>) -> (Self, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+            use std::sync::atomic::AtomicUsize;
+            let counter = std::sync::Arc::new(AtomicUsize::new(0));
+            (
+                Self {
+                    inner: Cursor::new(data),
+                    counter: std::sync::Arc::clone(&counter),
+                },
+                counter,
+            )
+        }
+    }
+
+    impl Read for CountingSource {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let n = self.inner.read(buf)?;
+            self.counter
+                .fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+            Ok(n)
+        }
+    }
+
+    impl Seek for CountingSource {
+        fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(pos)
+        }
+    }
+
+    /// Opening an archive must read only the EOCD + central directory, never
+    /// the entry payloads, no matter how big they are.
+    #[test]
+    fn construction_reads_only_metadata() {
+        // a 1MB stored entry: if the whole file were read, the counter would
+        // blow past the archive size
+        let big = vec![0x41u8; 1024 * 1024];
+        let (data, _) = build_archive(&[("big.bin", &big), ("small.txt", b"hi")]);
+
+        let (source, counter) = CountingSource::new(data.clone());
+        let zip = ZipEntry::from_reader(source).unwrap();
+
+        // archive is ~1MB, but only the tail metadata (EOCD + CD + sanity
+        // probes) may be read
+        assert!(
+            counter.load(std::sync::atomic::Ordering::Relaxed) < 32 * 1024,
+            "construction read {} bytes, not lazy",
+            counter.load(std::sync::atomic::Ordering::Relaxed)
+        );
+        assert_eq!(zip.namelist().count(), 2);
+
+        // reading an entry pulls roughly its own size, not the whole archive
+        let before = counter.load(std::sync::atomic::Ordering::Relaxed);
+        let (data, compression) = zip.read("big.bin").unwrap();
+        assert_eq!(data.len(), 1024 * 1024);
+        assert_eq!(compression, FileCompressionType::Stored);
+        assert!(
+            counter.load(std::sync::atomic::Ordering::Relaxed) - before <= 1024 * 1024 + 512,
+            "entry read pulled way more than the entry itself"
+        );
+    }
+
+    /// `ZipEntry::open` reads a real file from disk through the same lazy path.
+    #[test]
+    fn open_reads_archive_from_file() {
+        let (data, _) = build_archive(&[("a.txt", b"hello"), ("b.txt", b"world!")]);
+
+        let path =
+            std::env::temp_dir().join(format!("apk-info-lazy-test-{}.zip", std::process::id()));
+        std::fs::write(&path, &data).expect("can't write temp archive");
+
+        let zip = ZipEntry::open(&path).unwrap();
+        assert_eq!(zip.read("a.txt").unwrap().0, b"hello");
+        assert_eq!(zip.read("b.txt").unwrap().0, b"world!");
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    /// An EOCD hidden behind a comment long enough to straddle the search
+    /// window boundary (4096) must still be found: adjacent windows overlap by
+    /// `MAGIC.len() - 1` bytes precisely for this case.
+    #[test]
+    fn eocd_straddling_search_window_is_found() {
+        let (data, _) = build_archive(&[("a.txt", b"hello")]);
+
+        // rebuild the EOCD with a comment sized so the EOCD signature starts
+        // exactly 2 bytes before the first 4096-byte window boundary:
+        // comment length 4076 => magic at len - (22 + 4076) = len - 4098
+        let mut data = data;
+        let eocd: Vec<u8> = data.split_off(data.len() - 22);
+        let comment = vec![0xCC; 4076];
+
+        let mut patched = eocd;
+        patched[20..22].copy_from_slice(&(comment.len() as u16).to_le_bytes());
+        patched.extend_from_slice(&comment);
+        data.extend_from_slice(&patched);
+
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.read("a.txt").unwrap().0, b"hello");
+    }
+
+    /// A long comment that pushes the EOCD a full window back is found too
+    /// (several backward window reads).
+    #[test]
+    fn eocd_with_multiview_comment_is_found() {
+        let (data, _) = build_archive(&[("a.txt", b"hello")]);
+
+        let mut data = data;
+        let eocd: Vec<u8> = data.split_off(data.len() - 22);
+        let comment = vec![0xAB; 8192];
+
+        let mut patched = eocd;
+        patched[20..22].copy_from_slice(&(comment.len() as u16).to_le_bytes());
+        patched.extend_from_slice(&comment);
+        data.extend_from_slice(&patched);
+
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.read("a.txt").unwrap().0, b"hello");
     }
 }
