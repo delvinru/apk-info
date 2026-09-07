@@ -78,24 +78,24 @@ enum Commands {
         #[arg(required = true)]
         path: PathBuf,
     },
-    /// Unpack and repack a BadPack-damaged APK into a standard, well-formed zip archive
+    /// Repack a BadPack-damaged APK into a clean, well-formed zip archive
     ///
-    /// Some malware tampers with zip headers (the BadPack technique) so that
-    /// standard tools like `unzip` and `7z` fail to open the archive or silently
-    /// drop entries (e.g. the AndroidManifest.xml). This command decodes every
-    /// entry the way apk-info does, and writes the data back into a clean zip
-    /// archive with correct compression headers.
-    ///
-    /// NOTE: the resulting archive is NOT signed - v1 signature files (META-INF)
-    /// and the APK Signature Block (v2/v3) are not reproduced.
+    /// Malware sometimes tampers with zip headers (BadPack) so `unzip`/`7z`
+    /// fail or drop entries; this rebuilds the archive from decoded data.
+    /// The result is unsigned.
     Repack {
         /// One or more paths to APK files to repack
         #[arg(required = true)]
         paths: Vec<PathBuf>,
 
-        /// Output directory (default: same directory as the source file)
-        #[arg(short, long)]
+        /// Output file; a bare file name can be combined with `-d`
+        /// (default: `<name>.repacked.apk` next to the source file)
+        #[arg(short, long, value_name = "FILE")]
         output: Option<PathBuf>,
+
+        /// Output directory (default: same directory as the source file)
+        #[arg(short = 'd', long, value_name = "DIR")]
+        output_dir: Option<PathBuf>,
     },
     /// Generate shell completion
     Completion {
@@ -121,7 +121,11 @@ fn main() {
             list,
         }) => command_extract(paths, output, files, *verbose, *resources, *list),
         Some(Commands::Axml { path }) => command_axml(path),
-        Some(Commands::Repack { paths, output }) => command_repack(paths, output),
+        Some(Commands::Repack {
+            paths,
+            output,
+            output_dir,
+        }) => command_repack(paths, output, output_dir),
         Some(Commands::Completion { shell }) => {
             let mut cmd = Cli::command();
             let name = cmd.get_name().to_string();
@@ -133,5 +137,6 @@ fn main() {
 
     if let Err(err) = result {
         eprintln!("{:#}", err);
+        std::process::exit(1);
     }
 }

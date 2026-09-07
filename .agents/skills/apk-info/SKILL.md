@@ -61,6 +61,9 @@ apk-info extract ./app.apk -f 'classes\d+\.dex' -f 'AndroidManifest.xml'
 # Decode resources apktool-style (manifest + res/values* + res/<type>-<cfg>)
 # merges base + every config split for XAPK/APKM containers
 apk-info extract ./app.apk -r
+
+# Repair a BadPack-damaged APK so unzip/7z can open it (output is unsigned)
+apk-info repack ./malware.apk -d ./clean/
 ```
 
 > **Why not just `unzip`?** Malware often tampers with zip headers (BadPack technique): the compression method field is set to a bogus value while the data is stored normally. `unzip` silently skips such entries (`unsupported compression method 55914`, exit 0) and `7z` creates empty 0-byte files — you lose `AndroidManifest.xml` without knowing it. `apk-info` detects the tampering, flags it as `StoredTampered`/`DeflatedTampered`, and extracts the data correctly. See `references/recipes.md` §9 and §16 for real-world examples.

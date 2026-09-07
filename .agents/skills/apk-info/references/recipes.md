@@ -487,8 +487,9 @@ Instead of relying on apk-info for every read, you can rebuild the archive with 
 
 ```bash
 apk-info repack ./malware.apk                  # → ./malware.repacked.apk
-apk-info repack ./malware.apk -o ./clean/      # → ./clean/malware.repacked.apk
-apk-info repack ./malware-collection/          # repack a whole folder
+apk-info repack ./malware.apk -d ./clean/      # → ./clean/malware.repacked.apk
+apk-info repack ./malware.apk -o fixed.apk     # → ./fixed.apk
+apk-info repack ./malware-collection/ -d ./clean/  # repack a whole folder
 ```
 
 **Before** — `unzip` drops the tampered manifest:

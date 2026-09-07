@@ -186,20 +186,25 @@ apk-info completion fish > ~/.config/fish/completions/apk-info.fish
 Reads every entry using the same robust decoder as `extract` (which handles the `BadPack` technique) and writes the data back into a fresh, well-formed zip archive with correct compression headers, CRC32 checksums and offsets. This "repack" lets tools that choke on tampered headers — `unzip`, `7z`, androguard, etc. — open the APK normally.
 
 ```bash
-apk-info repack <PATH> [<PATH> ...] [-o <OUTPUT_DIR>]
+apk-info repack <PATH> [<PATH> ...] [-o <FILE>] [-d <DIR>]
 ```
 
 **Options:**
 
-- `-o, --output <DIR>` — write results into `<DIR>/<name>.repacked.apk`. If omitted, the output is written next to the source file as `<name>.repacked.apk` (source stem + `.repacked.apk`).
+- `-o, --output <FILE>` — output file. Used as a full path; a bare file name resolves against the working directory (unix `-o` convention). Only valid with a single input path.
+- `-d, --output-dir <DIR>` — output directory (the `unzip -d` convention): `<DIR>/<name>.repacked.apk` per input.
+- Combined: `-o` must then be a bare name, yielding `<DIR>/<FILE>`.
+- Without options the output lands next to the source file as `<name>.repacked.apk`.
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
 
 **Examples:**
 
 ```bash
 apk-info repack ./malware.apk                      # → ./malware.repacked.apk
-apk-info repack ./malware.apk -o ./clean/          # → ./clean/malware.repacked.apk
-apk-info repack ./malware-collection/              # repack every APK in a folder
+apk-info repack ./malware.apk -d ./clean/          # → ./clean/malware.repacked.apk
+apk-info repack ./malware.apk -o fixed.apk         # → ./fixed.apk
+apk-info repack ./malware.apk -o fixed.apk -d ./clean/  # → ./clean/fixed.apk
+apk-info repack ./malware-collection/ -d ./clean/  # repack every APK in a folder
 ```
 
 **Output highlighting:** the source path is green; when the archive contained tampered (`StoredTampered`/`DeflatedTampered`) entries, a `fixed N tampered entries` message is printed (bold).
@@ -221,7 +226,7 @@ apk-info show ./malware.repacked.apk                  # package info readable
 ## Exit codes & error behavior
 
 - On a per-file parse error, `show` prints the error in red and continues to the next file (exit 0 unless a fatal error occurs). This makes it safe to run over large collections of potentially-malformed files.
-- `extract`, `axml` and `repack` propagate errors via `anyhow` and print them with `{:#}` formatting.
+- `extract`, `axml` and `repack` propagate errors via `anyhow`, print them with `{:#}` formatting and exit with status `1`.
 - `show` separates multiple APKs with a blank line in human-readable mode; JSONL mode emits one line per APK with no separator.
 
 ## Common pipelines
