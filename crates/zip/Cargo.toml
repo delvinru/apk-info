@@ -2,12 +2,12 @@
 name = "apk-info-zip"
 description = "A library for correctly unpacking APK files that use the BadPack technique"
 authors.workspace = true
+categories = ["parser-implementations"]
 edition.workspace = true
-homepage.workspace = true
-keywords.workspace = true
+keywords = ["zip", "badpack", "android", "apk", "malware"]
 license.workspace = true
-readme = "README.md"
 repository.workspace = true
+rust-version.workspace = true
 version.workspace = true
 
 [dependencies]

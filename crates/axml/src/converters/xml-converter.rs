@@ -47,70 +47,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match reader.read_event_into(&mut buf) {
             Err(e) => panic!("Error at position {}: {:?}", reader.error_position(), e),
             Ok(Event::Eof) => break,
-            Ok(Event::Empty(e)) => {
-                if e.name().as_ref() == b"public" {
-                    let attributes: HashMap<String, String> = e
-                        .attributes()
-                        .map(|attr_result| match attr_result {
-                            Ok(a) => {
-                                let key = reader
-                                    .decoder()
-                                    .decode(a.key.local_name().as_ref())
-                                    .expect("can't get key")
-                                    .to_string();
+            Ok(Event::Empty(e)) if e.name().as_ref() == "public" => {
+                let attributes: HashMap<String, String> = e
+                    .attributes()
+                    .map(|attr_result| match attr_result {
+                        Ok(a) => {
+                            let key = a.key.as_ref().to_string();
+                            let value = a
+                                .normalized_value(XmlVersion::Implicit1_0)
+                                .expect("can't get value")
+                                .to_string();
 
-                                let value = a
-                                    .decoded_and_normalized_value(
-                                        XmlVersion::Implicit1_0,
-                                        reader.decoder(),
-                                    )
-                                    .expect("can't get value")
-                                    .to_string();
-
-                                (key, value)
-                            }
-                            Err(_) => {
-                                panic!("Can't read attributes of public field");
-                            }
-                        })
-                        .collect();
-
-                    let Some(type_) = attributes.get("type") else {
-                        continue;
-                    };
-                    let Some(name) = attributes.get("name") else {
-                        continue;
-                    };
-                    let Some(id) = attributes.get("id") else {
-                        continue;
-                    };
-
-                    let name = name.clone();
-                    let id = u32::from_str_radix(id.trim_start_matches("0x"), 16).unwrap();
-
-                    let _ = match type_.as_str() {
-                        "attr" => system_types.attr.insert(id, name),
-                        "id" => system_types.id.insert(id, name),
-                        "style" => system_types.style.insert(id, name),
-                        "string" => system_types.string.insert(id, name),
-                        "dimen" => system_types.dimen.insert(id, name),
-                        "color" => system_types.color.insert(id, name),
-                        "array" => system_types.array.insert(id, name),
-                        "drawable" => system_types.drawable.insert(id, name),
-                        "layout" => system_types.layout.insert(id, name),
-                        "anim" => system_types.anim.insert(id, name),
-                        "integer" => system_types.integer.insert(id, name),
-                        "animator" => system_types.animator.insert(id, name),
-                        "interpolator" => system_types.interpolator.insert(id, name),
-                        "mipmap" => system_types.mipmap.insert(id, name),
-                        "transition" => system_types.transition.insert(id, name),
-                        "raw" => system_types.raw.insert(id, name),
-                        &_ => {
-                            eprintln!("got unknown type: {}", type_);
-                            None
+                            (key, value)
                         }
-                    };
-                }
+                        Err(_) => {
+                            panic!("Can't read attributes of public field");
+                        }
+                    })
+                    .collect();
+
+                let Some(type_) = attributes.get("type") else {
+                    continue;
+                };
+                let Some(name) = attributes.get("name") else {
+                    continue;
+                };
+                let Some(id) = attributes.get("id") else {
+                    continue;
+                };
+
+                let name = name.clone();
+                let id = u32::from_str_radix(id.trim_start_matches("0x"), 16).unwrap();
+
+                let _ = match type_.as_str() {
+                    "attr" => system_types.attr.insert(id, name),
+                    "id" => system_types.id.insert(id, name),
+                    "style" => system_types.style.insert(id, name),
+                    "string" => system_types.string.insert(id, name),
+                    "dimen" => system_types.dimen.insert(id, name),
+                    "color" => system_types.color.insert(id, name),
+                    "array" => system_types.array.insert(id, name),
+                    "drawable" => system_types.drawable.insert(id, name),
+                    "layout" => system_types.layout.insert(id, name),
+                    "anim" => system_types.anim.insert(id, name),
+                    "integer" => system_types.integer.insert(id, name),
+                    "animator" => system_types.animator.insert(id, name),
+                    "interpolator" => system_types.interpolator.insert(id, name),
+                    "mipmap" => system_types.mipmap.insert(id, name),
+                    "transition" => system_types.transition.insert(id, name),
+                    "raw" => system_types.raw.insert(id, name),
+                    &_ => {
+                        eprintln!("got unknown type: {}", type_);
+                        None
+                    }
+                };
             }
             _ => (),
         }

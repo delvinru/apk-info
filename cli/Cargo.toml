@@ -1,15 +1,15 @@
 [package]
 name = "apk-info-cli"
-description = "A command-line tool to inspect and extract APK files "
+description = "A command-line tool to inspect and extract APK files"
 authors.workspace = true
+categories = ["command-line-utilities", "os::android-apis"]
 edition.workspace = true
-homepage.workspace = true
-keywords.workspace = true
+keywords = ["android", "apk", "malware", "cli", "analysis"]
 license.workspace = true
 readme.workspace = true
 repository.workspace = true
+rust-version.workspace = true
 version.workspace = true
-categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow.workspace = true

@@ -48,6 +48,15 @@ pub struct Apk {
     inner_zip: OnceLock<Option<ZipEntry>>,
 }
 
+/// Everything [`Apk::init`] gathers from a file.
+struct ParsedApk {
+    zip: ZipEntry,
+    base_apk_name: Option<String>,
+    axml: AXML,
+    arsc: Option<ARSC>,
+    inner_zip: OnceLock<Option<ZipEntry>>,
+}
+
 /// Implementation of internal methods
 impl Apk {
     fn get_arsc(zip: &ZipEntry) -> Result<Option<ARSC>, APKError> {
@@ -72,18 +81,7 @@ impl Apk {
     }
 
     /// Helper function for reading apk files
-    fn init(
-        p: &Path,
-    ) -> Result<
-        (
-            ZipEntry,
-            Option<String>,
-            AXML,
-            Option<ARSC>,
-            OnceLock<Option<ZipEntry>>,
-        ),
-        APKError,
-    > {
+    fn init(p: &Path) -> Result<ParsedApk, APKError> {
         let file = File::open(p).map_err(APKError::IoError)?;
         if file.metadata().map_err(APKError::IoError)?.len() == 0 {
             return Err(APKError::InvalidInput("got empty file"));
@@ -98,7 +96,13 @@ impl Apk {
             let arsc = Self::get_arsc(&zip)?;
             let axml = Self::get_axml(&manifest, arsc.as_ref())?;
 
-            return Ok((zip, None, axml, arsc, OnceLock::new()));
+            return Ok(ParsedApk {
+                zip,
+                base_apk_name: None,
+                axml,
+                arsc,
+                inner_zip: OnceLock::new(),
+            });
         }
 
         // helper to parse an inner apk out of the container and seed its cache
@@ -127,7 +131,13 @@ impl Apk {
             let inner_zip = OnceLock::new();
             inner_zip.get_or_init(|| Some(inner_apk));
 
-            return Ok((zip, Some(package_name), axml, arsc, inner_zip));
+            return Ok(ParsedApk {
+                zip,
+                base_apk_name: Some(package_name),
+                axml,
+                arsc,
+                inner_zip,
+            });
         }
 
         // apkm
@@ -137,7 +147,13 @@ impl Apk {
             let inner_zip = OnceLock::new();
             inner_zip.get_or_init(|| Some(inner_apk));
 
-            return Ok((zip, Some(APKM_BASE_APK.to_owned()), axml, arsc, inner_zip));
+            return Ok(ParsedApk {
+                zip,
+                base_apk_name: Some(APKM_BASE_APK.to_owned()),
+                axml,
+                arsc,
+                inner_zip,
+            });
         }
 
         Err(APKError::InvalidInput("is it apk/xapk/apkm?"))
@@ -198,14 +214,14 @@ impl Apk {
             )));
         }
 
-        let (zip, base_apk_name, axml, arsc, inner_zip) = Self::init(path)?;
+        let parsed = Self::init(path)?;
 
         Ok(Apk {
-            zip,
-            axml,
-            arsc,
-            base_apk_name,
-            inner_zip,
+            zip: parsed.zip,
+            axml: parsed.axml,
+            arsc: parsed.arsc,
+            base_apk_name: parsed.base_apk_name,
+            inner_zip: parsed.inner_zip,
         })
     }
 

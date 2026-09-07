@@ -2,12 +2,29 @@
 name = "apk-info"
 requires-python = ">=3.10"
 readme = "README.md"
+authors = [{ name = "Alexey", email = "delvinru@gmail.com" }]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
     "Programming Language :: Rust",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: Implementation :: CPython",
-    "Programming Language :: Python :: Implementation :: PyPy",
+    "Topic :: File Formats",
+    "Topic :: Security",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dynamic = ["version", "license", "keywords", "description"]
+
+[project.urls]
+Homepage = "https://github.com/delvinru/apk-info"
+Repository = "https://github.com/delvinru/apk-info"
+Issues = "https://github.com/delvinru/apk-info/issues"
+Changelog = "https://github.com/delvinru/apk-info/releases"
 
 [tool.maturin]
 profile = "release"

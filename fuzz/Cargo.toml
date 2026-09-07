@@ -3,7 +3,6 @@ name = "apk-info-fuzz"
 description = "fuzz internal structures"
 authors.workspace = true
 edition.workspace = true
-homepage.workspace = true
 license.workspace = true
 repository.workspace = true
 version.workspace = true

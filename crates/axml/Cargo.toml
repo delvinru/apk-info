@@ -2,12 +2,12 @@
 name = "apk-info-axml"
 description = "Library for working with AXML and ARSC in APK files"
 authors.workspace = true
+categories = ["parser-implementations", "os::android-apis"]
 edition.workspace = true
-homepage.workspace = true
-keywords.workspace = true
+keywords = ["axml", "arsc", "android", "apk", "resources"]
 license.workspace = true
-readme = "README.md"
 repository.workspace = true
+rust-version.workspace = true
 version.workspace = true
 exclude = ["src/assets/*.xml"]
 
@@ -16,7 +16,6 @@ apk-info-xml.workspace = true
 bitflags.workspace = true
 log.workspace = true
 phf = { workspace = true, features = ["macros"] }
-phf_codegen = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
@@ -25,12 +24,11 @@ winnow.workspace = true
 
 [build-dependencies]
 phf_codegen.workspace = true
-quick-xml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [features]
-converter = ["dep:quick-xml", "dep:phf_codegen", "dep:serde", "dep:serde_json"]
+converter = ["dep:quick-xml", "dep:serde", "dep:serde_json"]
 
 [[bin]]
 name = "xml-converter"

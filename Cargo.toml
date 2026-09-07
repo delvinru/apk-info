@@ -1,13 +1,12 @@
 [workspace.package]
 version = "1.0.12"
 authors = ["Alexey <delvinru@gmail.com>"]
-categories = ["Parsing tools"]
-description = "APK full-featured parser"
+description = "Fast, malware-robust parser for Android APK/XAPK/APKM files"
 edition = "2024"
-homepage = "https://github.com/delvinru/apk-info"
 keywords = ["android", "apk", "arsc", "axml", "malware"]
 license = "Apache-2.0"
 readme = "README.md"
+rust-version = "1.88"
 repository = "https://github.com/delvinru/apk-info"
 
 [workspace]
@@ -48,7 +47,6 @@ log = "0.4.33"
 md-5 = "0.11.0"
 memchr = "2.8.3"
 mimalloc = "0.1"
-once_cell = "1.21.4"
 phf = { version = "0.14.0", default-features = false }
 phf_codegen = "0.14.0"
 pyo3 = "0.29.2"
@@ -58,7 +56,6 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 sha1 = "0.11.0"
 sha2 = "0.11.0"
-smallvec = "1.15.2"
 thiserror = "2"
 walkdir = "2.5.0"
 winnow = { version = "1.0.4", features = ["binary"] }

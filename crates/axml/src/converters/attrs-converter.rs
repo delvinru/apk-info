@@ -4,7 +4,6 @@ use std::io::Write;
 use std::process::exit;
 
 use quick_xml::events::Event;
-use quick_xml::name::QName;
 use quick_xml::{Reader, XmlVersion};
 use serde::Serialize;
 
@@ -44,16 +43,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match reader.read_event_into(&mut buf)? {
             Event::Start(e) => {
                 let name = e.name();
-                if name == QName(b"attr") {
+                if name.as_ref() == "attr" {
                     let mut attr_name = String::new();
                     for a in e.attributes().flatten() {
-                        if a.key.as_ref() == b"name" {
-                            attr_name = a
-                                .decoded_and_normalized_value(
-                                    XmlVersion::Implicit1_0,
-                                    reader.decoder(),
-                                )?
-                                .to_string();
+                        if a.key.as_ref() == "name" {
+                            attr_name = a.normalized_value(XmlVersion::Implicit1_0)?.to_string();
                         }
                     }
                     current_attr_name = Some(attr_name);
@@ -62,50 +56,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             Event::Empty(e) => {
                 let name = e.name();
-                if name == QName(b"flag") || name == QName(b"enum") {
-                    if let Some(attr_name) = current_attr_name.clone() {
-                        let mut item_name = String::new();
-                        let mut value_str = String::new();
+                if (name.as_ref() == "flag" || name.as_ref() == "enum")
+                    && let Some(attr_name) = current_attr_name.clone()
+                {
+                    let mut item_name = String::new();
+                    let mut value_str = String::new();
 
-                        for a in e.attributes().flatten() {
-                            if a.key.as_ref() == b"name" {
-                                item_name = a
-                                    .decoded_and_normalized_value(
-                                        XmlVersion::Implicit1_0,
-                                        reader.decoder(),
-                                    )?
-                                    .to_string();
-                            } else if a.key.as_ref() == b"value" {
-                                value_str = a
-                                    .decoded_and_normalized_value(
-                                        XmlVersion::Implicit1_0,
-                                        reader.decoder(),
-                                    )?
-                                    .to_string();
-                            }
-                        }
-
-                        let value = parse_hex_or_dec(&value_str)?;
-
-                        let kind = if name == QName(b"flag") {
-                            AttrType::Flag
-                        } else {
-                            AttrType::Enum
-                        };
-
-                        let entry = data.entry(attr_name).or_insert_with(|| AttrCollection {
-                            kind,
-                            items: HashMap::new(),
-                        });
-
-                        if !entry.items.contains_key(&value) {
-                            entry.items.insert(value, item_name);
+                    for a in e.attributes().flatten() {
+                        if a.key.as_ref() == "name" {
+                            item_name = a.normalized_value(XmlVersion::Implicit1_0)?.to_string();
+                        } else if a.key.as_ref() == "value" {
+                            value_str = a.normalized_value(XmlVersion::Implicit1_0)?.to_string();
                         }
                     }
+
+                    let value = parse_hex_or_dec(&value_str)?;
+
+                    let kind = if name.as_ref() == "flag" {
+                        AttrType::Flag
+                    } else {
+                        AttrType::Enum
+                    };
+
+                    let entry = data.entry(attr_name).or_insert_with(|| AttrCollection {
+                        kind,
+                        items: HashMap::new(),
+                    });
+
+                    // keep the first name for a duplicated value
+                    entry.items.entry(value).or_insert(item_name);
                 }
             }
 
-            Event::End(e) if e.name() == QName(b"attr") => {
+            Event::End(e) if e.name().as_ref() == "attr" => {
                 current_attr_name = None;
             }
 
