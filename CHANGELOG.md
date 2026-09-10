@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.13] - 2026-09-10
+
+### Added
+
+- `--list` flag on `extract` prints the archive contents (name, size, compression method) without extracting; it accepts the same regex filter as extraction. ([e756553](https://github.com/delvinru/apk-info/commit/e756553))
+- `repack` gains `--output <FILE>` and `--output-dir <DIR>`: `-o` writes to an explicit path (single input only), `-d` points at a directory for batch runs. ([dbb701d](https://github.com/delvinru/apk-info/commit/dbb701d))
+
+### Fixed
+
+- A corrupt `resources.arsc` no longer aborts the parse; the resource table resolves to absent, so manifest, DEX, and signature analysis still complete. ([ba9133a](https://github.com/delvinru/apk-info/commit/ba9133a))
+- Sparse table entries in `resources.arsc` resolve by real entry id, fixing wrong references. ([ac6ebe7](https://github.com/delvinru/apk-info/commit/ac6ebe7))
+- Entry iteration now follows central-directory record order instead of hash-map order, so `namelist()` is deterministic and matches the archive. ([cb85007](https://github.com/delvinru/apk-info/commit/cb85007))
+
+### Performance
+
+- ZIP entries read lazily through a `Read + Seek` cursor instead of loading the whole file, cutting memory use on large archives. ([dda3223](https://github.com/delvinru/apk-info/commit/dda3223))
+
 ## [1.0.12] - 2026-08-17
 
 ### Added
@@ -147,6 +164,7 @@ Initial release of `apk-info`, a full-featured APK parser.
 - Python bindings.
 - Fuzzing targets.
 
+[1.0.13]: https://github.com/delvinru/apk-info/compare/v1.0.12...v1.0.13
 [1.0.12]: https://github.com/delvinru/apk-info/compare/v1.0.11...v1.0.12
 [1.0.11]: https://github.com/delvinru/apk-info/compare/v1.0.10...v1.0.11
 [1.0.10]: https://github.com/delvinru/apk-info/compare/v1.0.9...v1.0.10
