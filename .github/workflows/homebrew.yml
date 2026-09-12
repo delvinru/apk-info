@@ -1,0 +1,86 @@
+name: homebrew
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (empty = latest release)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  update-tap:
+    name: Update tap formula
+    if: ${{ github.event_name != 'release' ||
+      startsWith(github.event.release.tag_name, 'v') }}
+    runs-on: ubuntu-latest
+    environment:
+      name: homebrew
+    env:
+      HOMEBREW_TAP: delvinru/homebrew-tap
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Resolve tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG:-${INPUT_TAG:-}}"
+          if [ -z "$tag" ]; then
+            tag=$(gh release list --limit 1 --json tagName -q '.[0].tagName')
+          fi
+          if [[ "$tag" != v* ]]; then
+            echo "Tag '$tag' does not start with 'v', refusing to publish"
+            exit 1
+          fi
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+
+      - name: Download release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" \
+            --pattern "apk-info-${RELEASE_TAG}-*.tar.gz"
+
+      - name: Update tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$RELEASE_TAG"
+          version="${tag#v}"
+
+          sha_for() {
+            local target="$1"
+            sha256sum "apk-info-${tag}-${target}.tar.gz" | cut -d' ' -f1
+          }
+          sha_aarch64_darwin=$(sha_for aarch64-apple-darwin)
+          sha_x86_64_darwin=$(sha_for x86_64-apple-darwin)
+          sha_aarch64_linux=$(sha_for aarch64-unknown-linux-musl)
+          sha_x86_64_linux=$(sha_for x86_64-unknown-linux-musl)
+
+          auth="https://x-access-token:${GH_TOKEN}@github.com"
+          git clone "${auth}/${HOMEBREW_TAP}.git" tap
+          cd tap
+          mkdir -p Formula
+
+          sed -e "s/__TAG__/${tag}/g" \
+              -e "s/__VERSION__/${version}/g" \
+              -e "s/__SHA_AARCH64_DARWIN__/${sha_aarch64_darwin}/" \
+              -e "s/__SHA_X86_64_DARWIN__/${sha_x86_64_darwin}/" \
+              -e "s/__SHA_AARCH64_LINUX__/${sha_aarch64_linux}/" \
+              -e "s/__SHA_X86_64_LINUX__/${sha_x86_64_linux}/" \
+              templates/apk-info.rb > Formula/apk-info.rb
+
+          git config user.name "apk-info release bot"
+          git config user.email "actions@github.com"
+          git add Formula/apk-info.rb
+          git commit -m "apk-info ${version}"
+          git push origin main

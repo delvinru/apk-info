@@ -32,6 +32,14 @@ A full-featured `apk` parser.
 
 #### Installation
 
+With Homebrew:
+
+```bash
+brew install delvinru/tap/apk-info
+```
+
+Or with cargo:
+
 ```bash
 cargo install apk-info-cli
 ```
