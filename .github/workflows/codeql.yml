@@ -1,0 +1,41 @@
+name: codeql
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/codeql.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/codeql.yml"
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  security-events: write
+  contents: read
+  actions: read
+
+jobs:
+  analyze:
+    name: Analyze (rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Init CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: rust
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:rust"

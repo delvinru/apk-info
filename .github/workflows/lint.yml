@@ -1,5 +1,21 @@
 name: lint
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "**.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rustfmt.toml"
+      - "clippy.toml"
+      - ".github/workflows/lint.yml"
+  pull_request:
+    paths:
+      - "**.rs"
+      - "**/Cargo.toml"
+      - "Cargo.lock"
+      - "rustfmt.toml"
+      - "clippy.toml"
+      - ".github/workflows/lint.yml"
 
 jobs:
   clippy:
