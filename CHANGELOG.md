@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support for the APK Signature Scheme v3.2 (hybrid classical + post-quantum ML-DSA signing block, ID `0x70e1c89f`, introduced in Android 17 / API level 37). The new `Signature::V32` variant carries both signers' certificates and is surfaced in the CLI (`show -s`) and the Python bindings.
 
+### Changed
+
+- A malformed ID-value pair in the APK Signing Block no longer hides the blocks after it: the pair is skipped by its declared length and the walk continues.
+- A signing block whose leading and trailing sizes disagree is treated as absent instead of failing the whole signature listing.
+
 ## [1.0.13] - 2026-09-10
 
 ### Added

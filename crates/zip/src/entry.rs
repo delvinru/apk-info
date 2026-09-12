@@ -641,6 +641,10 @@ impl ZipEntry {
     /// at the end of the ZIP archive and attempts to parse all contained
     /// signatures (v2, v3, etc.).
     ///
+    /// Parsing is lenient: an ID-value pair whose value is malformed is
+    /// skipped by its declared length, and the blocks after it are still
+    /// reported.
+    ///
     /// <div class="warning">
     ///
     /// This method handles only v2+ signature blocks.
@@ -699,11 +703,14 @@ impl ZipEntry {
             .parse_next(&mut slice)
             .map_err(|_| CertificateError::ParseError)?;
 
+        // A block whose own sizes disagree is corrupt: treat it as absent
+        // rather than failing the whole signature listing. The v1 JAR
+        // signature, if any, is still reported by the caller.
         if size_of_block != size_of_block_start {
-            return Err(CertificateError::InvalidFormat(
-                size_of_block_start,
-                size_of_block,
-            ));
+            warn!(
+                "apk signing block size mismatch: start={size_of_block_start}, end={size_of_block}, treating the block as absent"
+            );
+            return Ok(Vec::new());
         }
 
         let signatures: Vec<Signature> =
@@ -859,6 +866,36 @@ impl ZipEntry {
         move |input: &mut &'a [u8]| {
             let (size, id) = (le_u64, le_u32).parse_next(input)?;
 
+            // A malformed pair must not hide the blocks that follow it
+            // Skips the pair by its declared length, and continues with the next pair
+            let mut value: &'a [u8] = input;
+            match Self::parse_signature_pair_value(id, size).parse_next(&mut value) {
+                Ok(signature) => {
+                    *input = value;
+                    Ok(signature)
+                }
+                Err(_) => {
+                    warn!(
+                        "malformed signing block pair 0x{id:08x} (size=0x{size:08x}), skipping the pair"
+                    );
+
+                    // skip the declared value; a length running past the end
+                    // of the block is a hard error and ends the walk
+                    let _ = take::<usize, &[u8], ContextError>(size.saturating_sub(4) as usize)
+                        .parse_next(input)?;
+
+                    Ok(Signature::Unknown)
+                }
+            }
+        }
+    }
+
+    /// Parses the value of a single ID-value pair of the APK Signing Block.
+    fn parse_signature_pair_value<'a>(
+        id: u32,
+        size: u64,
+    ) -> impl Parser<&'a [u8], Signature, ContextError> {
+        move |input: &mut &'a [u8]| {
             match id {
                 Self::SIGNATURE_SCHEME_V2_BLOCK_ID => {
                     let mut signers_data = length_take(le_u32).parse_next(input)?;
