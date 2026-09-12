@@ -9,6 +9,8 @@
 
 A full-featured `apk` parser.
 
+<img src="docs/assets/demo.gif" width="900" alt="apk-info demo" />
+
 ## Features
 
 - A malware-friendly zip extractor. Great [article](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) about `BadPack` technique;
