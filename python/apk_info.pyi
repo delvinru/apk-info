@@ -949,6 +949,16 @@ class Signature:
         certificates: list[CertificateInfo]
 
     @dataclass(frozen=True)
+    class V32:
+        """
+        APK signature scheme v3.2
+
+        See: <a href="https://source.android.com/docs/security/features/apksigning/v3-2" target="_blank">https://source.android.com/docs/security/features/apksigning/v3-2</a>
+        """
+
+        certificates: list[CertificateInfo]
+
+    @dataclass(frozen=True)
     class ApkChannelBlock:
         """
         Some useful information from apk channel block

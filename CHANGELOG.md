@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Support for the APK Signature Scheme v3.2 (hybrid classical + post-quantum ML-DSA signing block, ID `0x70e1c89f`, introduced in Android 17 / API level 37). The new `Signature::V32` variant carries both signers' certificates and is surfaced in the CLI (`show -s`) and the Python bindings.
+
 ## [1.0.13] - 2026-09-10
 
 ### Added

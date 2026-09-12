@@ -94,6 +94,7 @@ enum Signature {
     V2 { certificates: Vec<CertificateInfo> },
     V3 { certificates: Vec<CertificateInfo> },
     V31 { certificates: Vec<CertificateInfo> },
+    V32 { certificates: Vec<CertificateInfo> },
     StampBlockV1 { certificate: CertificateInfo },
     StampBlockV2 { certificate: CertificateInfo },
     ApkChannelBlock { value: String },
@@ -121,6 +122,11 @@ impl Signature {
             .into_pyobject(py)
             .ok(),
             ZipSignature::V31(v) => Signature::V31 {
+                certificates: v.into_iter().map(CertificateInfo::from).collect(),
+            }
+            .into_pyobject(py)
+            .ok(),
+            ZipSignature::V32(v) => Signature::V32 {
                 certificates: v.into_iter().map(CertificateInfo::from).collect(),
             }
             .into_pyobject(py)
@@ -167,6 +173,9 @@ impl Signature {
             }
             Signature::V31 { certificates } => {
                 format!("Signature.V31(certificates={:?})", certificates)
+            }
+            Signature::V32 { certificates } => {
+                format!("Signature.V32(certificates={:?})", certificates)
             }
             Signature::StampBlockV1 { certificate } => {
                 format!("Signature.StampBlockV1(certificate={:?})", certificate)

@@ -12,9 +12,17 @@ apk = APK(file)
 signatures = apk.get_signatures()
 for signature in signatures:
     match signature:
-        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31():
+        case (
+            Signature.V1()
+            | Signature.V2()
+            | Signature.V3()
+            | Signature.V31()
+            | Signature.V32()
+        ):
             for cert in signature.certificates:
-                print(f"{cert.subject=} {cert.issuer=} {cert.valid_from=} {cert.valid_until=}")
+                print(
+                    f"{cert.subject=} {cert.issuer=} {cert.valid_from=} {cert.valid_until=}"
+                )
         case Signature.ApkChannelBlock():
             print(f"got apk channel block: {signature.value}")
         case _:

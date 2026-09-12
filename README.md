@@ -22,6 +22,7 @@ A full-featured `apk` parser.
   - [APK Signature scheme v2](https://source.android.com/docs/security/features/apksigning/v2);
   - [APK Signature scheme v3](https://source.android.com/docs/security/features/apksigning/v3);
   - [APK Signature scheme v3.1](https://source.android.com/docs/security/features/apksigning/v3-1);
+  - [APK Signature scheme v3.2](https://source.android.com/docs/security/features/apksigning/v3-2);
   - Stamp Block v1 & v2;
   - Apk Channel Block;
   - [Packer NG v2](https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20);

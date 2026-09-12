@@ -139,7 +139,8 @@ fn print_signatures(signatures: &[Signature]) {
             Signature::V1(certificates)
             | Signature::V2(certificates)
             | Signature::V3(certificates)
-            | Signature::V31(certificates) => {
+            | Signature::V31(certificates)
+            | Signature::V32(certificates) => {
                 println!("  Type: {}", signature.name().green());
 
                 for (j, certificate) in certificates.iter().enumerate() {

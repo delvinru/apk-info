@@ -31,6 +31,12 @@ pub enum Signature {
     #[serde(rename = "v31")]
     V31(Vec<CertificateInfo>),
 
+    /// APK signature scheme v3.2
+    ///
+    /// See: <https://source.android.com/docs/security/features/apksigning/v3-2>
+    #[serde(rename = "v32")]
+    V32(Vec<CertificateInfo>),
+
     /// APK signature scheme v4
     ///
     /// See: <https://source.android.com/docs/security/features/apksigning/v4>
@@ -96,6 +102,7 @@ impl Signature {
             Signature::V2(_) => "v2".to_owned(),
             Signature::V3(_) => "v3".to_owned(),
             Signature::V31(_) => "v3.1".to_owned(),
+            Signature::V32(_) => "v3.2".to_owned(),
             Signature::V4 => "v4".to_owned(),
             Signature::ApkChannelBlock(_) => "APK Channel block".to_owned(),
             Signature::StampBlockV1(_) => "Stamp Block v1".to_owned(),

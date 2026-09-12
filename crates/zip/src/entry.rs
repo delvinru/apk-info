@@ -519,6 +519,11 @@ impl ZipEntry {
     /// See: <https://xrefandroid.com/android-16.0.0_r2/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/v3/V3SchemeConstants.java#26>
     pub const SIGNATURE_SCHEME_V31_BLOCK_ID: u32 = 0x1b93ad61;
 
+    /// Magic of V3.2 Signature Scheme
+    ///
+    /// See: <https://xrefandroid.com/android-17.0.0_r1/xref/tools/apksig/src/main/java/com/android/apksig/internal/apk/v3/V3SchemeConstants.java#27>
+    pub const SIGNATURE_SCHEME_V32_BLOCK_ID: u32 = 0x70e1c89f;
+
     /// Magic of V1 source stamp signing
     ///
     /// Includes metadata such as timestamp of the build, the version of the build tools, source code's git commit hash, etc
@@ -899,6 +904,21 @@ impl ZipEntry {
                         .collect();
 
                     Ok(Signature::V31(certificates))
+                }
+                Self::SIGNATURE_SCHEME_V32_BLOCK_ID => {
+                    let mut signers_data = length_take(le_u32).parse_next(input)?;
+
+                    let certificates =
+                        repeat::<_, Vec<CertificateInfo>, Vec<Vec<CertificateInfo>>, _, _>(
+                            1..,
+                            Self::parse_signer_v3(),
+                        )
+                        .parse_next(&mut signers_data)?
+                        .into_iter()
+                        .flatten()
+                        .collect();
+
+                    Ok(Signature::V32(certificates))
                 }
                 Self::APK_CHANNEL_BLOCK_ID => {
                     let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
