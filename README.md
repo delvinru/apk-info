@@ -1,8 +1,11 @@
 # apk-info
 
-[![Crates.io Version](https://img.shields.io/crates/v/apk-info?style=flat)](https://crates.io/crates/apk-info)
+[![crates.io](https://img.shields.io/crates/v/apk-info?style=flat)](https://crates.io/crates/apk-info)
+[![rust downloads](https://img.shields.io/crates/d/apk-info?label=rust%20downloads)](https://crates.io/crates/apk-info)
 [![docs.rs](https://img.shields.io/docsrs/apk-info?style=flat)](https://docs.rs/apk-info/latest/apk_info/)
-[![PyPI - Version](https://img.shields.io/pypi/v/apk-info?style=flat)](https://pypi.org/project/apk-info/)
+[![pypi](https://img.shields.io/pypi/v/apk-info?style=flat)](https://pypi.org/project/apk-info/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/apk-info?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=pypi+downloads)](https://pepy.tech/projects/apk-info)
+[![license](https://img.shields.io/crates/l/apk-info)](./LICENSE)
 
 A full-featured `apk` parser.
 
