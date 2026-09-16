@@ -106,6 +106,47 @@ impl ARSC {
         }
     }
 
+    pub fn get_all_resource_values(&self, id: u32) -> Vec<String> {
+        let (pkg_id, type_id, entry_id) = self.split_resource_id(id);
+
+        let Some(package) = self.packages.get(&pkg_id) else {
+        return vec![];
+    };
+
+        let entries = package.find_all_entries(type_id, entry_id);
+        let mut results = Vec::new();
+
+        for entry in entries {
+            match entry {
+                ResTableEntry::Default(e) => {
+                    let value = match e.value.data_type {
+                        ResourceValueType::Reference => {
+                            if e.value.data == id {
+                                continue;
+                            }
+                            self.get_resource_value(e.value.data)
+                        }
+                        _ => Some(e.value.to_string(&self.global_string_pool, Some(self))),
+                    };
+                    if let Some(s) = value 
+                        && !results.contains(&s) {
+                        results.push(s);
+                    }
+                }
+                ResTableEntry::Compact(e) => {
+                    if let Some(s) = self.global_string_pool.get(e.data)
+                        && !results.contains(s)
+                    {
+                        results.push(s.clone());
+                    }
+                }
+                ResTableEntry::Complex(_) | ResTableEntry::NoEntry => {}
+            }
+        }
+
+        results
+    }
+
     /// Retrieves a resource value by its resolved name.
     pub fn get_resource_value_by_name(&self, name: &str) -> Option<String> {
         let reference_names = self.reference_names.borrow();
