@@ -11,12 +11,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Support for the APK Signature Scheme v3.2 (hybrid classical + post-quantum ML-DSA signing block, ID `0x70e1c89f`, introduced in Android 17 / API level 37). The new `Signature::V32` variant carries both signers' certificates and is surfaced in the CLI (`show -s`) and the Python bindings.
 - A curated suite of golden signature fixtures from the AOSP `apksig` test resources (valid schemes + deliberately malformed archives), with integration tests for every parser path.
+- `ZipEntry::open_nested()` parses an archive stored inside another one (the base apk of a `xapk`/`apkm`) without copying it into memory.
+- `ZipEntry::METHOD_STORED` and `ZipEntry::METHOD_DEFLATED` constants for `EntryInfo::compression_method`.
+- `prek.toml` with `cargo fmt` and `cargo clippy` (warnings denied) pre-commit hooks.
 
 ### Changed
 
 - A malformed ID-value pair in the APK Signing Block no longer hides the blocks after it: the pair is skipped by its declared length and the walk continues.
 - A signing block whose leading and trailing sizes disagree is treated as absent instead of failing the whole signature listing.
 - `repack` integration tests now run against the golden APK fixtures through the library's own reader instead of host `zip`/`7zz` tools.
+- `flate2` uses the pure-Rust `zlib-rs` backend; `repack` output is about 1% larger.
+- `Debug` for `StringPool` shows the string count and the first decoded strings instead of the raw chunk.
+
+### Performance
+
+- `resources.arsc` and manifest string pools decode strings on access instead of all at once at parse time.
+- `xapk`/`apkm` containers read a stored inner apk in place: about 11× faster to open and about 3× less peak memory.
+- Fewer allocations while reading the central directory and resource type chunks.
+- Faster decompression from `zlib-rs`: whole-archive extraction about 1.4×, `repack` about 1.7×.
+- Opening the 5714-file test corpus with `show` went from 72 s to 26.5 s, with identical output.
+
+### Breaking Changes
+
+- `apk-info-axml`: `StringPool::strings` is removed; `StringPool::get()` and `get_with_resources()` return `Cow<str>`.
 
 ## [1.0.13] - 2026-09-10
 
