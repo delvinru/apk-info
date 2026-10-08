@@ -1,0 +1,8 @@
+#:schema https://www.schemastore.org/prek.json
+
+[[repos]]
+repo = "local"
+hooks = [
+    { id = "cargo-fmt", name = "cargo fmt", language = "system", entry = "cargo fmt --all --check", files = '(\.rs|rustfmt\.toml)$', pass_filenames = false },
+    { id = "cargo-clippy", name = "cargo clippy", language = "system", entry = "cargo clippy --workspace --all-targets -- -D warnings -D clippy::all", files = '(\.rs|Cargo\.(toml|lock)|rustfmt\.toml|clippy\.toml)$', pass_filenames = false },
+]

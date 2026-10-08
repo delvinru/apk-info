@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -527,26 +528,47 @@ impl ResTableType {
         // https://github.com/skylot/jadx/blob/master/jadx-core/src/main/java/jadx/core/xmlgen/ResTableBinaryParser.java#L276
         // Dense/offset16: id == position, ids not stored (`None`). Sparse: {idx, offset}
         // per entry (AOSP `ResTable_sparseTypeEntry`), idx maps an id to its packed position.
-        let (entry_ids, entry_offsets): (Option<Vec<u16>>, Vec<u32>) = if Self::is_sparse(flags) {
-            let pairs: Vec<(u16, u16)> =
-                repeat(entry_count as usize, (le_u16, le_u16)).parse_next(input)?;
+        // every variant is a fixed-width array: take it once, then decode in bulk
+        let index_len = (entry_count as usize)
+            .checked_mul(if Self::is_sparse(flags) {
+                4
+            } else {
+                offset_size as usize
+            })
+            .ok_or_else(|| ErrMode::Incomplete(Needed::Unknown))?;
+        let index = take(index_len).parse_next(input)?;
 
+        let (entry_ids, entry_offsets): (Option<Vec<u16>>, Vec<u32>) = if Self::is_sparse(flags) {
             // AOSP has no NO_ENTRY sentinel in sparse entries; jadx treats 0xffff
             // as one anyway, so do the same.
-            let (ids, offsets): (Vec<u16>, Vec<u32>) = pairs
-                .into_iter()
-                .map(|(idx, offset)| (idx, offset_from16(offset)))
+            let (ids, offsets): (Vec<u16>, Vec<u32>) = index
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| {
+                    (
+                        u16::from_le_bytes([c[0], c[1]]),
+                        offset_from16(u16::from_le_bytes([c[2], c[3]])),
+                    )
+                })
                 .unzip();
             (Some(ids), offsets)
         } else if Self::is_offset16(flags) {
-            let offsets =
-                repeat(entry_count as usize, le_u16.map(offset_from16)).parse_next(input)?;
+            let offsets = index
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| offset_from16(u16::from_le_bytes(*c)))
+                .collect();
             (None, offsets)
         } else {
-            (
-                None,
-                repeat(entry_count as usize, le_u32).parse_next(input)?,
-            )
+            let offsets = index
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| u32::from_le_bytes(*c))
+                .collect();
+            (None, offsets)
         };
 
         // WhatsApp (da8963f347c26ede58c1087690f1af8ef308cd778c5aaf58094eeb57b6962b21)
@@ -1012,11 +1034,11 @@ impl ResTablePackage {
 
     /// Allows you to get the name of a resource depending on its type.
     #[inline]
-    fn get_entry_key(&self, entry: &ResTableEntry) -> Option<&str> {
+    fn get_entry_key(&self, entry: &ResTableEntry) -> Option<Cow<'_, str>> {
         match entry {
-            ResTableEntry::Compact(e) => self.key_strings.get(u32::from(e.key)).map(String::as_str),
-            ResTableEntry::Complex(e) => self.key_strings.get(e.index).map(String::as_str),
-            ResTableEntry::Default(e) => self.key_strings.get(e.index).map(String::as_str),
+            ResTableEntry::Compact(e) => self.key_strings.get(u32::from(e.key)),
+            ResTableEntry::Complex(e) => self.key_strings.get(e.index),
+            ResTableEntry::Default(e) => self.key_strings.get(e.index),
             ResTableEntry::NoEntry => None,
         }
     }
@@ -1025,20 +1047,10 @@ impl ResTablePackage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::structs::{ResStringPoolHeader, ResourceValueType};
+    use crate::structs::ResourceValueType;
 
     fn get_string_pool(strings: &[&str]) -> StringPool {
-        StringPool {
-            header: ResStringPoolHeader {
-                header: ResChunkHeader::default(),
-                string_count: strings.len() as u32,
-                style_count: 0,
-                flags: 0,
-                strings_start: 0,
-                styles_start: 0,
-            },
-            strings: strings.iter().map(|s| s.to_string()).collect(),
-        }
+        StringPool::from_strs(strings)
     }
 
     fn default_entry(key_index: u32) -> ResTableEntry {

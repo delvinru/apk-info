@@ -135,7 +135,7 @@ impl AXML {
                         continue;
                     };
 
-                    let mut element = Element::with_capacity(name, node.attributes.len());
+                    let mut element = Element::with_capacity(&name, node.attributes.len());
 
                     // The `android` namespace is always in scope in decoded binary XML.
                     if stack.is_empty() {
@@ -169,7 +169,7 @@ impl AXML {
                         };
 
                         let value_str = attrs_manifest::get_attr_value(
-                            attribute_name,
+                            &attribute_name,
                             &attribute.typed_value.data,
                         )
                         .unwrap_or_else(|| {
@@ -186,7 +186,7 @@ impl AXML {
                             );
                         }
 
-                        element.set_attribute_with_prefix(ns_prefix, attribute_name, &value_str);
+                        element.set_attribute_with_prefix(ns_prefix, &attribute_name, &value_str);
                     }
 
                     stack.push(element);

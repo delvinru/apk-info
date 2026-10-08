@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{self, Cursor};
+use std::io;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -105,17 +105,16 @@ impl Apk {
             });
         }
 
-        // helper to parse an inner apk out of the container and seed its cache
-        let parse_inner = |data: Vec<u8>| -> Result<(AXML, Option<ARSC>, ZipEntry), APKError> {
-            let inner_apk = ZipEntry::from_reader(Cursor::new(data)).map_err(APKError::ZipError)?;
+        // helper to parse the manifest and resources of an inner apk
+        let parse_inner = |inner_apk: &ZipEntry| -> Result<(AXML, Option<ARSC>), APKError> {
             let (inner_manifest, _) = inner_apk
                 .read(ANDROID_MANIFEST_PATH)
                 .map_err(APKError::ZipError)?;
 
-            let arsc = Self::get_arsc(&inner_apk)?;
+            let arsc = Self::get_arsc(inner_apk)?;
             let axml = Self::get_axml(&inner_manifest, arsc.as_ref())?;
 
-            Ok((axml, arsc, inner_apk))
+            Ok((axml, arsc))
         };
 
         // xapk
@@ -124,8 +123,8 @@ impl Apk {
                 serde_json::from_slice(&manifest_json_data).map_err(APKError::XAPKManifestError)?;
 
             let package_name = format!("{}.apk", manifest_json.package_name);
-            let (inner_apk_data, _) = zip.read(&package_name).map_err(APKError::ZipError)?;
-            let (axml, arsc, inner_apk) = parse_inner(inner_apk_data)?;
+            let inner_apk = zip.open_nested(&package_name).map_err(APKError::ZipError)?;
+            let (axml, arsc) = parse_inner(&inner_apk)?;
 
             // the apk is parsed already; keeping it makes later queries free
             let inner_zip = OnceLock::new();
@@ -141,8 +140,8 @@ impl Apk {
         }
 
         // apkm
-        if let Ok((inner_apk_data, _)) = zip.read(APKM_BASE_APK) {
-            let (axml, arsc, inner_apk) = parse_inner(inner_apk_data)?;
+        if let Ok(inner_apk) = zip.open_nested(APKM_BASE_APK) {
+            let (axml, arsc) = parse_inner(&inner_apk)?;
 
             let inner_zip = OnceLock::new();
             inner_zip.get_or_init(|| Some(inner_apk));
@@ -877,10 +876,7 @@ impl Apk {
         self.inner_zip
             .get_or_init(|| {
                 // deterministic on fixed bytes, so caching a failure is safe
-                self.zip
-                    .read(name)
-                    .ok()
-                    .and_then(|(data, _)| ZipEntry::from_reader(Cursor::new(data)).ok())
+                self.zip.open_nested(name).ok()
             })
             .as_ref()
             .ok_or(APKError::ZipError(ZipError::ParseError))

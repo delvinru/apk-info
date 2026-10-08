@@ -87,8 +87,8 @@ fn list_archive(path: &Path, regexes: &[Regex]) -> Result<()> {
         };
 
         let mut method = match info.compression_method {
-            0 => "Stored".to_string(),
-            8 => "Deflate".to_string(),
+            ZipEntry::METHOD_STORED => "Stored".to_string(),
+            ZipEntry::METHOD_DEFLATED => "Deflate".to_string(),
             other => format!("Other({other})"),
         };
         if info.tampered {

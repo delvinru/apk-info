@@ -55,12 +55,6 @@ pub(crate) struct CentralDirectoryEntry {
     pub(crate) local_header_offset: u32,
 
     pub(crate) file_name: Arc<str>,
-
-    #[allow(unused)]
-    pub(crate) extra_field: Arc<[u8]>,
-
-    #[allow(unused)]
-    pub(crate) file_comment: Arc<[u8]>,
 }
 
 impl CentralDirectoryEntry {
@@ -112,7 +106,8 @@ impl CentralDirectoryEntry {
         )
             .parse_next(input)?;
 
-        let (file_name, extra_field, file_comment) = (
+        // extra field and comment are unused: skip them without copying
+        let (file_name, _, _) = (
             take(file_name_length),
             take(extra_field_length),
             take(file_comment_length),
@@ -139,8 +134,6 @@ impl CentralDirectoryEntry {
             external_attrs,
             local_header_offset,
             file_name: Arc::from(file_name),
-            extra_field: Arc::from(extra_field),
-            file_comment: Arc::from(file_comment),
         })
     }
 }
@@ -238,8 +231,8 @@ mod tests {
         let entry = CentralDirectoryEntry::parse(&mut input).unwrap();
 
         assert_eq!(entry.file_name.as_ref(), file_name);
-        assert_eq!(entry.extra_field.as_ref(), extra);
-        assert_eq!(entry.file_comment.as_ref(), comment);
+        assert_eq!(entry.extra_field_length as usize, extra.len());
+        assert_eq!(entry.file_comment_length as usize, comment.len());
         assert_eq!(entry.compressed_size, 111);
         assert_eq!(entry.uncompressed_size, 222);
         assert_eq!(entry.local_header_offset, 333);
@@ -287,8 +280,8 @@ mod tests {
         assert!(cd.entries.contains_key("b.txt"));
 
         let b = cd.entries.get("b.txt").unwrap();
-        assert_eq!(b.extra_field.as_ref(), b"extra information");
-        assert_eq!(b.file_comment.as_ref(), b"comment field");
+        assert_eq!(b.extra_field_length as usize, b"extra information".len());
+        assert_eq!(b.file_comment_length as usize, b"comment field".len());
     }
 
     #[test]

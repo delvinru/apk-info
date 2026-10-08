@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::Write;
 
 use winnow::binary::{le_u8, le_u16, le_u32};
@@ -282,7 +283,10 @@ impl ResourceValue {
 
             ResourceValueType::String => {
                 // direct clone or fallback to empty
-                string_pool.get(self.data).cloned().unwrap_or_default()
+                string_pool
+                    .get(self.data)
+                    .map(Cow::into_owned)
+                    .unwrap_or_default()
             }
 
             ResourceValueType::Float => {

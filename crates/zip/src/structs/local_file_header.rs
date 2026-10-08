@@ -33,13 +33,9 @@ pub(crate) struct LocalFileHeader {
     #[allow(unused)]
     pub(crate) file_name_length: u16,
 
-    #[allow(unused)]
     pub(crate) extra_field_length: u16,
 
     pub(crate) file_name: Arc<[u8]>,
-
-    #[allow(unused)]
-    pub(crate) extra_field: Arc<[u8]>,
 
     /// Actual offset of this local header in the file; differs from the claimed
     /// `local_header_offset` once self-healing recovered a shifted entry.
@@ -83,7 +79,8 @@ impl LocalFileHeader {
         )
             .parse_next(&mut input)?;
 
-        let (file_name, extra_field) =
+        // `size()` needs the extra field's length; the bytes go unused
+        let (file_name, _) =
             (take(file_name_length), take(extra_field_length)).parse_next(&mut input)?;
 
         Ok(LocalFileHeader {
@@ -98,7 +95,6 @@ impl LocalFileHeader {
             file_name_length,
             extra_field_length,
             file_name: Arc::from(file_name),
-            extra_field: Arc::from(extra_field),
             offset,
         })
     }
@@ -108,7 +104,7 @@ impl LocalFileHeader {
     /// 4 (MAGIC) + 26 (DATA) + file_name length + extra field length
     #[inline]
     pub(crate) fn size(&self) -> usize {
-        30 + self.file_name.len() + self.extra_field.len()
+        30 + self.file_name.len() + self.extra_field_length as usize
     }
 }
 
@@ -156,7 +152,6 @@ mod tests {
         assert_eq!(parsed.file_name_length, file_name.len() as u16);
         assert_eq!(parsed.extra_field_length, extra_field.len() as u16);
         assert_eq!(parsed.file_name.as_ref(), file_name);
-        assert_eq!(parsed.extra_field.as_ref(), extra_field);
 
         // Verify size() method
         assert_eq!(parsed.size(), 30 + file_name.len() + extra_field.len());
@@ -170,7 +165,7 @@ mod tests {
 
         let parsed = LocalFileHeader::parse(&data, 10).unwrap();
         assert_eq!(parsed.file_name.as_ref(), b"qwerty.txt");
-        assert_eq!(parsed.extra_field.as_ref(), b"1234");
+        assert_eq!(parsed.extra_field_length, 4);
     }
 
     #[test]

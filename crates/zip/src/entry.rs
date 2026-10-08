@@ -79,7 +79,8 @@ impl std::fmt::Debug for ZipEntry {
 /// Metadata of a single archive entry, without reading its data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntryInfo {
-    /// Compression method declared in the central directory (`0` = stored, `8` = deflate)
+    /// Compression method declared in the central directory
+    /// ([`ZipEntry::METHOD_STORED`], [`ZipEntry::METHOD_DEFLATED`], or another value in tampered archives)
     pub compression_method: u16,
 
     /// Compressed size, in bytes
@@ -94,6 +95,16 @@ pub struct EntryInfo {
 
 /// Implementation of basic methods
 impl ZipEntry {
+    /// Compression method `0`: uncompressed entry data.
+    ///
+    /// See: <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT> (4.4.5)
+    pub const METHOD_STORED: u16 = 0;
+
+    /// Compression method `8`: Deflate-compressed entry data.
+    ///
+    /// See: <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT> (4.4.5)
+    pub const METHOD_DEFLATED: u16 = 8;
+
     /// Parses the local file header at `offset`, reading it lazily from the source.
     ///
     /// Two bounded reads: the fixed part first (to learn the name and extra
@@ -431,7 +442,7 @@ impl ZipEntry {
         let read_data = |len: usize| self.source.read_bytes_at(offset, len);
 
         match (method, compressed_size == uncompressed_size) {
-            (0, _) => {
+            (Self::METHOD_STORED, _) => {
                 // stored (no compression)
                 let data = read_data(uncompressed_size)?;
                 let compression = if tampered {
@@ -441,7 +452,7 @@ impl ZipEntry {
                 };
                 Ok((data, compression))
             }
-            (8, _) => {
+            (Self::METHOD_DEFLATED, _) => {
                 // deflate default
                 let compressed_data = read_data(compressed_size)?;
                 let mut uncompressed_data = Vec::with_capacity(uncompressed_size);
@@ -492,6 +503,49 @@ impl ZipEntry {
                 }
             }
         }
+    }
+
+    /// Parses an archive nested inside this one, e.g. the base apk of a
+    /// `xapk`/`apkm` container.
+    ///
+    /// For a stored entry, it reads the inner archive in place through a window
+    /// over the same source, so a large inner apk costs one central directory
+    /// read. For any other entry, it decompresses the data into memory first
+    /// and gets the same bytes as [`ZipEntry::read`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a [ZipError] if the entry cannot be read, or the nested data is
+    /// not a valid archive (see [`ZipEntry::from_reader`]).
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use apk_info_zip::ZipEntry;
+    /// let container = ZipEntry::open("app.apkm").unwrap();
+    /// let base = container.open_nested("base.apk").expect("failed to parse inner apk");
+    /// ```
+    pub fn open_nested(&self, filename: &str) -> Result<ZipEntry, ZipError> {
+        let entry = self
+            .central_directory
+            .entries
+            .get(filename)
+            .ok_or(ZipError::FileNotFound)?;
+
+        let method = entry.compression_method;
+        let size = entry.uncompressed_size as usize;
+
+        let stored = method == Self::METHOD_STORED
+            || (method != Self::METHOD_DEFLATED
+                && entry.compressed_size == entry.uncompressed_size);
+        if !stored || size > MAX_UNCOMPRESSED_SIZE {
+            let (data, _) = self.read(filename)?;
+            return Self::new(data);
+        }
+
+        let local_header = self.read_local_header_verified(entry)?;
+        let offset = local_header.offset + local_header.size();
+        Self::parse(self.source.slice(offset, size)?)
     }
 }
 
