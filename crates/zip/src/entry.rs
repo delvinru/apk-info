@@ -287,13 +287,15 @@ impl ZipEntry {
             derived
         };
 
-        // Read the central directory to the end of the stream: `central_dir_size`
-        // may understate the real record area in a tampered archive, and the
-        // parser stops at the first non-CDH magic anyway.
+        // Read from the CD offset to EOF; `central_dir_size` can understate the
+        // real record area in a tampered archive. Parse at most `total_entries`
+        // records, like Android's loop over `num_records`, so a decoy appended
+        // past the count (which still installs and runs) can't shadow a real
+        // entry such as the manifest.
         let cd_bytes =
             source.read_bytes_at(central_dir_offset, source.len() - central_dir_offset)?;
-        let central_directory =
-            CentralDirectory::parse(&cd_bytes, 0).map_err(|_| ZipError::ParseError)?;
+        let central_directory = CentralDirectory::parse(&cd_bytes, 0, eocd.total_entries as usize)
+            .map_err(|_| ZipError::ParseError)?;
 
         Ok(ZipEntry {
             source,
@@ -302,32 +304,80 @@ impl ZipEntry {
         })
     }
 
-    /// Searches backwards from the end of the stream for the EOCD signature.
+    /// Finds the EOCD, scanning 4KB windows backward with a 3-byte overlap so a
+    /// signature on a window edge still matches.
     ///
-    /// Reads 4KB windows instead of the whole tail. Adjacent windows overlap
-    /// by 3 bytes so a signature straddling a window edge is not missed.
+    /// Accepts a candidate only if its comment reaches the exact end of the
+    /// stream ([`Self::eocd_spans_to_end`]) — Android's invariant, which ignores
+    /// a fake `PK\x05\x06` planted in the archive comment. Falls back to the
+    /// rightmost match when none qualifies, so a broken archive still parses.
     fn find_eocd_offset(source: &Source) -> Option<usize> {
         const MAGIC: &[u8; 4] = b"PK\x05\x06";
 
+        let total_len = source.len();
+        let mut fallback = None;
+
         // one reusable window for the whole backward scan
         let mut window = vec![0u8; EOCD_SEARCH_WINDOW];
-        let mut end = source.len();
+        let mut end = total_len;
         loop {
             let start = end.saturating_sub(EOCD_SEARCH_WINDOW);
             let len = end - start;
             source.read_exact_at(start, &mut window[..len]).ok()?;
 
-            if let Some(pos) = memmem::rfind(&window[..len], MAGIC) {
-                return Some(start + pos);
+            // Walk candidate signatures in this window from the rightmost.
+            let mut upto = len;
+            while let Some(pos) = memmem::rfind(&window[..upto], MAGIC) {
+                let offset = start + pos;
+                if Self::eocd_spans_to_end(source, &window[..len], start, offset, total_len) {
+                    return Some(offset);
+                }
+                // remember the first (rightmost) candidate as a lenient fallback
+                fallback.get_or_insert(offset);
+                // keep searching strictly earlier in the window
+                upto = pos + MAGIC.len() - 1;
             }
 
             if start == 0 {
-                return None;
+                return fallback;
             }
 
             // step back, overlapping by 3 bytes
             end = start + MAGIC.len() - 1;
         }
+    }
+
+    /// Whether an EOCD at `offset`, plus its declared comment, ends exactly at
+    /// the stream's end — the mark of the real record over a comment-embedded
+    /// decoy. Reads `comment_length` from `window` (already read from
+    /// `win_start`), touching the source only when that field crosses the edge.
+    fn eocd_spans_to_end(
+        source: &Source,
+        window: &[u8],
+        win_start: usize,
+        offset: usize,
+        total_len: usize,
+    ) -> bool {
+        // 22-byte fixed record; comment_length is the u16 at offset + 20
+        let Some(fields_end) = offset.checked_add(22) else {
+            return false;
+        };
+        if fields_end > total_len {
+            return false;
+        }
+
+        let rel = offset - win_start;
+        let comment_len = if rel + 22 <= window.len() {
+            u16::from_le_bytes([window[rel + 20], window[rel + 21]])
+        } else {
+            let mut buf = [0u8; 2];
+            if source.read_exact_at(offset + 20, &mut buf).is_err() {
+                return false;
+            }
+            u16::from_le_bytes(buf)
+        } as usize;
+
+        fields_end + comment_len == total_len
     }
 
     /// Returns an iterator over the names of all files in the ZIP archive,

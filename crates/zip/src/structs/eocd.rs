@@ -15,7 +15,6 @@ pub(crate) struct EndOfCentralDirectory {
     #[allow(unused)]
     pub(crate) entries_on_this_disk: u16,
 
-    #[allow(unused)]
     pub(crate) total_entries: u16,
 
     #[allow(unused)]

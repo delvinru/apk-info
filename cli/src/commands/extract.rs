@@ -133,6 +133,26 @@ fn make_output_dir(path: &Path, output: &Option<PathBuf>) -> PathBuf {
     }
 }
 
+/// Whether `name` stays inside `out_dir` once joined. Rejects `..` in any
+/// segment, an absolute root, a Windows drive, or a NUL. Both `/` and `\` count
+/// as separators so a crafted name can't escape on Windows either.
+fn is_safe_relative_name(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    // unix root, windows drive-relative `\`, or a UNC `\\server` share
+    if name.starts_with('/') || name.starts_with('\\') {
+        return false;
+    }
+    name.split(['/', '\\']).all(|segment| match segment {
+        // empty segments come from interior/trailing separators; they stay put
+        "" | "." => true,
+        ".." => false,
+        // `:` marks a windows drive or an alternate data stream
+        _ => !segment.contains([':', '\0']),
+    })
+}
+
 /// Resolves where an entry should be written inside `out_dir`.
 ///
 /// Returns `None` for traversal or directory entries that must never be written.
@@ -141,11 +161,7 @@ fn make_output_dir(path: &Path, output: &Option<PathBuf>) -> PathBuf {
 /// the filesystem) designed to break extraction tools - in that case the data is
 /// saved under an md5 hash of the original name.
 fn resolve_output_path(out_dir: &Path, file_name: &str) -> Option<(PathBuf, bool)> {
-    if file_name.ends_with('/')
-        || file_name.is_empty()
-        || file_name.starts_with("..")
-        || file_name.starts_with("/")
-    {
+    if file_name.ends_with('/') || !is_safe_relative_name(file_name) {
         return None;
     }
 
@@ -354,4 +370,55 @@ fn extract(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_path_traversal() {
+        let out = Path::new("/tmp/out");
+        for name in [
+            "../evil",
+            "assets/../../etc/passwd",
+            "a/../../b",
+            "/etc/passwd",
+            "\\windows\\system32",
+            "..\\..\\evil",
+            "C:\\evil",
+            "res/../../x",
+            "foo/..",
+        ] {
+            assert!(
+                resolve_output_path(out, name).is_none(),
+                "{name} must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_ordinary_names() {
+        let out = Path::new("/tmp/out");
+        for name in ["res/layout/main.xml", "classes.dex", "..foo", "a.b..c"] {
+            let (path, renamed) =
+                resolve_output_path(out, name).unwrap_or_else(|| panic!("{name} must be accepted"));
+            assert!(!renamed, "{name} should not be renamed");
+            assert!(path.starts_with(out), "{name} escaped out_dir");
+        }
+    }
+
+    #[test]
+    fn directory_entries_are_skipped() {
+        assert!(resolve_output_path(Path::new("/tmp/out"), "res/").is_none());
+    }
+
+    #[test]
+    fn overlong_name_is_hashed_but_stays_inside() {
+        let out = Path::new("/tmp/out");
+        let long = format!("dir/{}", "a".repeat(MAX_COMPONENT_LEN + 1));
+        let (path, renamed) = resolve_output_path(out, &long).expect("overlong name is kept");
+        assert!(renamed, "overlong name must be saved under a hash");
+        assert!(path.starts_with(out));
+    }
 }

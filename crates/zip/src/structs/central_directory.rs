@@ -150,13 +150,20 @@ pub(crate) struct CentralDirectory {
 }
 
 impl CentralDirectory {
-    pub(crate) fn parse(input: &[u8], cd_offset: usize) -> ModalResult<CentralDirectory> {
+    /// Parses at most `expected_entries` records, matching Android's loop over
+    /// `num_records`, so a decoy appended past the count can't shadow a real
+    /// entry. Stops early on a failed record, staying lenient for truncation.
+    pub(crate) fn parse(
+        input: &[u8],
+        cd_offset: usize,
+        expected_entries: usize,
+    ) -> ModalResult<CentralDirectory> {
         let mut input = input
             .get(cd_offset..)
             .ok_or(ErrMode::Incomplete(Needed::Unknown))?;
 
         let parsed = repeat::<_, CentralDirectoryEntry, Vec<CentralDirectoryEntry>, _, _>(
-            0..,
+            0..=expected_entries,
             CentralDirectoryEntry::parse,
         )
         .parse_next(&mut input)?;
@@ -274,7 +281,7 @@ mod tests {
         data.extend_from_slice(&e1);
         data.extend_from_slice(&e2);
 
-        let cd = CentralDirectory::parse(&data, 0).unwrap();
+        let cd = CentralDirectory::parse(&data, 0, 2).unwrap();
         assert_eq!(cd.entries.len(), 2);
         assert!(cd.entries.contains_key("a.txt"));
         assert!(cd.entries.contains_key("b.txt"));
@@ -291,7 +298,7 @@ mod tests {
         let offset = file.len();
         file.extend_from_slice(&entry);
 
-        let cd = CentralDirectory::parse(&file, offset).unwrap();
+        let cd = CentralDirectory::parse(&file, offset, 1).unwrap();
         assert_eq!(cd.entries.len(), 1);
         assert!(cd.entries.contains_key("offset.txt"));
     }
@@ -300,7 +307,24 @@ mod tests {
     fn test_parse_central_directory_invalid_offset() {
         let data = vec![0x00; 10];
 
-        let result = CentralDirectory::parse(&data, 9999);
+        let result = CentralDirectory::parse(&data, 9999, 1);
         assert!(result.is_err(), "expected error for out-of-bounds offset");
+    }
+
+    #[test]
+    fn test_decoy_record_beyond_num_records_is_ignored() {
+        // Real entry plus a decoy reusing its name; the count (1) excludes the
+        // decoy, so the real entry's data wins.
+        let real = make_cde_record("AndroidManifest.xml", b"", b"", 10, 20, 30);
+        let decoy = make_cde_record("AndroidManifest.xml", b"", b"", 99, 99, 999);
+        let mut data = Vec::new();
+        data.extend_from_slice(&real);
+        data.extend_from_slice(&decoy);
+
+        let cd = CentralDirectory::parse(&data, 0, 1).unwrap();
+        assert_eq!(cd.entries.len(), 1);
+        let entry = cd.entries.get("AndroidManifest.xml").unwrap();
+        assert_eq!(entry.local_header_offset, 30, "decoy must not win");
+        assert_eq!(entry.compressed_size, 10);
     }
 }
