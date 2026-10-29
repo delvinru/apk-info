@@ -32,12 +32,16 @@ const APKS_TOC_PATH: &str = "toc.pb";
 ///
 /// Names follow bundletool's `ApkPathManager`: `default`/`--connected-device`
 /// mode emits `splits/`, `universal` mode a single `universal.apk`,
-/// `system` and `archive` modes their own directories.
+/// `system`, `archive` and `instant` modes their own directories.
+///
+/// The order matters, keep it unsorted: `default` mode of an instant-enabled
+/// app emits both `splits/` and `instant/`, and the installed app is `splits/`.
 const APKS_BASE_APKS: &[&str] = &[
     "splits/base-master.apk",
     "universal.apk",
     "system/system.apk",
     "archive/archive.apk",
+    "instant/instant-base-master.apk",
 ];
 
 /// Directory and prefix of standalone (pre-Lollipop) APKs in an APKS archive,
@@ -220,9 +224,12 @@ impl Apk {
 
     /// Extracts the ABI from a split apk file name inside a container:
     /// `config.arm64_v8a.apk`/`split_config.arm64_v8a.apk` (xapk/apkm) or
-    /// `splits/base-arm64_v8a.apk` (apks).
+    /// `splits/base-arm64_v8a.apk`/`instant/instant-base-arm64_v8a.apk` (apks).
     fn split_abi_from_name(name: &str) -> Option<String> {
-        let token = match name.strip_prefix("splits/") {
+        let apks_split = name
+            .strip_prefix("splits/")
+            .or_else(|| name.strip_prefix("instant/instant-"));
+        let token = match apks_split {
             Some(split) => split.strip_suffix(".apk")?.split_once('-')?.1,
             None => name
                 .strip_prefix("config.")
@@ -1172,8 +1179,29 @@ mod tests {
             Some("universal.apk")
         );
         assert_eq!(
-            apks_base(&["toc.pb", "system/system.apk"]).as_deref(),
+            apks_base(&["toc.pb", "splits/base-ru.apk", "system/system.apk"]).as_deref(),
             Some("system/system.apk")
+        );
+        assert_eq!(
+            apks_base(&["toc.pb", "instant/instant-base-master.apk"]).as_deref(),
+            Some("instant/instant-base-master.apk")
+        );
+    }
+
+    /// `default` mode of an instant-enabled app ships both `splits/` and
+    /// `instant/`; the installable app is the `splits/` one.
+    #[test]
+    fn apks_base_prefers_splits_over_instant() {
+        assert_eq!(
+            apks_base(&[
+                "toc.pb",
+                "instant/instant-base-master.apk",
+                "instant/instant-base-ru.apk",
+                "splits/base-master.apk",
+                "splits/base-ru.apk",
+            ])
+            .as_deref(),
+            Some("splits/base-master.apk")
         );
     }
 
@@ -1210,6 +1238,8 @@ mod tests {
             ("splits/base-arm64_v8a.apk", Some("arm64-v8a")),
             ("splits/base-x86_64.apk", Some("x86_64")),
             ("splits/feature-x86.apk", Some("x86")),
+            ("instant/instant-base-arm64_v8a.apk", Some("arm64-v8a")),
+            ("instant/instant-base-master.apk", None),
             ("splits/base-master.apk", None),
             ("splits/base-xxhdpi.apk", None),
             ("config.en.apk", None),

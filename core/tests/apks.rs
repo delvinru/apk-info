@@ -58,3 +58,29 @@ fn universal_apks_parse_universal_apk() {
     let inner = apk.get_inner_zip().expect("universal.apk is the inner apk");
     assert!(inner.namelist().any(|n| n == "lib/x86_64/libstub.so"));
 }
+
+/// `--mode=system`: `system/system.apk` merges the device's abi and density
+/// splits, the language splits stay next to it in `splits/`.
+#[test]
+fn system_apks_parse_system_apk() {
+    let apk = Apk::new(fixture("apks-system.apks")).expect("system apks must parse");
+    assert_app(&apk);
+
+    let inner = apk.get_inner_zip().expect("system.apk is the inner apk");
+    assert!(inner.namelist().any(|n| n == "lib/x86_64/libstub.so"));
+    assert!(apk.namelist().any(|n| n == "splits/base-ru.apk"));
+}
+
+/// `--mode=instant`: only `instant/` exists; the abi comes from the
+/// `instant/instant-base-x86_64.apk` split.
+#[test]
+fn instant_apks_parse_instant_base_master() {
+    let apk = Apk::new(fixture("apks-instant.apks")).expect("instant apks must parse");
+    assert_app(&apk);
+
+    let inner = apk
+        .get_inner_zip()
+        .expect("instant-base-master is the inner apk");
+    assert!(inner.namelist().any(|n| n == "AndroidManifest.xml"));
+    assert!(!inner.namelist().any(|n| n.starts_with("lib/")));
+}

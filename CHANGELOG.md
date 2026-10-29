@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `apks` archives from `bundletool build-apks` (marked by `toc.pb`): the base is `splits/base-master.apk`, `universal.apk`, `system/system.apk`, `archive/archive.apk` or the first standalone apk. `extract -r` merges the splits of the base-master variant. `apk::apks_base_apk_name()` exposes the lookup.
+- `apks` archives from `bundletool build-apks` (marked by `toc.pb`): the base is `splits/base-master.apk`, `universal.apk`, `system/system.apk`, `archive/archive.apk`, `instant/instant-base-master.apk` or the first standalone apk. `extract -r` merges the splits of the base's variant (`splits/` for default and `system` mode, `instant/` for instant mode). `apk::apks_base_apk_name()` exposes the lookup.
 - Support for the APK Signature Scheme v3.2 (hybrid classical + post-quantum ML-DSA signing block, ID `0x70e1c89f`, introduced in Android 17 / API level 37). The new `Signature::V32` variant carries both signers' certificates and is surfaced in the CLI (`show -s`) and the Python bindings.
 - A curated suite of golden signature fixtures from the AOSP `apksig` test resources (valid schemes + deliberately malformed archives), with integration tests for every parser path.
 - `ZipEntry::open_nested()` parses an archive stored inside another one (the base apk of a `xapk`/`apkm`) without copying it into memory.

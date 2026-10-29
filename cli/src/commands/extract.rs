@@ -234,14 +234,14 @@ fn container_split_apks(zip: &ZipEntry) -> Vec<(String, ZipEntry)> {
         }
     }
 
-    // apks: the splits of the base-master variant; bundletool names the splits
+    // apks: the splits of the base's variant; bundletool names the splits
     // of further sdk variants with a `_<n>` suffix (`base-ru_2.apk`)
     if let Some(base) = apks_base_apk_name(zip)
-        && base.starts_with("splits/")
+        && let Some(dir) = apks_splits_dir(&base)
     {
         let all: BTreeSet<&str> = zip.namelist().collect();
         for &name in &all {
-            if name.starts_with("splits/")
+            if name.starts_with(dir)
                 && name.ends_with(".apk")
                 && name != base
                 && !is_apks_variant_copy(name, &all)
@@ -267,6 +267,16 @@ fn container_split_apks(zip: &ZipEntry) -> Vec<(String, ZipEntry)> {
                 .map(|inner| (name, inner))
         })
         .collect()
+}
+
+/// Directory holding the splits that complement an apks base: `system` mode
+/// keeps its language and feature splits in `splits/` next to `system/system.apk`.
+fn apks_splits_dir(base: &str) -> Option<&'static str> {
+    match base {
+        "splits/base-master.apk" | "system/system.apk" => Some("splits/"),
+        "instant/instant-base-master.apk" => Some("instant/"),
+        _ => None,
+    }
 }
 
 /// Checks whether an apks split is the `_<n>` copy of another entry for a further
@@ -415,6 +425,18 @@ fn extract(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn apks_splits_dir_follows_the_base() {
+        assert_eq!(apks_splits_dir("splits/base-master.apk"), Some("splits/"));
+        assert_eq!(apks_splits_dir("system/system.apk"), Some("splits/"));
+        assert_eq!(
+            apks_splits_dir("instant/instant-base-master.apk"),
+            Some("instant/")
+        );
+        assert_eq!(apks_splits_dir("universal.apk"), None);
+        assert_eq!(apks_splits_dir("standalones/standalone-x86_64.apk"), None);
+    }
 
     #[test]
     fn apks_variant_copies_are_detected() {
