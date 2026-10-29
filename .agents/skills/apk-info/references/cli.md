@@ -22,7 +22,7 @@ apk-info show <PATH> [<PATH> ...]
 
 **Options:**
 
-- `-s, --sigs` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers). For `xapk`/`apkm` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
+- `-s, --sigs` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers). For `xapk`/`apkm`/`apks` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
 - `-j, --json` — output as JSONL (one JSON object per APK) instead of colored text. Suitable for piping to `jq` or other tools.
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
 
@@ -61,7 +61,7 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
 }
 ```
 
-The `signatures` field is `null` unless `--sigs` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also `null` unless `--sigs` is passed *and* the outer `xapk`/`apkm` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
+The `signatures` field is `null` unless `--sigs` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also `null` unless `--sigs` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
 
 ## `extract` (alias `x`) — unpack the APK
 
@@ -117,8 +117,8 @@ the raw extraction in `<out>/<file>.unp/` (the manifest, `resources.arsc` and
   are emitted, so obfuscated flat decoy files under `res/` (e.g. Telegram's
   random `res/<xxx>.xml`) are skipped — matching apktool/jadx. See
   `recipes.md` §18.
-- **Split containers (XAPK/APKM):** resources of the inner base *and* every
-  `config.*`/`split_*` APK are merged into one `res/` tree, so all
+- **Split containers (XAPK/APKM/APKS):** resources of the inner base *and* every
+  `config.*`/`split_*` APK (`splits/*.apk` of the base-master variant for APKS) are merged into one `res/` tree, so all
   locale/configuration string variants are present in a single place; the base's
   `AndroidManifest.xml` stays at the output root (split manifests are not emitted).
 
@@ -148,7 +148,7 @@ apk-info axml <PATH>
 
 The path can be either:
 
-- An APK/XAPK/APKM file (the manifest is extracted and decoded from it).
+- An APK/XAPK/APKM/APKS file (the manifest is extracted and decoded from it).
 - A raw binary `AndroidManifest.xml` file (parsed directly).
 
 When stdout is a TTY, output is syntax-highlighted via `bat`. When piped, raw XML is printed (no ANSI codes), so you can redirect to a file:

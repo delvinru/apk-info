@@ -25,6 +25,40 @@ const XAPK_MANIFEST_PATH: &str = "manifest.json";
 /// The name of the base.apk to be searched for in the APKM format.
 const APKM_BASE_APK: &str = "base.apk";
 
+/// The table of contents written by `bundletool build-apks`, marks the APKS format.
+const APKS_TOC_PATH: &str = "toc.pb";
+
+/// Full-app entries of an APKS archive, in order of preference.
+///
+/// Names follow bundletool's `ApkPathManager`: `default`/`--connected-device`
+/// mode emits `splits/`, `universal` mode a single `universal.apk`,
+/// `system` and `archive` modes their own directories.
+const APKS_BASE_APKS: &[&str] = &[
+    "splits/base-master.apk",
+    "universal.apk",
+    "system/system.apk",
+    "archive/archive.apk",
+];
+
+/// Directory and prefix of standalone (pre-Lollipop) APKs in an APKS archive,
+/// e.g. `standalones/standalone-x86_hdpi.apk`.
+const APKS_STANDALONE_PREFIX: &str = "standalones/standalone";
+
+/// Android ABIs keyed by their spelling in split names (`config.arm64_v8a.apk`):
+/// split names swap `-` for `_`, `x86_64` is spelled the same in both.
+///
+/// See bundletool's `AbiName` and SAI's `AbiConfigSplitMeta`.
+const SPLIT_ABIS: &[(&str, &str)] = &[
+    ("armeabi", "armeabi"),
+    ("armeabi_v7a", "armeabi-v7a"),
+    ("arm64_v8a", "arm64-v8a"),
+    ("x86", "x86"),
+    ("x86_64", "x86_64"),
+    ("mips", "mips"),
+    ("mips64", "mips64"),
+    ("riscv64", "riscv64"),
+];
+
 /// The name of the resource to be searched in the zip archive.
 const RESOURCE_TABLE_PATH: &str = "resources.arsc";
 
@@ -38,10 +72,10 @@ pub struct Apk {
     axml: AXML,
     arsc: Option<ARSC>,
 
-    /// The name of the app entry inside a `xapk`/`apkm` container.
+    /// The name of the app entry inside a `xapk`/`apkm`/`apks` container.
     base_apk_name: Option<String>,
 
-    /// Cache of the parsed inner `base.apk` of a `xapk`/`apkm` container,
+    /// Cache of the parsed inner `base.apk` of a `xapk`/`apkm`/`apks` container,
     /// seeded during [`Apk::new`] so queries never re-decompress it.
     /// Outer `None`: not a container. Inner `None`: the inner apk failed
     /// to parse.
@@ -155,7 +189,26 @@ impl Apk {
             });
         }
 
-        Err(APKError::InvalidInput("is it apk/xapk/apkm?"))
+        // apks (bundletool build-apks)
+        if let Some(base_apk_name) = apks_base_apk_name(&zip) {
+            let inner_apk = zip
+                .open_nested(&base_apk_name)
+                .map_err(APKError::ZipError)?;
+            let (axml, arsc) = parse_inner(&inner_apk)?;
+
+            let inner_zip = OnceLock::new();
+            inner_zip.get_or_init(|| Some(inner_apk));
+
+            return Ok(ParsedApk {
+                zip,
+                base_apk_name: Some(base_apk_name),
+                axml,
+                arsc,
+                inner_zip,
+            });
+        }
+
+        Err(APKError::InvalidInput("is it apk/xapk/apkm/apks?"))
     }
 
     /// Checks if a zip entry name matches an Android `classes*.dex` file, i.e. `classes.dex`,
@@ -165,33 +218,47 @@ impl Apk {
             .is_some_and(|middle| middle.is_empty() || middle.bytes().all(|b| b.is_ascii_digit()))
     }
 
-    /// Extracts the ABI from a split apk file name inside a `xapk`/`apkm` container.
+    /// Extracts the ABI from a split apk file name inside a container:
+    /// `config.arm64_v8a.apk`/`split_config.arm64_v8a.apk` (xapk/apkm) or
+    /// `splits/base-arm64_v8a.apk` (apks).
     fn split_abi_from_name(name: &str) -> Option<String> {
-        let token = name
-            .strip_prefix("config.")
-            .or_else(|| name.strip_prefix("split_config."))?
-            .strip_suffix(".apk")?;
+        let token = match name.strip_prefix("splits/") {
+            Some(split) => split.strip_suffix(".apk")?.split_once('-')?.1,
+            None => name
+                .strip_prefix("config.")
+                .or_else(|| name.strip_prefix("split_config."))?
+                .strip_suffix(".apk")?,
+        };
 
-        let abi = token.replace('_', "-");
+        // the platform spelling (`arm64-v8a`) is accepted too, as installers do
+        SPLIT_ABIS
+            .iter()
+            .find(|(split, abi)| *split == token || *abi == token)
+            .map(|(_, abi)| (*abi).to_owned())
+    }
+}
 
-        Self::is_known_abi(&abi).then_some(abi)
+/// Returns the name of the full-app APK inside an APKS archive
+/// (`bundletool build-apks` output, marked by `toc.pb`), if the archive is one.
+///
+/// Prefers `splits/base-master.apk`, then the single APK of the other build
+/// modes, then the first standalone APK by name.
+pub fn apks_base_apk_name(zip: &ZipEntry) -> Option<String> {
+    if !zip.namelist().any(|name| name == APKS_TOC_PATH) {
+        return None;
     }
 
-    /// Checks whether a string is a well-known Android ABI.
-    #[inline]
-    fn is_known_abi(abi: &str) -> bool {
-        matches!(
-            abi,
-            "arm64-v8a"
-                | "armeabi"
-                | "armeabi-v7a"
-                | "mips"
-                | "mips64"
-                | "riscv64"
-                | "x86"
-                | "x86_64"
-        )
+    if let Some(name) = APKS_BASE_APKS
+        .iter()
+        .find(|&&name| zip.namelist().any(|n| n == name))
+    {
+        return Some((*name).to_owned());
     }
+
+    zip.namelist()
+        .filter(|name| name.starts_with(APKS_STANDALONE_PREFIX) && name.ends_with(".apk"))
+        .min()
+        .map(str::to_owned)
 }
 
 impl Apk {
@@ -259,7 +326,7 @@ impl Apk {
         let entries = match self.base_apk_name.as_deref() {
             // regular apk
             None => &self.zip,
-            // split container (xapk/apkm): the inner apk is cached, no re-reading
+            // split container (xapk/apkm/apks): the inner apk is cached, no re-reading
             Some(_) => match self.get_inner_zip() {
                 Ok(inner) => inner,
                 Err(_) => return false,
@@ -861,7 +928,7 @@ impl Apk {
         Ok(signatures)
     }
 
-    /// Returns the base APK inside a `xapk`/`apkm` container as a parsed ZIP
+    /// Returns the base APK inside a `xapk`/`apkm`/`apks` container as a parsed ZIP
     /// archive, cached from [`Apk::new`].
     ///
     /// # Errors
@@ -886,7 +953,7 @@ impl Apk {
     ///
     /// For a plain APK this is the signature of the file itself.
     ///
-    /// For a `xapk`/`apkm` container this is the signature of the inner base APK,
+    /// For a `xapk`/`apkm`/`apks` container this is the signature of the inner base APK,
     /// which is the actual app identity.
     /// See [`Apk::get_container_signatures`] for the signature of the container itself.
     pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
@@ -897,11 +964,11 @@ impl Apk {
         Self::collect_signatures(&self.zip)
     }
 
-    /// Returns the container signature of a `xapk`/`apkm` file, if it is signed.
+    /// Returns the container signature of a `xapk`/`apkm`/`apks` file, if it is signed.
     ///
     /// This is the signature of the outer archive that carries the split APKs.
     /// It belongs to the distributor, not to the app.
-    /// Most `xapk`/`apkm` containers are unsigned, so an empty result is expected and normal.
+    /// Most `xapk`/`apkm`/`apks` containers are unsigned, so an empty result is expected and normal.
     pub fn get_container_signatures(&self) -> Result<Vec<Signature>, APKError> {
         if self.base_apk_name.is_none() {
             return Ok(Vec::new());
@@ -926,7 +993,7 @@ impl Apk {
                     continue;
                 }
 
-                // ABI split apk inside a xapk/apkm container, e.g. `config.armeabi_v7a.apk` or `split_config.arm64_v8a.apk`.
+                // ABI split apk inside a xapk/apkm/apks container, e.g. `config.armeabi_v7a.apk` or `split_config.arm64_v8a.apk`.
                 if let Some(abi) = Self::split_abi_from_name(filename) {
                     native_codes_set.insert(abi);
                 }
@@ -935,7 +1002,7 @@ impl Apk {
 
         collect(&self.zip);
 
-        // split (xapk/apkm): the inner apk is cached, no re-reading
+        // split (xapk/apkm/apks): the inner apk is cached, no re-reading
         if let Ok(inner) = self.get_inner_zip() {
             collect(inner);
         }
@@ -950,7 +1017,7 @@ impl Apk {
 mod tests {
     use apk_info_zip::ZipEntry;
 
-    use super::Apk;
+    use super::{Apk, apks_base_apk_name};
 
     #[test]
     fn valid_dex_names_are_accepted() {
@@ -1017,56 +1084,138 @@ mod tests {
     /// (uncompressed) entry. Enough for [`Apk::get_arsc`] to locate and read
     /// `resources.arsc` without pulling in the zip writer's test helpers.
     fn single_stored_zip(name: &[u8], data: &[u8]) -> Vec<u8> {
+        stored_zip(&[(name, data)])
+    }
+
+    /// Builds a minimal, well-formed zip archive of stored (uncompressed) entries.
+    fn stored_zip(entries: &[(&[u8], &[u8])]) -> Vec<u8> {
         let mut out = Vec::new();
+        let mut local_offsets = Vec::new();
 
-        // local file header
-        out.extend_from_slice(&0x04034b50u32.to_le_bytes());
-        out.extend_from_slice(&20u16.to_le_bytes()); // version needed
-        out.extend_from_slice(&0u16.to_le_bytes()); // flags
-        out.extend_from_slice(&0u16.to_le_bytes()); // method: stored
-        out.extend_from_slice(&0u16.to_le_bytes()); // mod time
-        out.extend_from_slice(&0x21u16.to_le_bytes()); // mod date
-        out.extend_from_slice(&0u32.to_le_bytes()); // crc (unchecked for stored)
-        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // csize
-        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // usize
-        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes()); // extra len
-        out.extend_from_slice(name);
-        out.extend_from_slice(data);
+        for (name, data) in entries {
+            local_offsets.push(out.len() as u32);
 
-        // central directory file header
+            // local file header
+            out.extend_from_slice(&0x04034b50u32.to_le_bytes());
+            out.extend_from_slice(&20u16.to_le_bytes()); // version needed
+            out.extend_from_slice(&0u16.to_le_bytes()); // flags
+            out.extend_from_slice(&0u16.to_le_bytes()); // method: stored
+            out.extend_from_slice(&0u16.to_le_bytes()); // mod time
+            out.extend_from_slice(&0x21u16.to_le_bytes()); // mod date
+            out.extend_from_slice(&0u32.to_le_bytes()); // crc (unchecked for stored)
+            out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // csize
+            out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // usize
+            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes()); // extra len
+            out.extend_from_slice(name);
+            out.extend_from_slice(data);
+        }
+
+        // central directory file headers
         let cd_offset = out.len() as u32;
-        out.extend_from_slice(&0x02014b50u32.to_le_bytes());
-        out.extend_from_slice(&20u16.to_le_bytes()); // version made by
-        out.extend_from_slice(&20u16.to_le_bytes()); // version needed
-        out.extend_from_slice(&0u16.to_le_bytes()); // flags
-        out.extend_from_slice(&0u16.to_le_bytes()); // method: stored
-        out.extend_from_slice(&0u16.to_le_bytes()); // mod time
-        out.extend_from_slice(&0x21u16.to_le_bytes()); // mod date
-        out.extend_from_slice(&0u32.to_le_bytes()); // crc
-        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // csize
-        out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // usize
-        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes()); // extra len
-        out.extend_from_slice(&0u16.to_le_bytes()); // comment len
-        out.extend_from_slice(&0u16.to_le_bytes()); // disk number start
-        out.extend_from_slice(&0u16.to_le_bytes()); // internal attrs
-        out.extend_from_slice(&0u32.to_le_bytes()); // external attrs
-        out.extend_from_slice(&0u32.to_le_bytes()); // local header offset
-        out.extend_from_slice(name);
+        for ((name, data), local_offset) in entries.iter().zip(local_offsets) {
+            out.extend_from_slice(&0x02014b50u32.to_le_bytes());
+            out.extend_from_slice(&20u16.to_le_bytes()); // version made by
+            out.extend_from_slice(&20u16.to_le_bytes()); // version needed
+            out.extend_from_slice(&0u16.to_le_bytes()); // flags
+            out.extend_from_slice(&0u16.to_le_bytes()); // method: stored
+            out.extend_from_slice(&0u16.to_le_bytes()); // mod time
+            out.extend_from_slice(&0x21u16.to_le_bytes()); // mod date
+            out.extend_from_slice(&0u32.to_le_bytes()); // crc
+            out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // csize
+            out.extend_from_slice(&(data.len() as u32).to_le_bytes()); // usize
+            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+            out.extend_from_slice(&0u16.to_le_bytes()); // extra len
+            out.extend_from_slice(&0u16.to_le_bytes()); // comment len
+            out.extend_from_slice(&0u16.to_le_bytes()); // disk number start
+            out.extend_from_slice(&0u16.to_le_bytes()); // internal attrs
+            out.extend_from_slice(&0u32.to_le_bytes()); // external attrs
+            out.extend_from_slice(&local_offset.to_le_bytes()); // local header offset
+            out.extend_from_slice(name);
+        }
         let cd_size = out.len() as u32 - cd_offset;
 
         // end of central directory
         out.extend_from_slice(&0x06054b50u32.to_le_bytes());
         out.extend_from_slice(&0u16.to_le_bytes()); // disk number
         out.extend_from_slice(&0u16.to_le_bytes()); // cd start disk
-        out.extend_from_slice(&1u16.to_le_bytes()); // entries this disk
-        out.extend_from_slice(&1u16.to_le_bytes()); // total entries
+        out.extend_from_slice(&(entries.len() as u16).to_le_bytes()); // entries this disk
+        out.extend_from_slice(&(entries.len() as u16).to_le_bytes()); // total entries
         out.extend_from_slice(&cd_size.to_le_bytes());
         out.extend_from_slice(&cd_offset.to_le_bytes());
         out.extend_from_slice(&0u16.to_le_bytes()); // comment len
 
         out
+    }
+
+    /// Picks the base of an apks archive from its entry names alone.
+    fn apks_base(names: &[&str]) -> Option<String> {
+        let entries: Vec<(&[u8], &[u8])> = names.iter().map(|n| (n.as_bytes(), &b""[..])).collect();
+        let zip = ZipEntry::new(stored_zip(&entries)).expect("test zip should parse");
+        apks_base_apk_name(&zip)
+    }
+
+    #[test]
+    fn apks_base_prefers_base_master() {
+        assert_eq!(
+            apks_base(&[
+                "toc.pb",
+                "standalones/standalone-x86_hdpi.apk",
+                "splits/base-master_2.apk",
+                "splits/base-master.apk",
+            ])
+            .as_deref(),
+            Some("splits/base-master.apk")
+        );
+        assert_eq!(
+            apks_base(&["toc.pb", "universal.apk"]).as_deref(),
+            Some("universal.apk")
+        );
+        assert_eq!(
+            apks_base(&["toc.pb", "system/system.apk"]).as_deref(),
+            Some("system/system.apk")
+        );
+    }
+
+    #[test]
+    fn apks_base_falls_back_to_first_standalone() {
+        assert_eq!(
+            apks_base(&[
+                "toc.pb",
+                "standalones/standalone-x86_hdpi.apk",
+                "standalones/standalone-armeabi_v7a_hdpi.apk",
+            ])
+            .as_deref(),
+            Some("standalones/standalone-armeabi_v7a_hdpi.apk")
+        );
+    }
+
+    /// `toc.pb` is the format marker: the same layout without it is not apks.
+    #[test]
+    fn apks_base_requires_toc() {
+        assert_eq!(apks_base(&["splits/base-master.apk"]), None);
+        assert_eq!(apks_base(&["toc.pb", "splits/base-ru.apk"]), None);
+    }
+
+    #[test]
+    fn split_abi_is_read_from_container_names() {
+        for (name, abi) in [
+            ("config.arm64_v8a.apk", Some("arm64-v8a")),
+            ("split_config.armeabi_v7a.apk", Some("armeabi-v7a")),
+            ("config.x86_64.apk", Some("x86_64")),
+            ("config.armeabi.apk", Some("armeabi")),
+            ("config.riscv64.apk", Some("riscv64")),
+            ("config.arm64-v8a.apk", Some("arm64-v8a")),
+            ("config.x86-64.apk", None),
+            ("splits/base-arm64_v8a.apk", Some("arm64-v8a")),
+            ("splits/base-x86_64.apk", Some("x86_64")),
+            ("splits/feature-x86.apk", Some("x86")),
+            ("splits/base-master.apk", None),
+            ("splits/base-xxhdpi.apk", None),
+            ("config.en.apk", None),
+        ] {
+            assert_eq!(Apk::split_abi_from_name(name).as_deref(), abi, "{name:?}");
+        }
     }
 
     /// A present-but-corrupt `resources.arsc` (a static-analysis evasion trick)

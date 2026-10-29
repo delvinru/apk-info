@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use apk_info::FileCompressionType;
+use apk_info::apk::apks_base_apk_name;
 use apk_info_zip::ZipEntry;
 use colored::Colorize;
 use log::warn;
@@ -189,7 +190,7 @@ fn resolve_output_path(out_dir: &Path, file_name: &str) -> Option<(PathBuf, bool
     }
 }
 
-/// Locates and parses the base inner APK of a `xapk`/`apkm` container, if any.
+/// Locates and parses the base inner APK of a `xapk`/`apkm`/`apks` container, if any.
 fn container_base_apk(zip: &ZipEntry) -> Option<ZipEntry> {
     // xapk: manifest.json declares package_name -> <package_name>.apk
     if let Ok((m, _)) = zip.read("manifest.json")
@@ -203,10 +204,16 @@ fn container_base_apk(zip: &ZipEntry) -> Option<ZipEntry> {
     if let Ok((data, _)) = zip.read("base.apk") {
         return ZipEntry::new(data).ok();
     }
+    // apks: toc.pb + splits/base-master.apk (or the single apk of other modes)
+    if let Some(name) = apks_base_apk_name(zip)
+        && let Ok((data, _)) = zip.read(&name)
+    {
+        return ZipEntry::new(data).ok();
+    }
     None
 }
 
-/// Enumerates the config/other split inner APKs of a `xapk`/`apkm` container
+/// Enumerates the config/other split inner APKs of a `xapk`/`apkm`/`apks` container
 /// (everything that is *not* the base).
 ///
 /// Each carries its own `resources.arsc` with locale/configuration string variations that complement the base's.
@@ -227,6 +234,23 @@ fn container_split_apks(zip: &ZipEntry) -> Vec<(String, ZipEntry)> {
         }
     }
 
+    // apks: the splits of the base-master variant; bundletool names the splits
+    // of further sdk variants with a `_<n>` suffix (`base-ru_2.apk`)
+    if let Some(base) = apks_base_apk_name(zip)
+        && base.starts_with("splits/")
+    {
+        let all: BTreeSet<&str> = zip.namelist().collect();
+        for &name in &all {
+            if name.starts_with("splits/")
+                && name.ends_with(".apk")
+                && name != base
+                && !is_apks_variant_copy(name, &all)
+            {
+                names.insert(name.to_string());
+            }
+        }
+    }
+
     // heuristic fallback (apkm / manifestless containers): config.*/split_* APKs
     for name in zip.namelist() {
         if name.ends_with(".apk") && (name.starts_with("config.") || name.starts_with("split_")) {
@@ -243,6 +267,20 @@ fn container_split_apks(zip: &ZipEntry) -> Vec<(String, ZipEntry)> {
                 .map(|inner| (name, inner))
         })
         .collect()
+}
+
+/// Checks whether an apks split is the `_<n>` copy of another entry for a further
+/// sdk variant, e.g. `splits/base-ru_2.apk` next to `splits/base-ru.apk`.
+///
+/// Requiring the unsuffixed entry keeps names like `splits/base-x86_64.apk`.
+fn is_apks_variant_copy(name: &str, names: &BTreeSet<&str>) -> bool {
+    name.strip_suffix(".apk")
+        .and_then(|stem| stem.rsplit_once('_'))
+        .is_some_and(|(stem, n)| {
+            !n.is_empty()
+                && n.bytes().all(|b| b.is_ascii_digit())
+                && names.contains(format!("{stem}.apk").as_str())
+        })
 }
 
 fn write_bytes(path: &Path, contents: &[u8]) -> Result<()> {
@@ -375,6 +413,31 @@ fn extract(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn apks_variant_copies_are_detected() {
+        let names: BTreeSet<&str> = [
+            "splits/base-master.apk",
+            "splits/base-master_2.apk",
+            "splits/base-ru.apk",
+            "splits/base-ru_2.apk",
+            "splits/base-x86_64.apk",
+            "splits/base-x86_64_2.apk",
+        ]
+        .into_iter()
+        .collect();
+
+        for copy in [
+            "splits/base-master_2.apk",
+            "splits/base-ru_2.apk",
+            "splits/base-x86_64_2.apk",
+        ] {
+            assert!(is_apks_variant_copy(copy, &names), "{copy:?}");
+        }
+        for split in ["splits/base-ru.apk", "splits/base-x86_64.apk"] {
+            assert!(!is_apks_variant_copy(split, &names), "{split:?}");
+        }
+    }
 
     #[test]
     fn rejects_path_traversal() {

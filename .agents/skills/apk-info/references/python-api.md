@@ -160,11 +160,11 @@ for activity in apk.get_activities():
 
 ```python
 apk.get_signatures()             # list[Signature] — raises APKError if certs can't be parsed
-apk.get_container_signatures()   # list[Signature] — distributor's signature on a `xapk`/`apkm` container
+apk.get_container_signatures()   # list[Signature] — distributor's signature on a `xapk`/`apkm`/`apks` container
 ```
 
 `get_signatures()` returns the app signatures. For a plain APK that is the
-file itself; for a `xapk`/`apkm` container it is the inner base APK, the
+file itself; for a `xapk`/`apkm`/`apks` container it is the inner base APK, the
 real app identity. `get_container_signatures()` is separate: it returns the
 signature on the outer archive and is empty for plain APKs and for most
 unsigned containers.

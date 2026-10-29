@@ -814,7 +814,7 @@ class APK:
 
         For a plain APK this is the signature of the file itself.
 
-        For a `xapk`/`apkm` container this is the signature of the inner base
+        For a `xapk`/`apkm`/`apks` container this is the signature of the inner base
         APK, which is the actual app identity.
         See ``get_container_signatures`` for the signature of the container itself.
 
@@ -831,11 +831,11 @@ class APK:
 
     def get_container_signatures(self) -> list[SignatureType]:
         """
-        Returns the container signature of a `xapk`/`apkm` file, if signed.
+        Returns the container signature of a `xapk`/`apkm`/`apks` file, if signed.
 
         This is the signature of the outer archive that carries the split
         APKs. It belongs to the distributor, not to the app.
-        Most `xapk`/`apkm` containers are unsigned, so an empty result is
+        Most `xapk`/`apkm`/`apks` containers are unsigned, so an empty result is
         expected and normal.
 
         Raises

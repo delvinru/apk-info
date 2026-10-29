@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `apks` archives from `bundletool build-apks` (marked by `toc.pb`): the base is `splits/base-master.apk`, `universal.apk`, `system/system.apk`, `archive/archive.apk` or the first standalone apk. `extract -r` merges the splits of the base-master variant. `apk::apks_base_apk_name()` exposes the lookup.
 - Support for the APK Signature Scheme v3.2 (hybrid classical + post-quantum ML-DSA signing block, ID `0x70e1c89f`, introduced in Android 17 / API level 37). The new `Signature::V32` variant carries both signers' certificates and is surfaced in the CLI (`show -s`) and the Python bindings.
 - A curated suite of golden signature fixtures from the AOSP `apksig` test resources (valid schemes + deliberately malformed archives), with integration tests for every parser path.
 - `ZipEntry::open_nested()` parses an archive stored inside another one (the base apk of a `xapk`/`apkm`) without copying it into memory.
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `get_supported_abis()` reports `x86_64` from a `config.x86_64.apk` split; the name was read as `x86-64` before.
 - A malformed ID-value pair in the APK Signing Block no longer hides the blocks after it: the pair is skipped by its declared length and the walk continues.
 - A signing block whose leading and trailing sizes disagree is treated as absent instead of failing the whole signature listing.
 - `repack` integration tests now run against the golden APK fixtures through the library's own reader instead of host `zip`/`7zz` tools.

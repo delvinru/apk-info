@@ -18,7 +18,7 @@ Copy-paste solutions for common APK analysis tasks. Each recipe is self-containe
 - [12. Resolve a resource reference](#12-resolve-a-resource-reference)
 - [13. Read a custom manifest attribute](#13-read-a-custom-manifest-attribute)
 - [14. Compare two APKs by signing certificate](#14-compare-two-apks-by-signing-certificate)
-- [15. Process XAPK / APKM bundles](#15-process-xapk--apkm-bundles)
+- [15. Process XAPK / APKM / APKS bundles](#15-process-xapk--apkm--apks-bundles)
 - [16. Why not just use unzip / 7z?](#16-why-not-just-use-unzip--7z)
 - [17. Repack a BadPack APK so standard tools can open it](#17-repack-a-badpack-apk-so-standard-tools-can-open-it)
 - [18. Decode resources (apktool-style)](#18-decode-resources-apktool-style)
@@ -392,14 +392,14 @@ print("only in v1:", a - b)
 print("only in v2:", b - a)
 ```
 
-## 15. Process XAPK / APKM bundles
+## 15. Process XAPK / APKM / APKS bundles
 
 No special handling needed — `APK(path)` auto-detects the format and parses the inner APK.
 
 ```python
 from apk_info import APK
 
-apk = APK("./app.xapk")   # or .apkm
+apk = APK("./app.xapk")   # or .apkm / .apks
 print(apk.get_package_name())
 ```
 
@@ -525,7 +525,7 @@ canonical `res/<type>[-<config>]/` file-resource folders.
 # Decode a plain APK → ./app.apk.unp/res/values*/, .../res/<type>-<cfg>/, AndroidManifest.xml
 apk-info extract ./app.apk -r
 
-# Split container (XAPK/APKM): merge base + every config split into one res/ tree,
+# Split container (XAPK/APKM/APKS): merge base + every config split into one res/ tree,
 # so all locale/configuration string variants are present in a single place
 apk-info extract ./app.xapk -r -o ./out/
 # → base manifest at ./out/app.xapk.unp/AndroidManifest.xml (split manifests are not emitted)
