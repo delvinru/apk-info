@@ -41,7 +41,7 @@ uv pip install apk-info
 apk-info show ./app.apk
 
 # Include signature/certificate details
-apk-info show --sigs ./app.apk
+apk-info show --signatures ./app.apk
 
 # Machine-readable output (one JSON object per APK) — pipe to jq
 apk-info show --json ./app.apk | jq .package_name
@@ -109,7 +109,7 @@ for sig in apk.get_signatures():
 | Main (launchable) activity                    | `show`        | `get_main_activity()` / `get_main_activities()`                                |
 | Application label                             | `show`        | `get_application_label()`                                                      |
 | Supported ABIs (native libs)                  | `show`        | `get_supported_abis()`                                                         |
-| Signatures & certificates                     | `show --sigs` | `get_signatures()`                                                             |
+| Signatures & certificates                     | `show --signatures` | `get_signatures()`                                                             |
 | Permissions                                   | —             | `get_permissions()`                                                            |
 | Declared permissions                          | —             | `get_declared_permissions()`                                                   |
 | Features (device capabilities)                | —             | `get_features()`                                                               |

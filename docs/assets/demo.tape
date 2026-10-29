@@ -27,6 +27,6 @@ Type "clear"
 Enter
 Show
 
-Type "apk-info show --sigs malware.apk"
+Type "apk-info show --signatures malware.apk"
 Enter
 Sleep 6s

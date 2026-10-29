@@ -22,7 +22,7 @@ apk-info show <PATH> [<PATH> ...]
 
 **Options:**
 
-- `-s, --sigs` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers). For `xapk`/`apkm`/`apks` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
+- `-s, --signatures` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers). For `xapk`/`apkm`/`apks` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
 - `-j, --json` — output as JSONL (one JSON object per APK) instead of colored text. Suitable for piping to `jq` or other tools.
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
 
@@ -36,7 +36,7 @@ apk-info show ./app.apk
 apk-info show ./app.apk ./other.apk ./folder-of-apks/
 
 # Include signatures
-apk-info show --sigs ./app.apk
+apk-info show --signatures ./app.apk
 
 # JSONL output for scripting
 apk-info show --json ./app.apk
@@ -61,7 +61,7 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
 }
 ```
 
-The `signatures` field is `null` unless `--sigs` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also `null` unless `--sigs` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
+The `signatures` field is `null` unless `--signatures` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also `null` unless `--signatures` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
 
 ## `extract` (alias `x`) — unpack the APK
 
@@ -236,7 +236,7 @@ apk-info show ./malware.repacked.apk                  # package info readable
 apk-info show --json ./apks/ | jq -r .package_name | sort -u
 
 # Find APKs signed by a specific certificate (by SHA256 fingerprint)
-apk-info show --json --sigs ./apks/ | jq -r 'select(.signatures[].certificates[].sha256_fingerprint == "ab:cd:...") | .package_name'
+apk-info show --json --signatures ./apks/ | jq -r 'select(.signatures[].certificates[].sha256_fingerprint == "ab:cd:...") | .package_name'
 
 # Dump every manifest to its own file
 for apk in ./apks/*.apk; do

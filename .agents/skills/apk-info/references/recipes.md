@@ -47,7 +47,7 @@ print(f"Launchable:   {activities[0] if activities else '(none)'}")
 CLI equivalent:
 
 ```bash
-apk-info show --sigs ./app.apk
+apk-info show --signatures ./app.apk
 ```
 
 ## 2. Extract and inspect certificates

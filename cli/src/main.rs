@@ -32,7 +32,7 @@ enum Commands {
             default_value_t = false,
             help = "Show information about signatures"
         )]
-        sigs: bool,
+        signatures: bool,
 
         #[arg(short, long, default_value_t = false, help = "Show output as jsonl")]
         json: bool,
@@ -111,7 +111,11 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match &cli.commands {
-        Some(Commands::Show { paths, sigs, json }) => command_show(paths, sigs, json),
+        Some(Commands::Show {
+            paths,
+            signatures,
+            json,
+        }) => command_show(paths, signatures, json),
         Some(Commands::Extract {
             paths,
             output,
