@@ -272,9 +272,11 @@ fn container_split_apks(zip: &ZipEntry) -> Vec<(String, ZipEntry)> {
 /// Checks whether an apks split is the `_<n>` copy of another entry for a further
 /// sdk variant, e.g. `splits/base-ru_2.apk` next to `splits/base-ru.apk`.
 ///
-/// Requiring the unsuffixed entry keeps names like `splits/base-x86_64.apk`.
+/// The unsuffixed entry must exist, and the `_64` of `x86_64` is part of the
+/// abi, not a variant: `splits/base-x86_64.apk` sits next to `splits/base-x86.apk`.
 fn is_apks_variant_copy(name: &str, names: &BTreeSet<&str>) -> bool {
     name.strip_suffix(".apk")
+        .filter(|stem| !stem.ends_with("-x86_64"))
         .and_then(|stem| stem.rsplit_once('_'))
         .is_some_and(|(stem, n)| {
             !n.is_empty()
@@ -421,6 +423,8 @@ mod tests {
             "splits/base-master_2.apk",
             "splits/base-ru.apk",
             "splits/base-ru_2.apk",
+            "splits/base-x86.apk",
+            "splits/base-x86_2.apk",
             "splits/base-x86_64.apk",
             "splits/base-x86_64_2.apk",
         ]
@@ -430,11 +434,16 @@ mod tests {
         for copy in [
             "splits/base-master_2.apk",
             "splits/base-ru_2.apk",
+            "splits/base-x86_2.apk",
             "splits/base-x86_64_2.apk",
         ] {
             assert!(is_apks_variant_copy(copy, &names), "{copy:?}");
         }
-        for split in ["splits/base-ru.apk", "splits/base-x86_64.apk"] {
+        for split in [
+            "splits/base-ru.apk",
+            "splits/base-x86.apk",
+            "splits/base-x86_64.apk",
+        ] {
             assert!(!is_apks_variant_copy(split, &names), "{split:?}");
         }
     }
