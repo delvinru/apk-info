@@ -37,19 +37,6 @@ pub enum Signature {
     #[serde(rename = "v32")]
     V32(Vec<CertificateInfo>),
 
-    /// APK signature scheme v4
-    ///
-    /// See: <https://source.android.com/docs/security/features/apksigning/v4>
-    ///
-    /// <div class="warning">
-    ///
-    /// Right now it's just a stub.
-    /// Need help/a hint on how to correctly implement the parsing of this signature.
-    ///
-    /// </div>
-    #[serde(rename = "v4")]
-    V4,
-
     /// Some useful information from apk channel block
     #[serde(rename = "apk_channel_block")]
     ApkChannelBlock(String),
@@ -106,10 +93,9 @@ impl Signature {
             Signature::V3(_) => 2,
             Signature::V31(_) => 3,
             Signature::V32(_) => 4,
-            Signature::V4 => 5,
-            Signature::StampBlockV1(_) => 6,
-            Signature::StampBlockV2(_) => 7,
-            _ => 8,
+            Signature::StampBlockV1(_) => 5,
+            Signature::StampBlockV2(_) => 6,
+            _ => 7,
         }
     }
 
@@ -120,7 +106,6 @@ impl Signature {
             Signature::V3(_) => "v3".to_owned(),
             Signature::V31(_) => "v3.1".to_owned(),
             Signature::V32(_) => "v3.2".to_owned(),
-            Signature::V4 => "v4".to_owned(),
             Signature::ApkChannelBlock(_) => "APK Channel block".to_owned(),
             Signature::StampBlockV1(_) => "Stamp Block v1".to_owned(),
             Signature::StampBlockV2(_) => "Stamp Block v2".to_owned(),

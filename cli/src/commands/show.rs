@@ -164,7 +164,6 @@ fn print_signatures(signatures: &[Signature]) {
                 println!("  Type: {}", signature.name().green());
                 println!("  Value: {}", value.green());
             }
-            _ => continue,
         }
 
         if i != signatures.len() - 1 {

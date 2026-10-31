@@ -577,7 +577,7 @@ class APK:
             A list of all permission names (e.g., "android.permission.INTERNET").
         """
 
-    def get_permissions_sdk23(self) -> list[str]:
+    def get_permissions_sdk23(self) -> set[str]:
         """
         Retrieves all declared permissions for API level 23 and above from `<uses-permission-sdk-23>` elements
 
@@ -586,7 +586,7 @@ class APK:
         Returns
         -------
         set[str]
-            A list of permission names
+            A set of permission names
         """
 
     def get_min_sdk_version(self) -> str | None:
@@ -1025,8 +1025,6 @@ class Signature:
         For more details you can inspect: <https://github.com/avast/apkverifier/blob/master/signingblock/frosting.go#L23>
         """
 
-        value: bytes
-
     @dataclass
     class VasDollyV2:
         """
@@ -1059,6 +1057,7 @@ type SignatureType = (
     | Signature.V2
     | Signature.V3
     | Signature.V31
+    | Signature.V32
     | Signature.VasDollyV2
     | Signature.ByteDance
 )
