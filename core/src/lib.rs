@@ -49,6 +49,7 @@
 pub mod apk;
 pub mod errors;
 pub mod models;
+mod toc;
 
 pub use apk::Apk;
 pub use apk_info_axml::*;

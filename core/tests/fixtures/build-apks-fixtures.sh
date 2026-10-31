@@ -14,6 +14,7 @@ cd "$work"
 mkdir -p res/values res/values-ru res/drawable-xxhdpi
 
 # $1 = extra manifest element, e.g. the instant-enabled <dist:module>
+# $2 = minSdkVersion, 21 by default
 manifest() {
     cat <<EOF
 <?xml version="1.0" encoding="utf-8"?>
@@ -22,7 +23,7 @@ manifest() {
     package="io.github.delvinru.apkstest"
     android:versionCode="7"
     android:versionName="1.0.7">
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
+    <uses-sdk android:minSdkVersion="${2:-21}" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -81,11 +82,11 @@ aapt2 compile --dir res -o compiled.zip
 # compressed native libs skip the 16 KiB page alignment of every abi split
 echo '{"optimizations":{"uncompressNativeLibraries":{"enabled":false}}}' >BundleConfig.json
 
-# $1 = output aab, $2 = extra manifest element
+# $1 = output aab, $2 = extra manifest element, $3 = minSdkVersion
 build_aab() {
     local module
     module=$(mktemp -d "$work/module.XXXX")
-    manifest "$2" >"$module.xml"
+    manifest "$2" "${3:-}" >"$module.xml"
     aapt2 link --proto-format -o "$module.apk" -I "$android_jar" --manifest "$module.xml" compiled.zip
     (
         cd "$module"
@@ -100,6 +101,7 @@ build_aab() {
 
 build_aab app.aab ""
 build_aab instant.aab '<dist:module dist:instant="true" />'
+build_aab legacy.aab "" 19
 
 keytool -genkeypair -keystore ks.jks -storepass android -keypass android -alias apkstest \
     -keyalg RSA -keysize 2048 -validity 36500 -dname "CN=apk-info apks test" >/dev/null 2>&1
@@ -114,3 +116,7 @@ bundletool build-apks --bundle=app.aab --mode=system --device-spec=device.json \
     --output="$out_dir/apks-system.apks" --overwrite "${sign[@]}"
 
 bundletool build-apks --bundle=instant.aab --mode=instant --output="$out_dir/apks-instant.apks" --overwrite "${sign[@]}"
+
+# minSdk 19: bundletool raises the splits/ variant to 21 (split installs need
+# Lollipop) and adds standalones/ for older devices; toc.pb keeps both
+bundletool build-apks --bundle=legacy.aab --output="$out_dir/apks-legacy.apks" --overwrite "${sign[@]}"

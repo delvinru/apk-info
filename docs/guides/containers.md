@@ -17,6 +17,8 @@ The candidates are tried in order until one parses: the base named in `manifest.
 
 When none of these names is present and the archive has no `AndroidManifest.xml` of its own, apk-info guesses: the same names in another case or directory (`BASE.APK`, `app/base.apk`), then any APK at the root. A guess is accepted only if it is not a split, and a warning names it. An APK with a broken manifest is never treated as a container, so an APK it carries (for example a dropper's payload) is not reported as the app.
 
+For a bundletool APKS, `get_min_sdk_version()` reports the lowest SDK the variants in `toc.pb` target. For an app with a minimum below 21, bundletool raises `minSdkVersion` of the split APKs to 21, since split installs need Lollipop, and keeps the app's own minimum in the `standalones/` APKs for older devices.
+
 `apk-info extract -r` decodes the resources of the same base APK, plus its splits.
 
 === "Python"
@@ -114,4 +116,3 @@ ls out/org.telegram.messenger.xapk.unp/res/ | grep values-
 - Compressed (DEFLATED) entries over 4 GB can't be read or extracted; stored ones, which is how stores write APKs and OBB files, are fine.
 - There is no API yet to list splits, their config qualifiers or their signatures, or the OBB files of an XAPK.
 - Encrypted APKM files from before 2021 are rejected with a hint to decrypt them with [unapkm](https://github.com/souramoo/unapkm).
-- For bundletool APKS files with standalone variants, `get_min_sdk_version()` reports the min SDK of `splits/base-master.apk`, which can be higher than the app's real minimum.

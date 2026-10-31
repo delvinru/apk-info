@@ -48,6 +48,25 @@ fn split_apks_parse_base_master() {
     assert!(!inner.namelist().any(|n| n.starts_with("lib/")));
 }
 
+/// An app with `minSdkVersion` 19: bundletool raises the split APKs to 21
+/// and adds `standalones/` for older devices. The minimum SDK comes from the
+/// lowest variant in `toc.pb`, not from `splits/base-master.apk`.
+#[test]
+fn apks_min_sdk_is_the_lowest_variant() {
+    let apk = Apk::new(fixture("apks-legacy.apks")).expect("legacy apks must parse");
+    assert_app(&apk);
+    assert_eq!(apk.get_min_sdk_version().as_deref(), Some("19"));
+
+    let base = apk.get_inner_zip().unwrap();
+    assert!(base.namelist().any(|n| n == "AndroidManifest.xml"));
+
+    // the other modes declare 21 both in the manifest and in toc.pb
+    for name in ["apks-split.apks", "apks-universal.apks", "apks-system.apks"] {
+        let apk = Apk::new(fixture(name)).unwrap();
+        assert_eq!(apk.get_min_sdk_version().as_deref(), Some("21"), "{name}");
+    }
+}
+
 /// `--mode=universal`: a single `universal.apk` that carries the native libs.
 #[test]
 fn universal_apks_parse_universal_apk() {

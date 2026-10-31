@@ -88,6 +88,10 @@ pub struct Apk {
     /// Outer `None`: not a container. Inner `None`: the inner apk failed
     /// to parse.
     inner_zip: OnceLock<Option<ZipEntry>>,
+
+    /// The lowest SDK of the variants in an APKS archive's `toc.pb`, read on
+    /// first use.
+    apks_min_sdk: OnceLock<Option<u32>>,
 }
 
 /// What [`Apk::resolve`] found in an archive.
@@ -451,6 +455,7 @@ impl Apk {
             arsc: parsed.arsc,
             base_apk_name: parsed.base_apk_name,
             inner_zip: parsed.inner_zip,
+            apks_min_sdk: OnceLock::new(),
         })
     }
 
@@ -789,11 +794,35 @@ impl Apk {
 
     /// Extracts the minimum supported SDK version (`minSdkVersion`) from the `<uses-sdk>` element.
     ///
+    /// For an `apks` archive, the lowest SDK its `toc.pb` targets when that is
+    /// lower: bundletool raises the `minSdkVersion` of split APKs to 21 and
+    /// puts the app's own minimum into the standalone APKs for older devices.
+    ///
     /// See: <https://developer.android.com/guide/topics/manifest/uses-sdk-element#min>
-    #[inline]
     pub fn get_min_sdk_version(&self) -> Option<String> {
-        self.axml
-            .get_attribute_value("uses-sdk", "minSdkVersion", self.arsc.as_ref())
+        let manifest =
+            self.axml
+                .get_attribute_value("uses-sdk", "minSdkVersion", self.arsc.as_ref());
+
+        let Some(toc) = self.apks_min_sdk() else {
+            return manifest;
+        };
+        match manifest.as_deref().map(str::parse::<u32>) {
+            Some(Ok(sdk)) if sdk <= toc => manifest,
+            // a codename, e.g. "Q" for a preview build
+            Some(Err(_)) => manifest,
+            _ => Some(toc.to_string()),
+        }
+    }
+
+    /// The lowest SDK of the variants in `toc.pb`, for an `apks` archive.
+    fn apks_min_sdk(&self) -> Option<u32> {
+        *self.apks_min_sdk.get_or_init(|| {
+            // a container only; a plain apk has no toc.pb
+            self.base_apk_name.as_ref()?;
+            let (toc, _) = self.zip.read(APKS_TOC_PATH).ok()?;
+            crate::toc::min_sdk(&toc)
+        })
     }
 
     /// Extracts the target SDK version (`targetSdkVersion`) from the `<uses-sdk>` element.
