@@ -1,5 +1,5 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::{Mutex, PoisonError};
 
 use log::warn;
 use winnow::combinator::repeat;
@@ -21,7 +21,9 @@ pub struct ARSC {
     packages: HashMap<u8, ResTablePackage>,
 
     /// Cache for resolved reference names to avoid repeated lookups.
-    reference_names: RefCell<HashMap<u32, String>>,
+    ///
+    /// A mutex, not a `RefCell`, so a parsed table can be shared between threads.
+    reference_names: Mutex<HashMap<u32, String>>,
 }
 
 impl ARSC {
@@ -67,7 +69,7 @@ impl ARSC {
             global_string_pool,
             packages,
             // preallocate some space
-            reference_names: RefCell::new(HashMap::with_capacity(32)),
+            reference_names: Mutex::new(HashMap::with_capacity(32)),
         })
     }
 
@@ -139,7 +141,12 @@ impl ARSC {
     /// Uses a cache to speed up repeated lookups.
     pub fn get_resource_name(&self, id: u32) -> Option<String> {
         // fast path: if we've already have this name in cache
-        if let Some(name) = self.reference_names.borrow().get(&id) {
+        if let Some(name) = self
+            .reference_names
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(&id)
+        {
             return Some(name.clone());
         }
 
@@ -160,7 +167,10 @@ impl ARSC {
         let name = package.get_entry_full_name(entry, type_id)?;
 
         // save in cache
-        self.reference_names.borrow_mut().insert(id, name.clone());
+        self.reference_names
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(id, name.clone());
 
         Some(name)
     }

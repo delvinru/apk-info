@@ -20,7 +20,7 @@ jq -r 'select((.target_sdk_version | tonumber) < 29) | .path' results.jsonl
 
 ## Python
 
-Catch `APKError` per file, and use processes to parse in parallel:
+Catch `APKError` per file, and use a thread pool to parse in parallel:
 
 ```python
 --8<-- "examples/guides/batch.py:batch"
@@ -31,7 +31,7 @@ Catch `APKError` per file, and use processes to parse in parallel:
 {"file": "samples/org.adaway.apk", "package": "org.adaway", "version": "6.1.4", "min_sdk": "26", ...}
 ```
 
-Parsing holds the GIL, so a thread pool won't speed things up; `ProcessPoolExecutor` will.
+`APK()`, `get_signatures()` and `read()` release the GIL while they work, so threads parse files in parallel, about 3× faster with 8 threads than with one. An `APK` object can be passed between threads.
 
 ## Rust
 

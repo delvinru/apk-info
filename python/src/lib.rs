@@ -768,7 +768,7 @@ impl Attribution {
     }
 }
 
-#[pyclass(name = "APK", unsendable, module = "apk_info._apk_info")]
+#[pyclass(name = "APK", frozen, module = "apk_info._apk_info")]
 struct Apk {
     apkrs: ApkRust,
 }
@@ -786,6 +786,7 @@ impl Apk {
 impl Apk {
     #[new]
     pub fn new(path: &Bound<'_, PyAny>) -> PyResult<Apk> {
+        let py = path.py();
         let resolved: Option<PathBuf> = if let Ok(s) = path.extract::<&str>() {
             Some(PathBuf::from(s))
         } else {
@@ -800,7 +801,10 @@ impl Apk {
             )));
         }
 
-        let apkrs = ApkRust::new(&path).map_err(|e| APKError::new_err(e.to_string()))?;
+        // parsing is pure Rust: other Python threads run meanwhile
+        let apkrs = py
+            .detach(|| ApkRust::new(&path))
+            .map_err(|e| APKError::new_err(e.to_string()))?;
 
         Ok(Apk { apkrs })
     }
@@ -811,10 +815,13 @@ impl Apk {
             .extract()
             .map_err(|_| PyValueError::new_err("bad filename"))?;
 
+        // decompression can take a while for a large entry
+        let py = filename.py();
         let result = if base {
-            self.base_zip()?.read(name)
+            let zip = self.base_zip()?;
+            py.detach(|| zip.read(name))
         } else {
-            self.apkrs.read(name)
+            py.detach(|| self.apkrs.read(name))
         };
 
         result
@@ -1029,9 +1036,9 @@ impl Apk {
     }
 
     pub fn get_signatures<'py>(&self, py: Python<'py>) -> PyResult<Vec<Bound<'py, Signature>>> {
-        Ok(self
-            .apkrs
-            .get_signatures()
+        // reads and parses the signing block and the certificates
+        Ok(py
+            .detach(|| self.apkrs.get_signatures())
             .map_err(|e| APKError::new_err(format!("failed to get signatures: {:?}", e)))?
             .into_iter()
             .filter_map(|x| Signature::from(py, x))

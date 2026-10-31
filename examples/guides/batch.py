@@ -5,7 +5,7 @@ Usage: python batch.py <folder>
 
 import json
 import sys
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from apk_info import APK, APKError
@@ -33,8 +33,8 @@ def triage(path: Path) -> dict:
 if __name__ == "__main__":
     files = [p for p in Path(sys.argv[1]).rglob("*") if p.suffix.lower() in EXTENSIONS]
 
-    # parsing holds the GIL, so threads would run one at a time; use processes
-    with ProcessPoolExecutor() as pool:
+    # parsing releases the GIL, so threads run in parallel
+    with ThreadPoolExecutor(max_workers=8) as pool:
         for result in pool.map(triage, files):
             print(json.dumps(result))
 # --8<-- [end:batch]
