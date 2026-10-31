@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "**.rs"
+      - "python/**"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "**/tests/**"
@@ -11,6 +12,7 @@ on:
   pull_request:
     paths:
       - "**.rs"
+      - "python/**"
       - "**/Cargo.toml"
       - "Cargo.lock"
       - "**/tests/**"
@@ -68,3 +70,29 @@ jobs:
 
       - name: Build on MSRV
         run: cargo build --workspace --exclude apk-info-fuzz --exclude apk-info-python --all-targets --locked
+
+  python:
+    name: python stubs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: python
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      # apk_info.pyi is written by hand: check it against the built module
+      - name: Check apk_info.pyi
+        working-directory: python
+        run: |
+          uv venv --python 3.13
+          uv pip install maturin pytest
+          uv run --no-project maturin develop --uv
+          uv run --no-project pytest tests
