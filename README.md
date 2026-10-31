@@ -9,6 +9,8 @@
 
 A full-featured `apk` parser.
 
+Documentation: <https://delvinru.github.io/apk-info/>
+
 <img src="docs/assets/demo.gif" width="900" alt="apk-info demo" />
 
 ## Features

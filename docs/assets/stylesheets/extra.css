@@ -1,0 +1,130 @@
+/* apk-info theme: neutral surfaces, one olive accent (the cursor and the
+   selected byte of the logo). */
+
+:root {
+  --apk-olive: #4d7c0f;
+  --apk-olive-bright: #65a30d;
+}
+
+[data-md-color-primary="custom"] {
+  --md-primary-fg-color: var(--apk-olive);
+  --md-primary-fg-color--light: var(--apk-olive-bright);
+  --md-primary-fg-color--dark: #3f6212;
+  --md-primary-bg-color: #ffffff;
+}
+
+[data-md-color-accent="custom"] {
+  --md-accent-fg-color: var(--apk-olive);
+  --md-accent-fg-color--transparent: rgb(77 124 15 / 10%);
+  --md-accent-bg-color: #ffffff;
+}
+
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: var(--apk-olive);
+  --md-code-hl-color: rgb(77 124 15 / 100%);
+  --md-code-hl-color--light: rgb(77 124 15 / 14%);
+  --apk-cursor: var(--apk-olive);
+  --apk-hl-bg: var(--apk-olive);
+}
+
+[data-md-color-scheme="slate"] {
+  --md-typeset-a-color: var(--apk-olive-bright);
+  --md-code-hl-color: rgb(101 163 13 / 100%);
+  --md-code-hl-color--light: rgb(101 163 13 / 20%);
+  --md-accent-fg-color: var(--apk-olive-bright);
+  --md-accent-fg-color--transparent: rgb(101 163 13 / 12%);
+  --apk-cursor: var(--apk-olive-bright);
+  --apk-hl-bg: var(--apk-olive-bright);
+}
+
+/* Type: Plex for text, JetBrains Mono for code and small labels */
+/* Plex loads in 300/400/500/700; 600 would be synthesised */
+.md-typeset h1,
+.md-typeset h2 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h3 {
+  font-weight: 500;
+}
+
+/* The selected-byte highlight: marks what to look at, like 4B in the logo.
+   Use on inline code with attr_list: `!`{ .hl } */
+.md-typeset .hl,
+.md-typeset code.hl {
+  background: var(--apk-hl-bg);
+  color: #ffffff;
+  border-radius: 0.15em;
+  padding: 0 0.3em;
+}
+
+/* Home page */
+.apk-hero {
+  margin: 1rem 0 1.5rem;
+}
+
+.apk-hero__title {
+  margin: 0 0 0.8rem !important;
+  line-height: 1;
+}
+
+.apk-hero__title svg {
+  display: block;
+  width: min(19rem, 100%);
+  height: auto;
+}
+
+.apk-hero__title path {
+  fill: currentColor;
+}
+
+.apk-hero__lead {
+  font-size: 1.15rem;
+  line-height: 1.5;
+  max-width: 34rem;
+  margin: 0 0 1.4rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.apk-hero__lead strong {
+  color: var(--md-default-fg-color);
+  font-weight: 600;
+}
+
+/* One slow blink, like a terminal cursor; static for reduced motion */
+@keyframes apk-blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0; }
+}
+
+.apk-hero__title .cursor {
+  fill: var(--apk-cursor);
+  animation: apk-blink 1.1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apk-hero__title .cursor {
+    animation: none;
+  }
+}
+
+/* A plain two-column list instead of feature cards */
+.apk-points {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.2rem 2.5rem;
+}
+
+.apk-points > p {
+  margin: 0.6rem 0;
+}
+
+.apk-points strong {
+  display: block;
+  font-family: var(--md-code-font-family);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--md-default-fg-color);
+}

@@ -1,0 +1,136 @@
+[project]
+site_name = "apk-info"
+site_description = "A fast, malware-friendly parser for Android APK files"
+site_url = "https://delvinru.github.io/apk-info/"
+repo_url = "https://github.com/delvinru/apk-info"
+repo_name = "delvinru/apk-info"
+edit_uri = "edit/main/docs/"
+extra_css = ["assets/stylesheets/extra.css"]
+
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = [
+    { "Installation" = "getting-started/installation.md" },
+    { "Quickstart" = "getting-started/quickstart.md" },
+  ] },
+  { "Guides" = [
+    { "Inspecting an APK" = "guides/inspecting.md" },
+    { "Permissions and components" = "guides/components.md" },
+    { "Signatures" = "guides/signatures.md" },
+    { "Files and resources" = "guides/files.md" },
+    { "XAPK, APKM and APKS" = "guides/containers.md" },
+    { "Malformed APKs" = "guides/malformed-apks.md" },
+    { "Processing many APKs" = "guides/batch.md" },
+  ] },
+  { "Reference" = [
+    { "CLI" = "reference/cli.md" },
+    { "Python API" = "reference/python.md" },
+    { "Rust API" = "https://docs.rs/apk-info/latest/apk_info/" },
+  ] },
+  { "Benchmarks" = "benchmarks.md" },
+  { "FAQ" = "faq.md" },
+]
+
+[project.theme]
+language = "en"
+custom_dir = "overrides"
+logo = "assets/logo/favicon.svg"
+favicon = "assets/logo/favicon.svg"
+features = [
+  "content.action.edit",
+  "content.code.annotate",
+  "content.code.copy",
+  "content.tabs.link",
+  "navigation.footer",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+  "search.suggest",
+]
+
+[project.theme.font]
+text = "IBM Plex Sans"
+code = "JetBrains Mono"
+
+[project.theme.icon]
+repo = "fontawesome/brands/github"
+
+# follow the system color scheme, with a toggle in the header;
+# colours come from docs/assets/stylesheets/extra.css
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/delvinru/apk-info"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/python"
+link = "https://pypi.org/project/apk-info/"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/rust"
+link = "https://crates.io/crates/apk-info"
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["python"]
+inventories = ["https://docs.python.org/3/objects.inv"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_section_style = "table"
+docstring_style = "numpy"
+line_length = 88
+merge_init_into_class = true
+separate_signature = true
+show_attribute_values = true
+show_docstring_raises = true
+show_labels = false
+show_signature_annotations = true
+show_signature_type_parameters = true
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+filters = ["!^_"]
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+def_list = {}
+md_in_html = {}
+toc.permalink = true
+pymdownx.details = {}
+pymdownx.emoji.emoji_generator = "zensical.extensions.emoji.to_svg"
+pymdownx.emoji.emoji_index = "zensical.extensions.emoji.twemoji"
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.line_spans = "__span"
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.inlinehilite = {}
+# code examples are included from runnable files in the repository
+pymdownx.snippets.base_path = ["."]
+pymdownx.snippets.check_paths = true
+pymdownx.superfences = {}
+pymdownx.tabbed.alternate_style = true
+pymdownx.tasklist.custom_checkbox = true

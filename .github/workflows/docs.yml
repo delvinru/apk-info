@@ -1,0 +1,100 @@
+name: docs
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "zensical.toml"
+      - "overrides/**"
+      - "examples/**"
+      - "core/examples/**"
+      - "python/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "zensical.toml"
+      - "overrides/**"
+      - "examples/**"
+      - "core/examples/**"
+      - "python/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: docs
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      # mkdocstrings documents the installed `apk_info` package, so the bindings
+      # are built from source together with the docs dependencies
+      - name: Install docs dependencies
+        run: uv sync --project python --group docs --locked
+
+      # the docs include these examples verbatim; make sure they still run
+      - name: Run examples
+        run: |
+          # a plain APK: the universal APK from the bundletool fixture
+          APK="$RUNNER_TEMP/app.apk"
+          unzip -p core/tests/fixtures/apks-universal.apks universal.apk > "$APK"
+
+          py() { uv run --project python --no-sync python "$@"; }
+          rs() { cargo run -q --locked -p apk-info --example "$@"; }
+
+          py examples/quickstart.py "$APK"
+          py examples/guides/triage.py "$APK"
+          py examples/guides/components.py "$APK"
+          py examples/guides/signatures.py "$APK" "$APK"
+          py examples/guides/files.py "$APK" "$RUNNER_TEMP/files-py"
+          py examples/guides/batch.py core/tests/fixtures
+
+          rs quickstart -- "$APK"
+          rs triage -- "$APK"
+          rs components -- "$APK"
+          rs signatures -- "$APK" "$APK"
+          rs files -- "$APK" "$RUNNER_TEMP/files-rs"
+          rs batch -- core/tests/fixtures
+
+      - name: Build site
+        run: uv run --project python --no-sync zensical build --strict
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: site
+
+  deploy:
+    name: deploy
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5.0.1

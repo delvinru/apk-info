@@ -15,8 +15,11 @@ dist/
 *.egg-info/
 .coverage
 
-# mkdocs
+# zensical
 site/
+
+# local research notes, not published
+.research/
 docs/_build/
 
 # Editor

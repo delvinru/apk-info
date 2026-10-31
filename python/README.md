@@ -6,6 +6,8 @@
 
 A full-featured `apk` parser.
 
+Documentation: <https://delvinru.github.io/apk-info/>
+
 ## Features
 
 - A malware-friendly zip extractor. Great [article](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) about `BadPack` technique;
