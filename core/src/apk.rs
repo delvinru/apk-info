@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 use apk_info_axml::{ARSC, AXML};
 use apk_info_xml::Element;
 use apk_info_zip::{FileCompressionType, Signature, ZipEntry, ZipError};
-use log::warn;
+use log::{debug, warn};
 
 use crate::errors::APKError;
 use crate::models::{
@@ -25,6 +25,9 @@ const XAPK_MANIFEST_PATH: &str = "manifest.json";
 
 /// The name of the base.apk to be searched for in the APKM format.
 const APKM_BASE_APK: &str = "base.apk";
+
+/// The bundle config of an Android App Bundle, marks the AAB format.
+const AAB_BUNDLE_CONFIG_PATH: &str = "BundleConfig.pb";
 
 /// The table of contents written by `bundletool build-apks`, marks the APKS format.
 const APKS_TOC_PATH: &str = "toc.pb";
@@ -87,6 +90,20 @@ pub struct Apk {
     inner_zip: OnceLock<Option<ZipEntry>>,
 }
 
+/// What [`Apk::resolve`] found in an archive.
+enum Resolved {
+    /// A plain apk.
+    Apk { axml: AXML, arsc: Option<ARSC> },
+
+    /// A container, with its parsed base apk.
+    Container {
+        name: String,
+        base: ZipEntry,
+        axml: AXML,
+        arsc: Option<ARSC>,
+    },
+}
+
 /// Everything [`Apk::init`] gathers from a file.
 struct ParsedApk {
     zip: ZipEntry,
@@ -128,8 +145,54 @@ impl Apk {
 
         // only the central directory is loaded now; the manifest, resource
         // table and requested entries follow on demand
-        let zip = ZipEntry::from_reader(file).map_err(APKError::ZipError)?;
+        let zip = match ZipEntry::from_reader(file) {
+            Ok(zip) => zip,
+            // APKMirror encrypted .apkm files before 2021
+            Err(ZipError::InvalidHeader)
+                if p.extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("apkm")) =>
+            {
+                return Err(APKError::InvalidInput(
+                    "not a zip archive, likely an encrypted apkm: decrypt it with unapkm first",
+                ));
+            }
+            Err(err) => return Err(APKError::ZipError(err)),
+        };
 
+        let parsed = match Self::resolve(&zip)? {
+            Resolved::Apk { axml, arsc } => ParsedApk {
+                zip,
+                base_apk_name: None,
+                axml,
+                arsc,
+                inner_zip: OnceLock::new(),
+            },
+            Resolved::Container {
+                name,
+                base,
+                axml,
+                arsc,
+            } => {
+                // the apk is parsed already; keeping it makes later queries free
+                let inner_zip = OnceLock::new();
+                inner_zip.get_or_init(|| Some(base));
+
+                ParsedApk {
+                    zip,
+                    base_apk_name: Some(name),
+                    axml,
+                    arsc,
+                    inner_zip,
+                }
+            }
+        };
+
+        Ok(parsed)
+    }
+
+    /// Decides whether `zip` is an apk or a container, and parses the
+    /// manifest of the apk or of the container's base apk.
+    fn resolve(zip: &ZipEntry) -> Result<Resolved, APKError> {
         // apk
         //
         // A root manifest that doesn't parse is not the end: a container may
@@ -137,16 +200,8 @@ impl Apk {
         // the error path, so a healthy apk costs nothing extra.
         let mut error = None;
         if let Ok((manifest, _)) = zip.read(ANDROID_MANIFEST_PATH) {
-            match Self::parse_manifest(&zip, &manifest) {
-                Ok((axml, arsc)) => {
-                    return Ok(ParsedApk {
-                        zip,
-                        base_apk_name: None,
-                        axml,
-                        arsc,
-                        inner_zip: OnceLock::new(),
-                    });
-                }
+            match Self::parse_manifest(zip, &manifest) {
+                Ok((axml, arsc)) => return Ok(Resolved::Apk { axml, arsc }),
                 Err(err) => error = Some(err),
             }
         }
@@ -154,41 +209,59 @@ impl Apk {
         let root_error = error.as_ref().map(ToString::to_string);
 
         // xapk / apkm / apks: the first candidate that parses is the base
-        for name in Self::base_apk_candidates(&zip, &mut error) {
+        for (name, guessed) in Self::base_apk_candidates(zip, &mut error) {
             let parsed = zip
                 .open_nested(&name)
                 .map_err(APKError::ZipError)
-                .and_then(|inner_apk| {
-                    let (manifest, _) = inner_apk
+                .and_then(|base| {
+                    let (manifest, _) = base
                         .read(ANDROID_MANIFEST_PATH)
                         .map_err(APKError::ZipError)?;
-                    let (axml, arsc) = Self::parse_manifest(&inner_apk, &manifest)?;
-                    Ok((inner_apk, axml, arsc))
+                    let (axml, arsc) = Self::parse_manifest(&base, &manifest)?;
+                    Ok((base, axml, arsc))
                 });
 
+            // a guess must be the base, not a config or feature split
+            let parsed = parsed.and_then(|(base, axml, arsc)| {
+                if guessed
+                    && axml
+                        .get_attribute_value("manifest", "split", None)
+                        .is_some()
+                {
+                    return Err(APKError::InvalidInput("a split apk, not the base"));
+                }
+                Ok((base, axml, arsc))
+            });
+
             match parsed {
-                Ok((inner_apk, axml, arsc)) => {
+                Ok((base, axml, arsc)) => {
                     if let Some(err) = &root_error {
                         warn!("root {ANDROID_MANIFEST_PATH} doesn't parse ({err}), using {name}");
                     }
+                    if guessed {
+                        warn!("no known base apk name in the container, guessed {name}");
+                    }
 
-                    // the apk is parsed already; keeping it makes later queries free
-                    let inner_zip = OnceLock::new();
-                    inner_zip.get_or_init(|| Some(inner_apk));
-
-                    return Ok(ParsedApk {
-                        zip,
-                        base_apk_name: Some(name),
+                    return Ok(Resolved::Container {
+                        name,
+                        base,
                         axml,
                         arsc,
-                        inner_zip,
                     });
                 }
+                // a failed guess is expected, e.g. every split of a set
+                Err(err) if guessed => debug!("{name} is not the base apk: {err}"),
                 Err(err) => {
                     warn!("{name} is not a usable base apk: {err}");
                     error.get_or_insert(err);
                 }
             }
+        }
+
+        if zip.contains(AAB_BUNDLE_CONFIG_PATH) {
+            return Err(APKError::InvalidInput(
+                "an app bundle (.aab) is not an installable apk: build apks from it with bundletool",
+            ));
         }
 
         Err(error.unwrap_or(APKError::InvalidInput("is it apk/xapk/apkm/apks?")))
@@ -208,20 +281,26 @@ impl Apk {
     /// 1. xapk `manifest.json`: the `base` split, then `<package_name>.apk`;
     /// 2. `base.apk` (apkm, SAI, App Manager, or an xapk whose
     ///    `manifest.json` is broken or names a missing file);
-    /// 3. the full-app apk of a bundletool apks (`toc.pb`).
+    /// 3. the full-app apk of a bundletool apks (`toc.pb`);
+    /// 4. a guess, only for an archive without a root `AndroidManifest.xml`:
+    ///    the names above or the bundletool ones in any case or directory
+    ///    (`BASE.APK`, `app/base.apk`, `splits/base-master.apk` without
+    ///    `toc.pb`), then any `*.apk` at the root.
+    ///
+    /// A guessed candidate (`true` in the pair) must not be a split. Guessing
+    /// is off when the archive has its own manifest, so a broken apk that
+    /// carries a payload apk is never reported as that payload.
     ///
     /// A broken `manifest.json` is recorded in `error` and does not stop the
     /// other candidates.
-    fn base_apk_candidates(zip: &ZipEntry, error: &mut Option<APKError>) -> Vec<String> {
+    fn base_apk_candidates(zip: &ZipEntry, error: &mut Option<APKError>) -> Vec<(String, bool)> {
         let mut candidates = Vec::new();
 
         if let Ok((data, _)) = zip.read(XAPK_MANIFEST_PATH) {
             match XAPKManifest::from_json(&data) {
                 Ok(manifest) => {
                     let names: Vec<String> = manifest.base_apk_names().collect();
-                    if !names.is_empty()
-                        && !names.iter().any(|name| zip.namelist().any(|n| n == name))
-                    {
+                    if !names.is_empty() && !names.iter().any(|name| zip.contains(name)) {
                         warn!(
                             "{XAPK_MANIFEST_PATH} names no base apk present in the archive: {names:?}"
                         );
@@ -239,9 +318,45 @@ impl Apk {
         candidates.push(APKM_BASE_APK.to_owned());
         candidates.extend(apks_base_apk_name(zip));
 
+        let mut guesses = Vec::new();
+        if !zip.contains(ANDROID_MANIFEST_PATH) {
+            let file_name = |name: &str| name.rsplit('/').next().unwrap_or(name).to_owned();
+            // bundletool names count too: an apks that lost its `toc.pb`
+            let known: Vec<String> = candidates
+                .iter()
+                .map(String::as_str)
+                .chain(APKS_BASE_APKS.iter().copied())
+                .map(file_name)
+                .collect();
+
+            // known names in another case or directory
+            guesses.extend(
+                zip.namelist()
+                    .filter(|name| {
+                        let base = file_name(name);
+                        known.iter().any(|known| known.eq_ignore_ascii_case(&base))
+                    })
+                    .map(str::to_owned),
+            );
+            // then any apk at the root
+            guesses.extend(
+                zip.namelist()
+                    .filter(|name| {
+                        !name.contains('/')
+                            && name.len() > 4
+                            && name[name.len() - 4..].eq_ignore_ascii_case(".apk")
+                    })
+                    .map(str::to_owned),
+            );
+        }
+
         let mut seen = HashSet::new();
-        candidates.retain(|name| zip.namelist().any(|n| n == name) && seen.insert(name.clone()));
         candidates
+            .into_iter()
+            .map(|name| (name, false))
+            .chain(guesses.into_iter().map(|name| (name, true)))
+            .filter(|(name, _)| zip.contains(name) && seen.insert(name.clone()))
+            .collect()
     }
 
     /// Checks if a zip entry name matches an Android `classes*.dex` file, i.e. `classes.dex`,
@@ -274,20 +389,30 @@ impl Apk {
     }
 }
 
+/// Finds the base apk of a `xapk`/`apkm`/`apks` container, the same way
+/// [`Apk::new`] does.
+///
+/// Returns `Ok(None)` for a plain apk, `Ok(Some((name, base)))` for a
+/// container, where `base` is the parsed inner apk, and an error when the
+/// archive is neither, e.g. a broken apk or a container without a usable base.
+pub fn find_base_apk(zip: &ZipEntry) -> Result<Option<(String, ZipEntry)>, APKError> {
+    match Apk::resolve(zip)? {
+        Resolved::Apk { .. } => Ok(None),
+        Resolved::Container { name, base, .. } => Ok(Some((name, base))),
+    }
+}
+
 /// Returns the name of the full-app APK inside an APKS archive
 /// (`bundletool build-apks` output, marked by `toc.pb`), if the archive is one.
 ///
 /// Prefers `splits/base-master.apk`, then the single APK of the other build
 /// modes, then the first standalone APK by name.
 pub fn apks_base_apk_name(zip: &ZipEntry) -> Option<String> {
-    if !zip.namelist().any(|name| name == APKS_TOC_PATH) {
+    if !zip.contains(APKS_TOC_PATH) {
         return None;
     }
 
-    if let Some(name) = APKS_BASE_APKS
-        .iter()
-        .find(|&&name| zip.namelist().any(|n| n == name))
-    {
+    if let Some(name) = APKS_BASE_APKS.iter().find(|&&name| zip.contains(name)) {
         return Some((*name).to_owned());
     }
 

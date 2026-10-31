@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use apk_info::apk::find_base_apk;
 use apk_info::models::{XAPKManifest, XAPKSplitApk};
 use apk_info::{APKError, Apk, ZipEntry, ZipError};
 
@@ -173,4 +174,78 @@ fn xapk_manifest_is_read_leniently() {
     assert_eq!(manifest.base_apk_names().collect::<Vec<_>>(), ["b.apk"]);
 
     assert!(XAPKManifest::from_json(b"{not json").is_err());
+}
+
+#[test]
+fn find_base_apk_tells_apk_from_container() {
+    let base = base_apk();
+
+    let plain = ZipEntry::new(base.clone()).unwrap();
+    assert!(find_base_apk(&plain).unwrap().is_none());
+
+    let container =
+        ZipEntry::new(stored_zip(&[("info.json", b"{}"), ("base.apk", &base)])).unwrap();
+    let (name, inner) = find_base_apk(&container).unwrap().unwrap();
+    assert_eq!(name, "base.apk");
+    assert!(inner.contains("AndroidManifest.xml"));
+}
+
+#[test]
+fn app_bundle_is_reported() {
+    let files = [
+        ("BundleConfig.pb", &b""[..]),
+        ("base/manifest/AndroidManifest.xml", &b""[..]),
+    ];
+    let Err(APKError::InvalidInput(message)) = open("aab", &files) else {
+        panic!("an aab must be rejected with a clear message");
+    };
+    assert!(message.contains("app bundle"), "{message}");
+}
+
+#[test]
+fn encrypted_apkm_is_reported() {
+    let path = std::env::temp_dir().join(format!("apk-info-{}-encrypted.apkm", std::process::id()));
+    std::fs::write(&path, b"\x01\x02 not a zip archive").unwrap();
+    let apk = Apk::new(&path);
+    std::fs::remove_file(&path).unwrap();
+
+    let Err(APKError::InvalidInput(message)) = apk else {
+        panic!("a non-zip apkm must be rejected with a clear message");
+    };
+    assert!(message.contains("unapkm"), "{message}");
+}
+
+#[test]
+fn base_apk_is_guessed_by_case_and_directory() {
+    let base = base_apk();
+    assert_eq!(package("upper", &[("BASE.APK", &base)]), PACKAGE);
+    assert_eq!(package("nested", &[("app/base.apk", &base)]), PACKAGE);
+    assert_eq!(package("root-apk", &[("app-release.apk", &base)]), PACKAGE);
+    assert_eq!(
+        package("no-toc", &[("splits/base-master.apk", &base)]),
+        PACKAGE
+    );
+}
+
+#[test]
+fn split_is_never_guessed_as_base() {
+    let apks = ZipEntry::open(fixture("apks-split.apks")).unwrap();
+    let split = apks.read("splits/base-ru.apk").unwrap().0;
+    assert!(open("splits-only", &[("config.ru.apk", &split)]).is_err());
+}
+
+/// An apk with a broken manifest is not a container: an apk it carries,
+/// e.g. a dropper's payload, must not be reported as the app.
+#[test]
+fn payload_of_a_broken_apk_is_not_guessed() {
+    let payload = base_apk();
+    let files = [
+        ("AndroidManifest.xml", &b"garbage"[..]),
+        ("payload.apk", &payload),
+        ("assets/base.apk", &payload),
+    ];
+    assert!(matches!(
+        open("dropper", &files),
+        Err(APKError::ManifestError(_))
+    ));
 }

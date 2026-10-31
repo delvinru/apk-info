@@ -15,6 +15,10 @@ Google Play builds most apps from App Bundles and installs them as a set of APKs
 
 The candidates are tried in order until one parses: the base named in `manifest.json` (the `base` entry of `split_apks`, then `<package_name>.apk`), `base.apk`, then the base of a bundletool APKS. A broken `manifest.json` or a broken root `AndroidManifest.xml` only produces a warning when a base APK is found. Containers over 4 GB (ZIP64) are supported.
 
+When none of these names is present and the archive has no `AndroidManifest.xml` of its own, apk-info guesses: the same names in another case or directory (`BASE.APK`, `app/base.apk`), then any APK at the root. A guess is accepted only if it is not a split, and a warning names it. An APK with a broken manifest is never treated as a container, so an APK it carries (for example a dropper's payload) is not reported as the app.
+
+`apk-info extract -r` decodes the resources of the same base APK, plus its splits.
+
 === "Python"
 
     ```python
@@ -105,8 +109,9 @@ ls out/org.telegram.messenger.xapk.unp/res/ | grep values-
 
 ## Limitations
 
-- File names are matched exactly: a base APK in a subdirectory or named `BASE.APK` is not found.
+- A container nested in another archive (a ZIP holding an XAPK) is not opened.
+- App Bundles (`.aab`) are rejected with an explicit error: build APKS from them with bundletool.
 - Compressed (DEFLATED) entries over 4 GB can't be read or extracted; stored ones, which is how stores write APKs and OBB files, are fine.
 - There is no API yet to list splits, their config qualifiers or their signatures, or the OBB files of an XAPK.
-- apk-info doesn't support AAB files (`.aab`, the App Bundle itself) or encrypted APKM files from before 2021.
+- Encrypted APKM files from before 2021 are rejected with a hint to decrypt them with [unapkm](https://github.com/souramoo/unapkm).
 - For bundletool APKS files with standalone variants, `get_min_sdk_version()` reports the min SDK of `splits/base-master.apk`, which can be higher than the app's real minimum.

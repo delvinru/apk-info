@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use apk_info::FileCompressionType;
-use apk_info::apk::apks_base_apk_name;
+use apk_info::apk::{apks_base_apk_name, find_base_apk};
+use apk_info::models::XAPKManifest;
 use apk_info_zip::ZipEntry;
 use colored::Colorize;
 use log::warn;
@@ -190,46 +191,24 @@ fn resolve_output_path(out_dir: &Path, file_name: &str) -> Option<(PathBuf, bool
     }
 }
 
-/// Locates and parses the base inner APK of a `xapk`/`apkm`/`apks` container, if any.
-fn container_base_apk(zip: &ZipEntry) -> Option<ZipEntry> {
-    // xapk: manifest.json declares package_name -> <package_name>.apk
-    if let Ok((m, _)) = zip.read("manifest.json")
-        && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&m)
-        && let Some(pkg) = v.get("package_name").and_then(|s| s.as_str())
-        && let Ok((data, _)) = zip.read(&format!("{pkg}.apk"))
-    {
-        return ZipEntry::new(data).ok();
-    }
-    // apkm: contains a single base.apk
-    if let Ok((data, _)) = zip.read("base.apk") {
-        return ZipEntry::new(data).ok();
-    }
-    // apks: toc.pb + splits/base-master.apk (or the single apk of other modes)
-    if let Some(name) = apks_base_apk_name(zip)
-        && let Ok((data, _)) = zip.read(&name)
-    {
-        return ZipEntry::new(data).ok();
-    }
-    None
-}
-
 /// Enumerates the config/other split inner APKs of a `xapk`/`apkm`/`apks` container
 /// (everything that is *not* the base).
 ///
 /// Each carries its own `resources.arsc` with locale/configuration string variations that complement the base's.
-fn container_split_apks(zip: &ZipEntry) -> Vec<(String, ZipEntry)> {
+fn container_split_apks(zip: &ZipEntry, base: &str) -> Vec<(String, ZipEntry)> {
     let mut names: BTreeSet<String> = BTreeSet::new();
 
     // xapk: manifest.json split_apks -> file names (skip the id == "base" module)
     if let Ok((m, _)) = zip.read("manifest.json")
-        && let Ok(v) = serde_json::from_slice::<serde_json::Value>(&m)
-        && let Some(arr) = v.get("split_apks").and_then(|s| s.as_array())
+        && let Ok(manifest) = XAPKManifest::from_json(&m)
     {
-        for sp in arr {
-            let file = sp.get("file").and_then(|s| s.as_str()).unwrap_or("");
-            let id = sp.get("id").and_then(|s| s.as_str()).unwrap_or("");
-            if file.ends_with(".apk") && !id.is_empty() && id != "base" {
-                names.insert(file.to_string());
+        for split in manifest.split_apks {
+            if let (Some(file), Some(id)) = (split.file, split.id)
+                && file.ends_with(".apk")
+                && !id.is_empty()
+                && id != "base"
+            {
+                names.insert(file);
             }
         }
     }
@@ -257,6 +236,8 @@ fn container_split_apks(zip: &ZipEntry) -> Vec<(String, ZipEntry)> {
             names.insert(name.to_string());
         }
     }
+
+    names.remove(base);
 
     names
         .into_iter()
@@ -337,9 +318,25 @@ fn extract(
 
     let regexes = compile_regexes(files)?;
 
-    if resources && let Err(e) = decode_resources(out_dir, &zip) {
-        println!("[-] can't decode resources - {}", e.to_string().red());
-    }
+    // the same base apk `show` uses; the outer archive of a container has
+    // no resources of its own to decode
+    let base = if resources {
+        match find_base_apk(&zip) {
+            Ok(None) => {
+                if let Err(e) = decode_resources(out_dir, &zip) {
+                    println!("[-] can't decode resources - {}", e.to_string().red());
+                }
+                None
+            }
+            Ok(Some(base)) => Some(base),
+            Err(e) => {
+                println!("[-] can't decode resources - {}", e.to_string().red());
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     for file_name in zip.namelist() {
         if !regexes.is_empty() && !regexes.iter().any(|re| re.is_match(file_name)) {
@@ -401,14 +398,12 @@ fn extract(
         }
     }
 
-    if resources {
-        if let Some(inner) = container_base_apk(&zip) {
-            println!("[*] decoding resources of the base inner apk");
-            if let Err(e) = decode_resources(out_dir, &inner) {
-                println!("[-] can't decode inner resources - {}", e.to_string().red());
-            }
+    if let Some((base_name, inner)) = base {
+        println!("[*] decoding resources of the base inner apk \"{base_name}\"");
+        if let Err(e) = decode_resources(out_dir, &inner) {
+            println!("[-] can't decode inner resources - {}", e.to_string().red());
         }
-        for (name, split) in container_split_apks(&zip) {
+        for (name, split) in container_split_apks(&zip, &base_name) {
             println!("[*] decoding resources of split apk \"{name}\"");
             if let Err(e) = decode_resources_split(out_dir, &split) {
                 println!(
