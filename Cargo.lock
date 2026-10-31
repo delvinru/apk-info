@@ -102,6 +102,7 @@ dependencies = [
  "apk-info-axml",
  "apk-info-xml",
  "apk-info-zip",
+ "log",
  "serde",
  "serde_json",
  "thiserror",

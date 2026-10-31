@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 use apk_info_axml::{ARSC, AXML};
 use apk_info_xml::Element;
 use apk_info_zip::{FileCompressionType, Signature, ZipEntry, ZipError};
+use log::warn;
 
 use crate::errors::APKError;
 use crate::models::{
@@ -130,89 +131,117 @@ impl Apk {
         let zip = ZipEntry::from_reader(file).map_err(APKError::ZipError)?;
 
         // apk
+        //
+        // A root manifest that doesn't parse is not the end: a container may
+        // carry a garbage one to hide its base apk. The fallback only runs on
+        // the error path, so a healthy apk costs nothing extra.
+        let mut error = None;
         if let Ok((manifest, _)) = zip.read(ANDROID_MANIFEST_PATH) {
-            let arsc = Self::get_arsc(&zip)?;
-            let axml = Self::get_axml(&manifest, arsc.as_ref())?;
-
-            return Ok(ParsedApk {
-                zip,
-                base_apk_name: None,
-                axml,
-                arsc,
-                inner_zip: OnceLock::new(),
-            });
+            match Self::parse_manifest(&zip, &manifest) {
+                Ok((axml, arsc)) => {
+                    return Ok(ParsedApk {
+                        zip,
+                        base_apk_name: None,
+                        axml,
+                        arsc,
+                        inner_zip: OnceLock::new(),
+                    });
+                }
+                Err(err) => error = Some(err),
+            }
         }
 
-        // helper to parse the manifest and resources of an inner apk
-        let parse_inner = |inner_apk: &ZipEntry| -> Result<(AXML, Option<ARSC>), APKError> {
-            let (inner_manifest, _) = inner_apk
-                .read(ANDROID_MANIFEST_PATH)
-                .map_err(APKError::ZipError)?;
+        let root_error = error.as_ref().map(ToString::to_string);
 
-            let arsc = Self::get_arsc(inner_apk)?;
-            let axml = Self::get_axml(&inner_manifest, arsc.as_ref())?;
+        // xapk / apkm / apks: the first candidate that parses is the base
+        for name in Self::base_apk_candidates(&zip, &mut error) {
+            let parsed = zip
+                .open_nested(&name)
+                .map_err(APKError::ZipError)
+                .and_then(|inner_apk| {
+                    let (manifest, _) = inner_apk
+                        .read(ANDROID_MANIFEST_PATH)
+                        .map_err(APKError::ZipError)?;
+                    let (axml, arsc) = Self::parse_manifest(&inner_apk, &manifest)?;
+                    Ok((inner_apk, axml, arsc))
+                });
 
-            Ok((axml, arsc))
-        };
+            match parsed {
+                Ok((inner_apk, axml, arsc)) => {
+                    if let Some(err) = &root_error {
+                        warn!("root {ANDROID_MANIFEST_PATH} doesn't parse ({err}), using {name}");
+                    }
 
-        // xapk
-        if let Ok((manifest_json_data, _)) = zip.read(XAPK_MANIFEST_PATH) {
-            let manifest_json: XAPKManifest =
-                serde_json::from_slice(&manifest_json_data).map_err(APKError::XAPKManifestError)?;
+                    // the apk is parsed already; keeping it makes later queries free
+                    let inner_zip = OnceLock::new();
+                    inner_zip.get_or_init(|| Some(inner_apk));
 
-            let package_name = format!("{}.apk", manifest_json.package_name);
-            let inner_apk = zip.open_nested(&package_name).map_err(APKError::ZipError)?;
-            let (axml, arsc) = parse_inner(&inner_apk)?;
-
-            // the apk is parsed already; keeping it makes later queries free
-            let inner_zip = OnceLock::new();
-            inner_zip.get_or_init(|| Some(inner_apk));
-
-            return Ok(ParsedApk {
-                zip,
-                base_apk_name: Some(package_name),
-                axml,
-                arsc,
-                inner_zip,
-            });
+                    return Ok(ParsedApk {
+                        zip,
+                        base_apk_name: Some(name),
+                        axml,
+                        arsc,
+                        inner_zip,
+                    });
+                }
+                Err(err) => {
+                    warn!("{name} is not a usable base apk: {err}");
+                    error.get_or_insert(err);
+                }
+            }
         }
 
-        // apkm
-        if let Ok(inner_apk) = zip.open_nested(APKM_BASE_APK) {
-            let (axml, arsc) = parse_inner(&inner_apk)?;
+        Err(error.unwrap_or(APKError::InvalidInput("is it apk/xapk/apkm/apks?")))
+    }
 
-            let inner_zip = OnceLock::new();
-            inner_zip.get_or_init(|| Some(inner_apk));
+    /// Parses the manifest and the resource table of an apk.
+    fn parse_manifest(zip: &ZipEntry, manifest: &[u8]) -> Result<(AXML, Option<ARSC>), APKError> {
+        let arsc = Self::get_arsc(zip)?;
+        let axml = Self::get_axml(manifest, arsc.as_ref())?;
 
-            return Ok(ParsedApk {
-                zip,
-                base_apk_name: Some(APKM_BASE_APK.to_owned()),
-                axml,
-                arsc,
-                inner_zip,
-            });
+        Ok((axml, arsc))
+    }
+
+    /// Names of the base apk inside a container that exist in `zip`, most
+    /// specific first:
+    ///
+    /// 1. xapk `manifest.json`: the `base` split, then `<package_name>.apk`;
+    /// 2. `base.apk` (apkm, SAI, App Manager, or an xapk whose
+    ///    `manifest.json` is broken or names a missing file);
+    /// 3. the full-app apk of a bundletool apks (`toc.pb`).
+    ///
+    /// A broken `manifest.json` is recorded in `error` and does not stop the
+    /// other candidates.
+    fn base_apk_candidates(zip: &ZipEntry, error: &mut Option<APKError>) -> Vec<String> {
+        let mut candidates = Vec::new();
+
+        if let Ok((data, _)) = zip.read(XAPK_MANIFEST_PATH) {
+            match XAPKManifest::from_json(&data) {
+                Ok(manifest) => {
+                    let names: Vec<String> = manifest.base_apk_names().collect();
+                    if !names.is_empty()
+                        && !names.iter().any(|name| zip.namelist().any(|n| n == name))
+                    {
+                        warn!(
+                            "{XAPK_MANIFEST_PATH} names no base apk present in the archive: {names:?}"
+                        );
+                        error.get_or_insert(APKError::ZipError(ZipError::FileNotFound));
+                    }
+                    candidates.extend(names);
+                }
+                Err(err) => {
+                    warn!("can't parse {XAPK_MANIFEST_PATH}: {err}");
+                    error.get_or_insert(APKError::XAPKManifestError(err));
+                }
+            }
         }
 
-        // apks (bundletool build-apks)
-        if let Some(base_apk_name) = apks_base_apk_name(&zip) {
-            let inner_apk = zip
-                .open_nested(&base_apk_name)
-                .map_err(APKError::ZipError)?;
-            let (axml, arsc) = parse_inner(&inner_apk)?;
+        candidates.push(APKM_BASE_APK.to_owned());
+        candidates.extend(apks_base_apk_name(zip));
 
-            let inner_zip = OnceLock::new();
-            inner_zip.get_or_init(|| Some(inner_apk));
-
-            return Ok(ParsedApk {
-                zip,
-                base_apk_name: Some(base_apk_name),
-                axml,
-                arsc,
-                inner_zip,
-            });
-        }
-
-        Err(APKError::InvalidInput("is it apk/xapk/apkm/apks?"))
+        let mut seen = HashSet::new();
+        candidates.retain(|name| zip.namelist().any(|n| n == name) && seen.insert(name.clone()));
+        candidates
     }
 
     /// Checks if a zip entry name matches an Android `classes*.dex` file, i.e. `classes.dex`,

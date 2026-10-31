@@ -15,6 +15,7 @@ version.workspace = true
 apk-info-axml.workspace = true
 apk-info-xml.workspace = true
 apk-info-zip.workspace = true
+log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

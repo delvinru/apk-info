@@ -1,12 +1,69 @@
 //! Abstractions over `manifest` tags.
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 /// Represents xapk manifest.json
-#[derive(Deserialize)]
+///
+/// Read leniently: every field is optional and a field of an unexpected type
+/// is treated as absent, so only invalid JSON is an error.
+#[derive(Debug, Default, PartialEq, Eq)]
 pub struct XAPKManifest {
     /// Defined package name
-    pub package_name: String,
+    pub package_name: Option<String>,
+
+    /// Apks of the split set, `split_apks[{file, id}]`
+    pub split_apks: Vec<XAPKSplitApk>,
+}
+
+/// One entry of `split_apks` in xapk manifest.json
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct XAPKSplitApk {
+    /// File name inside the container, e.g. `com.example.apk` or `config.arm64_v8a.apk`
+    pub file: Option<String>,
+
+    /// Split id, `base` for the base apk
+    pub id: Option<String>,
+}
+
+impl XAPKManifest {
+    /// Parses `manifest.json`, skipping a UTF-8 BOM if present.
+    pub fn from_json(data: &[u8]) -> Result<XAPKManifest, serde_json::Error> {
+        let data = data.strip_prefix(b"\xef\xbb\xbf").unwrap_or(data);
+        let value: serde_json::Value = serde_json::from_slice(data)?;
+
+        let string = |value: &serde_json::Value, key: &str| {
+            value.get(key).and_then(|v| v.as_str()).map(str::to_owned)
+        };
+
+        let split_apks = value
+            .get("split_apks")
+            .and_then(|v| v.as_array())
+            .map(|splits| {
+                splits
+                    .iter()
+                    .map(|split| XAPKSplitApk {
+                        file: string(split, "file"),
+                        id: string(split, "id"),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(XAPKManifest {
+            package_name: string(&value, "package_name"),
+            split_apks,
+        })
+    }
+
+    /// Names the base apk may have, most specific first: the `base` split,
+    /// then `<package_name>.apk`.
+    pub fn base_apk_names(&self) -> impl Iterator<Item = String> + '_ {
+        self.split_apks
+            .iter()
+            .filter(|split| split.id.as_deref() == Some("base"))
+            .filter_map(|split| split.file.clone())
+            .chain(self.package_name.as_ref().map(|name| format!("{name}.apk")))
+    }
 }
 
 /// Represents `<intent-filter>` in manifest

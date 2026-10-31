@@ -126,7 +126,7 @@ for sig in apk.get_signatures():
 ## Supported formats
 
 - **APK** — standard Android packages.
-- **XAPK** — APK containers with a `manifest.json` (the inner `<package_name>.apk` is parsed).
+- **XAPK** — APK containers with a `manifest.json` (the inner base APK named there, `<package_name>.apk`, or `base.apk` is parsed).
 - **APKM** — APKM bundles (the inner `base.apk` is parsed).
 - **APKS** — `bundletool build-apks` output with a `toc.pb` (the inner `splits/base-master.apk`, `universal.apk` or first standalone APK is parsed).
 
