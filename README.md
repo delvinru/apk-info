@@ -1,4 +1,9 @@
-# apk-info
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo/wordmark-dark.svg">
+    <img src="docs/assets/logo/wordmark-light.svg" alt="apk-info" height="56">
+  </picture>
+</h1>
 
 [![crates.io](https://img.shields.io/crates/v/apk-info?style=flat)](https://crates.io/crates/apk-info)
 [![rust downloads](https://img.shields.io/crates/d/apk-info?label=rust%20downloads)](https://crates.io/crates/apk-info)

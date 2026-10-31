@@ -15,6 +15,13 @@
 //! let (data, compression_method) = zip.read("AndroidManifest.xml").expect("can't read manifest");
 //! ```
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/logo-256.png"
+)]
+#![doc(
+    html_favicon_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/favicon-32.png"
+)]
+
 pub mod compression;
 pub mod entry;
 pub mod errors;

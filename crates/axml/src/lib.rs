@@ -9,6 +9,13 @@
 //! let axml = AXML::new(input, None /* arsc */).expect("can't parse given axml file");
 //! ```
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/logo-256.png"
+)]
+#![doc(
+    html_favicon_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/favicon-32.png"
+)]
+
 mod arsc;
 mod axml;
 pub mod errors;

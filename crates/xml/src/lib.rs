@@ -1,5 +1,12 @@
 //! A small library that allows you to build an XML DOM tree.
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/logo-256.png"
+)]
+#![doc(
+    html_favicon_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/favicon-32.png"
+)]
+
 use std::fmt::{Display as _, Write as _};
 
 /// Represents a single XML attribute, including an optional namespace prefix.

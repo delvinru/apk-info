@@ -1,4 +1,4 @@
-# apk-info
+<h1><img src="https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/wordmark-light.png" alt="apk-info" height="56"></h1>
 
 ![PyPI - Version](https://img.shields.io/pypi/v/apk-info?style=flat)
 ![PyPI - License](https://img.shields.io/pypi/l/apk-info?style=flat)

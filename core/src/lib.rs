@@ -39,6 +39,13 @@
 //! println!("{}/{}", package_name, main_activity);
 //! ```
 
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/logo-256.png"
+)]
+#![doc(
+    html_favicon_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/favicon-32.png"
+)]
+
 pub mod apk;
 pub mod errors;
 pub mod models;
