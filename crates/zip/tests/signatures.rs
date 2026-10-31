@@ -161,9 +161,19 @@ fn verity_padding_block_does_not_hide_signatures() {
 }
 
 #[test]
-fn malformed_v1_certificate_is_an_error() {
-    // the .RSA file holds a certificate that is not DER: the v1 parse must
-    // fail cleanly instead of returning garbage
+fn ber_v1_certificate_keeps_original_encoding() {
+    // the certificate's signature length is BER-encoded with two bytes
+    // instead of one. Android accepts it and identifies the signer by the
+    // original bytes, not by a DER re-encoding (apksig
+    // `testV1SchemeSignatureCertNotReencoded`)
     let zip = ZipEntry::open(fixture("v1-only-with-rsa-1024-cert-not-der.apk")).unwrap();
-    assert!(zip.get_signature_v1().is_err());
+    let Signature::V1(certs) = zip.get_signature_v1().expect("BER certificate must parse") else {
+        panic!("expected a v1 signature");
+    };
+    assert_eq!(certs.len(), 1);
+    assert_eq!(subject(&certs[0]), "CN=rsa-1024");
+    assert_eq!(
+        certs[0].sha256_fingerprint,
+        "c5d4535a7e1c8111687a8374b2198da6f5ff8d811a7a25aa99ef060669342fa9"
+    );
 }

@@ -4,9 +4,8 @@ use std::fmt::Write;
 use std::io::Cursor;
 use std::path::Path;
 
-use cms::cert::CertificateChoices;
-use cms::content_info::ContentInfo;
-use cms::signed_data::SignedData;
+use ahash::AHashSet;
+use cms::signed_data::{SignerIdentifier, SignerInfo};
 use flate2::{Decompress, FlushDecompress, Status};
 use log::warn;
 use md5::{Digest, Md5};
@@ -21,13 +20,14 @@ use winnow::token::take;
 use x509_cert::Certificate;
 use x509_cert::der::oid::db::DB;
 use x509_cert::der::{Decode, Encode};
+use x509_cert::name::Name;
 
 use crate::signature::{CertificateInfo, Signature};
 use crate::source::Source;
 use crate::structs::{
     CentralDirectory, CentralDirectoryEntry, EndOfCentralDirectory, LocalFileHeader,
 };
-use crate::{CertificateError, FileCompressionType, ReadSeek, ZipError};
+use crate::{CertificateError, FileCompressionType, ReadSeek, ZipError, ber};
 
 /// Maximum allowed uncompressed size for a file entry.
 const MAX_UNCOMPRESSED_SIZE: usize = u32::MAX as usize;
@@ -681,9 +681,14 @@ impl ZipEntry {
 
     /// Extracts information from a v1 (APK-style) signature in the ZIP archive.
     ///
-    /// This method searches for signature files in the `META-INF/` directory
-    /// with extensions `.DSA`, `.EC`, or `.RSA`, reads the PKCS#7 data,
-    /// and returns the associated certificates.
+    /// Follows apksig `V1SchemeVerifier`: every `META-INF/*.RSA`, `*.DSA` or
+    /// `*.EC` signature block that sits directly in `META-INF/` and has a
+    /// matching `.SF` file is a signer, other block files are ignored. The
+    /// reported certificates are the ones each signer's `SignerInfo` points
+    /// to, followed by their issuer chains, merged across signers.
+    ///
+    /// A malformed signature block is skipped with a warning; the call fails
+    /// only if no signature block could be parsed at all.
     ///
     /// # Example
     ///
@@ -699,44 +704,157 @@ impl ZipEntry {
     /// }
     /// ```
     pub fn get_signature_v1(&self) -> Result<Signature, CertificateError> {
-        let signature_file = match self.namelist().find(|name| {
-            name.starts_with("META-INF/")
-                && (name.ends_with(".DSA") || name.ends_with(".EC") || name.ends_with(".RSA"))
-        }) {
-            Some(v) => v,
-            // just apk without signatures
-            None => return Ok(Signature::Unknown),
-        };
+        let names: AHashSet<&str> = self.namelist().collect();
 
-        let (data, _) = self
-            .read(signature_file)
-            .map_err(|_| CertificateError::ParseError)?;
+        let mut certificates: Vec<CertificateInfo> = Vec::new();
+        let mut parsed = false;
+        let mut failed = false;
 
-        let info = ContentInfo::from_der(&data).map_err(|_| CertificateError::ParseError)?;
-        let content = info
-            .content
-            .to_der()
-            .map_err(|_| CertificateError::ParseError)?;
+        for block in self
+            .namelist()
+            .filter(|name| Self::is_v1_signature_block(name))
+        {
+            let stem = &block[..block.rfind('.').unwrap_or(block.len())];
+            if !names.contains(format!("{stem}.SF").as_str()) {
+                warn!("v1 signature block {block} has no matching .SF file, ignoring it");
+                continue;
+            }
 
-        let signed_data =
-            SignedData::from_der(&content).map_err(|_| CertificateError::ParseError)?;
+            let signer = self
+                .read(block)
+                .map_err(CertificateError::from)
+                .and_then(|(data, _)| Self::parse_v1_signature_block(&data));
 
-        let certs = signed_data
-            .certificates
-            .ok_or(CertificateError::ParseError)?
-            .0
-            .into_vec()
-            .into_iter()
-            .filter_map(|cert| {
-                if let CertificateChoices::Certificate(cert) = cert {
-                    Some(cert.into())
-                } else {
-                    None
+            match signer {
+                Ok(chain) => {
+                    parsed = true;
+                    for certificate in chain {
+                        if !certificates.contains(&certificate) {
+                            certificates.push(certificate);
+                        }
+                    }
                 }
-            })
-            .collect();
+                Err(err) => {
+                    warn!("skipping malformed v1 signature block {block}: {err}");
+                    failed = true;
+                }
+            }
+        }
 
-        Ok(Signature::V1(certs))
+        match (parsed, failed) {
+            (true, _) => Ok(Signature::V1(certificates)),
+            (false, true) => Err(CertificateError::ParseError),
+            // just apk without signatures
+            (false, false) => Ok(Signature::Unknown),
+        }
+    }
+
+    /// `META-INF/<name>.RSA|.DSA|.EC`, without subdirectories.
+    fn is_v1_signature_block(name: &str) -> bool {
+        name.strip_prefix("META-INF/").is_some_and(|rest| {
+            !rest.contains('/')
+                && (rest.ends_with(".RSA") || rest.ends_with(".DSA") || rest.ends_with(".EC"))
+        })
+    }
+
+    /// Returns the signing certificate of a PKCS#7 signature block and its
+    /// issuer chain.
+    ///
+    /// The blob is walked as BER so that every certificate keeps its original
+    /// bytes for fingerprints. The certificate comes from the first
+    /// `SignerInfo` that resolves to one: a certificate the `SignerInfo` does
+    /// not point to is not the signer, even if it comes first in the set.
+    fn parse_v1_signature_block(data: &[u8]) -> Result<Vec<CertificateInfo>, CertificateError> {
+        // 1.2.840.113549.1.7.2
+        const SIGNED_DATA_OID: &[u8] = &[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x02];
+
+        let mut input = data;
+        let content_info = ber::read(&mut input).ok_or(CertificateError::ParseError)?;
+        let fields = ber::children(&content_info).ok_or(CertificateError::ParseError)?;
+        let [content_type, content, ..] = fields.as_slice() else {
+            return Err(CertificateError::ParseError);
+        };
+        if content_type.content != SIGNED_DATA_OID || content.tag != [0xa0] {
+            return Err(CertificateError::ParseError);
+        }
+
+        // SignedData: version, digestAlgorithms, encapContentInfo,
+        // certificates [0] IMPLICIT OPTIONAL, crls [1] IMPLICIT OPTIONAL, signerInfos
+        let signed_data = ber::children(content)
+            .and_then(|children| children.into_iter().next())
+            .ok_or(CertificateError::ParseError)?;
+        let fields = ber::children(&signed_data).ok_or(CertificateError::ParseError)?;
+
+        let certificates: Vec<(Certificate, &[u8])> =
+            match fields.iter().skip(3).find(|field| field.tag == [0xa0]) {
+                Some(set) => ber::children(set)
+                    .ok_or(CertificateError::ParseError)?
+                    .into_iter()
+                    .filter_map(|tlv| decode_certificate(tlv.raw).map(|cert| (cert, tlv.raw)))
+                    .collect(),
+                None => Vec::new(),
+            };
+
+        let signer_infos = fields
+            .iter()
+            .skip(3)
+            .find(|field| field.tag == [0x31])
+            .and_then(ber::children)
+            .ok_or(CertificateError::ParseError)?;
+
+        for signer_info in signer_infos {
+            let Some(signer_info) =
+                ber::to_der(signer_info.raw).and_then(|der| SignerInfo::from_der(&der).ok())
+            else {
+                continue;
+            };
+            let SignerIdentifier::IssuerAndSerialNumber(id) = &signer_info.sid else {
+                continue;
+            };
+
+            let leaf = certificates.iter().position(|(cert, _)| {
+                let tbs = cert.tbs_certificate();
+                tbs.serial_number() == &id.serial_number && same_name(tbs.issuer(), &id.issuer)
+            });
+
+            if let Some(leaf) = leaf {
+                return Ok(Self::certificate_chain(&certificates, leaf));
+            }
+        }
+
+        Err(CertificateError::SignerError)
+    }
+
+    /// Builds the chain from `leaf` by following issuers through the
+    /// certificate set, like apksig `Certificate.getCertificateChain`.
+    fn certificate_chain(
+        certificates: &[(Certificate, &[u8])],
+        leaf: usize,
+    ) -> Vec<CertificateInfo> {
+        let mut unused: Vec<usize> = (0..certificates.len()).filter(|&i| i != leaf).collect();
+        let mut chain = vec![leaf];
+        let mut current = leaf;
+
+        loop {
+            let tbs = certificates[current].0.tbs_certificate();
+            if same_name(tbs.subject(), tbs.issuer()) {
+                break;
+            }
+
+            let Some(position) = unused.iter().position(|&i| {
+                same_name(certificates[i].0.tbs_certificate().subject(), tbs.issuer())
+            }) else {
+                break;
+            };
+
+            current = unused.remove(position);
+            chain.push(current);
+        }
+
+        chain
+            .into_iter()
+            .map(|i| certificate_info(&certificates[i].0, certificates[i].1))
+            .collect()
     }
 
     /// Parses the APK Signature Block and extracts useful information.
@@ -817,6 +935,17 @@ impl ZipEntry {
             return Ok(Vec::new());
         }
 
+        // Android stops at the first pair it can't read and never sees the
+        // pairs after it, so the walk stops there too, with one clear warning
+        // instead of a cascade of garbage ids
+        if let Some(broken) = Self::find_unreadable_pair(slice) {
+            warn!(
+                "apk signing block is corrupted: the pair at offset 0x{:x} runs past the end of the block, the pairs from there on are unreachable",
+                offset - total + 8 + broken
+            );
+            slice = &slice[..broken];
+        }
+
         let signatures: Vec<Signature> =
             repeat::<&[u8], Signature, Vec<Signature>, ContextError, _>(
                 0..,
@@ -829,6 +958,30 @@ impl ZipEntry {
             .collect();
 
         Ok(signatures)
+    }
+
+    /// Returns the offset of the first pair whose header or value runs past
+    /// the end of `pairs`, like the "size out of range" check of apksig
+    /// `ApkSigningBlockUtils.findApkSignatureSchemeBlock`.
+    fn find_unreadable_pair(pairs: &[u8]) -> Option<usize> {
+        let mut offset = 0;
+        while offset < pairs.len() {
+            let rest = &pairs[offset..];
+            let Some(size) = rest
+                .first_chunk::<8>()
+                .map(|size| u64::from_le_bytes(*size))
+            else {
+                return Some(offset);
+            };
+            // a pair with `size < 4` is still walked as a 12-byte header
+            let size = size.max(4);
+            if size > (rest.len() - 8) as u64 {
+                return Some(offset);
+            }
+            offset += 8 + size as usize;
+        }
+
+        None
     }
 
     #[allow(unused)]
@@ -844,9 +997,17 @@ impl ZipEntry {
 
     fn parse_certificate<'a>() -> impl Parser<&'a [u8], Option<CertificateInfo>, ContextError> {
         move |input: &mut &'a [u8]| {
-            let certificate = length_take(le_u32).parse_next(input)?;
+            let raw = length_take(le_u32).parse_next(input)?;
 
-            Ok(Certificate::from_der(certificate).ok().map(Into::into))
+            let Some(certificate) = decode_certificate(raw) else {
+                warn!(
+                    "skipping a certificate that is neither DER nor BER (sha256={})",
+                    hex(&Sha256::digest(raw))
+                );
+                return Ok(None);
+            };
+
+            Ok(Some(certificate_info(&certificate, raw)))
         }
     }
 
@@ -967,8 +1128,22 @@ impl ZipEntry {
     }
 
     fn parse_apk_signatures<'a>(&self) -> impl Parser<&'a [u8], Signature, ContextError> {
+        // Android looks a pair up by ID and takes the first match
+        // (apksig `ApkSigningBlockUtils.findApkSignatureSchemeBlock`), so a
+        // repeated ID is never seen by the platform
+        let mut seen = AHashSet::new();
+
         move |input: &mut &'a [u8]| {
             let (size, id) = (le_u64, le_u32).parse_next(input)?;
+
+            if !seen.insert(id) {
+                warn!(
+                    "duplicate signing block pair 0x{id:08x} (size=0x{size:08x}), Android uses only the first one, skipping"
+                );
+                let _ = take::<usize, &[u8], ContextError>(size.saturating_sub(4) as usize)
+                    .parse_next(input)?;
+                return Ok(Signature::Unknown);
+            }
 
             // A malformed pair must not hide the blocks that follow it
             // Skips the pair by its declared length, and continues with the next pair
@@ -1122,6 +1297,16 @@ impl ZipEntry {
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::Unknown)
                 }
+                // no block uses a zero id, it shows up when the pairs lost alignment
+                0 => {
+                    warn!(
+                        "signing block pair with a zero id (size=0x{size:08x}), the block is likely misaligned"
+                    );
+
+                    let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
+
+                    Ok(Signature::Unknown)
+                }
                 _ => {
                     // highlight new interesting blocks
                     warn!(
@@ -1140,47 +1325,54 @@ impl ZipEntry {
 
 impl From<Certificate> for CertificateInfo {
     fn from(value: Certificate) -> Self {
-        let mut cert_data = Vec::new();
-        _ = value.encode_to_vec(&mut cert_data);
-        let cert = value.tbs_certificate();
-
-        CertificateInfo {
-            serial_number: cert.serial_number().as_bytes().iter().fold(
-                String::new(),
-                |mut out, x| {
-                    _ = write!(out, "{x:02x}");
-                    out
-                },
-            ),
-            subject: cert.subject().to_string(),
-            issuer: cert.issuer().to_string(),
-            valid_from: cert.validity().not_before.to_string(),
-            valid_until: cert.validity().not_after.to_string(),
-            signature_type: DB
-                .by_oid(&cert.signature().oid)
-                .unwrap_or_default()
-                .to_string(),
-            md5_fingerprint: Md5::digest(&cert_data)
-                .iter()
-                .fold(String::new(), |mut out, x| {
-                    _ = write!(out, "{x:02x}");
-                    out
-                }),
-            sha1_fingerprint: Sha1::digest(&cert_data)
-                .iter()
-                .fold(String::new(), |mut out, x| {
-                    _ = write!(out, "{x:02x}");
-                    out
-                }),
-            sha256_fingerprint: Sha256::digest(&cert_data).iter().fold(
-                String::new(),
-                |mut out, x| {
-                    _ = write!(out, "{x:02x}");
-                    out
-                },
-            ),
-        }
+        let encoded = value.to_der().unwrap_or_default();
+        certificate_info(&value, &encoded)
     }
+}
+
+/// Builds the certificate summary, with fingerprints over `raw`, the bytes
+/// the certificate was stored as.
+///
+/// Android identifies a signer by the original encoding, which differs from
+/// a DER re-encoding when the certificate is BER.
+fn certificate_info(certificate: &Certificate, raw: &[u8]) -> CertificateInfo {
+    let cert = certificate.tbs_certificate();
+
+    CertificateInfo {
+        serial_number: hex(cert.serial_number().as_bytes()),
+        subject: cert.subject().to_string(),
+        issuer: cert.issuer().to_string(),
+        valid_from: cert.validity().not_before.to_string(),
+        valid_until: cert.validity().not_after.to_string(),
+        signature_type: DB
+            .by_oid(&cert.signature().oid)
+            .unwrap_or_default()
+            .to_string(),
+        md5_fingerprint: hex(&Md5::digest(raw)),
+        sha1_fingerprint: hex(&Sha1::digest(raw)),
+        sha256_fingerprint: hex(&Sha256::digest(raw)),
+    }
+}
+
+/// Compares distinguished names the way Java's `X500Principal.equals` does,
+/// ignoring the string type and case: a `SignerInfo` may spell the issuer as
+/// `PrintableString` while the certificate uses `UTF8String`.
+fn same_name(a: &Name, b: &Name) -> bool {
+    a == b || a.to_string().to_lowercase() == b.to_string().to_lowercase()
+}
+
+/// Parses a certificate as strict DER, falling back to BER like Android does.
+fn decode_certificate(raw: &[u8]) -> Option<Certificate> {
+    Certificate::from_der(raw)
+        .ok()
+        .or_else(|| Certificate::from_der(&ber::to_der(raw)?).ok())
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().fold(String::new(), |mut out, x| {
+        _ = write!(out, "{x:02x}");
+        out
+    })
 }
 
 #[cfg(test)]

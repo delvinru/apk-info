@@ -27,6 +27,7 @@ pub mod entry;
 pub mod errors;
 pub mod signature;
 
+mod ber;
 mod source;
 mod structs;
 mod writer;
