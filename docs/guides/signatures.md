@@ -53,6 +53,7 @@ Google Play Frosting block present
 | source stamp | `StampBlockV1`, `StampBlockV2` | certificate of the store that distributed the APK (Google Play uses `CN=Android, O=Google Inc.`) |
 | channel | `ApkChannelBlock` | [Walle](https://github.com/Meituan-Dianping/walle) channel string, often JSON |
 | channel | `VasDollyV2` | [VasDolly](https://github.com/Tencent/VasDolly) channel string |
+| channel | `ByteDance` | ByteDance build config (Toutiao), usually JSON, returned as is |
 | channel | `PackerNextGenV2` | raw [Packer-NG](https://github.com/mcxiaoke/packer-ng-plugin) payload |
 | Play Frosting | `GooglePlayFrosting` | presence of Google Play's metadata block only |
 

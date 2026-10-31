@@ -487,9 +487,27 @@ fn duplicate_pair_id_keeps_the_first_one() {
     assert_eq!(
         sigs,
         [
-            Signature::ApkChannelBlock("first".to_owned()),
-            Signature::V2(Vec::new())
+            Signature::V2(Vec::new()),
+            Signature::ApkChannelBlock("first".to_owned())
         ]
+    );
+}
+
+/// The ByteDance value is returned as is, the padding is skipped.
+#[test]
+fn bytedance_blocks_are_recognized() {
+    let config = br#"{"branch_info": "x master", "is_change_icon": false}"#;
+    let pairs = [
+        (ZipEntry::BYTEDANCE_BLOCK_ID, config.to_vec()),
+        (ZipEntry::BYTEDANCE_PADDING_BLOCK_ID, vec![b'1'; 3666]),
+    ];
+    let zip = ZipEntry::new(zip_with_signing_block(&pairs)).unwrap();
+    let sigs = zip.get_signatures_other().unwrap();
+    assert_eq!(
+        sigs,
+        [Signature::ByteDance(
+            String::from_utf8(config.to_vec()).unwrap()
+        )]
     );
 }
 
@@ -510,4 +528,23 @@ fn pair_running_past_the_block_ends_the_walk() {
     let zip = ZipEntry::new(zip_with_raw_signing_block(&pairs)).unwrap();
     let sigs = zip.get_signatures_other().expect("must not hard-fail");
     assert_eq!(sigs, [Signature::V3(Vec::new())]);
+}
+
+/// Schemes are reported first, whatever the pair order in the block.
+#[test]
+fn schemes_come_before_other_blocks() {
+    let pairs = [
+        (ZipEntry::APK_CHANNEL_BLOCK_ID, b"channel".to_vec()),
+        (ZipEntry::SIGNATURE_SCHEME_V3_BLOCK_ID, minimal_v3_signers()),
+        (ZipEntry::BYTEDANCE_BLOCK_ID, b"config".to_vec()),
+        (ZipEntry::SIGNATURE_SCHEME_V2_BLOCK_ID, minimal_v2_signers()),
+    ];
+    let zip = ZipEntry::new(zip_with_signing_block(&pairs)).unwrap();
+    let names: Vec<String> = zip
+        .get_signatures_other()
+        .unwrap()
+        .iter()
+        .map(|s| s.name())
+        .collect();
+    assert_eq!(names, ["v2", "v3", "APK Channel block", "ByteDance"]);
 }

@@ -1039,6 +1039,16 @@ class Signature:
 
         value: str
 
+    @dataclass
+    class ByteDance:
+        """
+        ByteDance build config, seen in Toutiao (`com.ss.android.article.news`)
+
+        Usually a JSON object with feature flags, returned as is.
+        """
+
+        value: str
+
 type SignatureType = (
     Signature.ApkChannelBlock
     | Signature.GooglePlayFrosting
@@ -1050,6 +1060,7 @@ type SignatureType = (
     | Signature.V3
     | Signature.V31
     | Signature.VasDollyV2
+    | Signature.ByteDance
 )
 """
 Represents all available signatures

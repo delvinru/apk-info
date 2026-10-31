@@ -78,7 +78,7 @@ $ apk-info show --json --signatures apkstest.apk | jq
 - `signatures` is present only with `--signatures`. Each element is an object with a single key naming the block, except Google Play Frosting:
     - `v1`, `v2`, `v3`, `v31`, `v32`: a list of certificates;
     - `stamp_block_v1`, `stamp_block_v2`: a single certificate;
-    - `apk_channel_block`, `vasdolly_v2`: a string;
+    - `apk_channel_block`, `vasdolly_v2`, `bytedance`: a string;
     - `packer_next_gen_v2`: a list of bytes;
     - Google Play Frosting is the plain string `"google_play_frosting"` (presence only).
 - `container_signatures` has the same shape. It is present only with `--signatures`, and only when an XAPK / APKM / APKS archive is itself signed, which is rare.

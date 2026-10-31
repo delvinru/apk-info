@@ -101,6 +101,7 @@ enum Signature {
     PackerNextGenV2 { value: Vec<u8> },
     GooglePlayFrosting {},
     VasDollyV2 { value: String },
+    ByteDance { value: String },
 }
 
 impl Signature {
@@ -153,6 +154,7 @@ impl Signature {
             ZipSignature::VasDollyV2(v) => {
                 Signature::VasDollyV2 { value: v }.into_pyobject(py).ok()
             }
+            ZipSignature::ByteDance(value) => Signature::ByteDance { value }.into_pyobject(py).ok(),
             _ => None,
         }
     }
@@ -197,6 +199,9 @@ impl Signature {
             Signature::GooglePlayFrosting {} => "Signature.GooglePlayFrosting()".to_string(),
             Signature::VasDollyV2 { value } => {
                 format!("Signature.VasDollyV2(value='{}')", value)
+            }
+            Signature::ByteDance { value } => {
+                format!("Signature.ByteDance(value='{}')", value)
             }
         }
     }

@@ -661,6 +661,20 @@ impl ZipEntry {
     /// Alsow known as `MEITAN_APK_CHANNEL_BLOCK`
     pub const APK_CHANNEL_BLOCK_ID: u32 = 0x71777777;
 
+    /// ByteDance build config, a JSON object with feature flags, stored next to the Walle channel
+    ///
+    /// Not documented publicly. Samples (sha256):
+    /// - `a1112a0c941f865847c2fab9138cf815735268fbfcd41d697412fb80992c7395` - Toutiao (`com.ss.android.article.news`)
+    /// - `4225e058411e61dfbde8310819f7551cbbc95b75d35cec1e1d3c24f718b2ec75` - Toutiao 10.1.2
+    pub const BYTEDANCE_BLOCK_ID: u32 = 0x71777776;
+
+    /// ByteDance padding, a few thousand ASCII `1` characters
+    ///
+    /// Not documented publicly. Samples (sha256):
+    /// - `a1112a0c941f865847c2fab9138cf815735268fbfcd41d697412fb80992c7395` - Toutiao (`com.ss.android.article.news`)
+    /// - `c400ae7596f5eeaa3e3b942be1f0da0f1fe7835c6cb51618a898c3f09145b840` - Douyin (`com.ss.android.ugc.aweme`)
+    pub const BYTEDANCE_PADDING_BLOCK_ID: u32 = 0x71777775;
+
     /// Google Play Frosting ID
     pub const GOOGLE_PLAY_FROSTING_ID: u32 = 0x2146444e;
 
@@ -946,7 +960,7 @@ impl ZipEntry {
             slice = &slice[..broken];
         }
 
-        let signatures: Vec<Signature> =
+        let mut signatures: Vec<Signature> =
             repeat::<&[u8], Signature, Vec<Signature>, ContextError, _>(
                 0..,
                 self.parse_apk_signatures(),
@@ -956,6 +970,9 @@ impl ZipEntry {
             .into_iter()
             .filter(|signature| signature != &Signature::Unknown)
             .collect();
+
+        // schemes go first regardless of the pair order in the block
+        signatures.sort_by_key(Signature::order);
 
         Ok(signatures)
     }
@@ -1290,9 +1307,16 @@ impl ZipEntry {
                         String::from_utf8_lossy(data).trim().to_owned(),
                     ))
                 }
+                Self::BYTEDANCE_BLOCK_ID => {
+                    let data = take(size.saturating_sub(4) as usize).parse_next(input)?;
+                    Ok(Signature::ByteDance(
+                        String::from_utf8_lossy(data).trim().to_owned(),
+                    ))
+                }
                 Self::VERITY_PADDING_BLOCK_ID
                 | Self::DEPENDENCY_INFO_BLOCK_ID
-                | Self::ZERO_BLOCK_ID => {
+                | Self::ZERO_BLOCK_ID
+                | Self::BYTEDANCE_PADDING_BLOCK_ID => {
                     // not interesting blocks
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
                     Ok(Signature::Unknown)

@@ -173,6 +173,10 @@ fn print_signatures(signatures: &[Signature]) {
                 println!("  Type: {}", signature.name().green());
                 println!("  Channel: {}", channel.green());
             }
+            Signature::ByteDance(value) => {
+                println!("  Type: {}", signature.name().green());
+                println!("  Value: {}", value.green());
+            }
             _ => continue,
         }
 

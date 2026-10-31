@@ -90,12 +90,33 @@ pub enum Signature {
     #[serde(rename = "vasdolly_v2")]
     VasDollyV2(String),
 
+    /// ByteDance build config, seen in Toutiao (`com.ss.android.article.news`)
+    ///
+    /// Usually a JSON object with feature flags, returned as is.
+    #[serde(rename = "bytedance")]
+    ByteDance(String),
+
     /// Got something that we don't know yet
     #[serde(rename = "unknown")]
     Unknown,
 }
 
 impl Signature {
+    /// Sort key: signature schemes first, then source stamps, then the rest.
+    pub(crate) fn order(&self) -> u8 {
+        match self {
+            Signature::V1(_) => 0,
+            Signature::V2(_) => 1,
+            Signature::V3(_) => 2,
+            Signature::V31(_) => 3,
+            Signature::V32(_) => 4,
+            Signature::V4 => 5,
+            Signature::StampBlockV1(_) => 6,
+            Signature::StampBlockV2(_) => 7,
+            _ => 8,
+        }
+    }
+
     pub fn name(&self) -> String {
         match &self {
             Signature::V1(_) => "v1".to_owned(),
@@ -110,6 +131,7 @@ impl Signature {
             Signature::PackerNextGenV2(_) => "Packer NG v2".to_owned(),
             Signature::GooglePlayFrosting => "Google Play Frosting".to_owned(),
             Signature::VasDollyV2(_) => "v2-VasDolly".to_owned(),
+            Signature::ByteDance(_) => "ByteDance".to_owned(),
             Signature::Unknown => "unknown".to_owned(),
         }
     }
