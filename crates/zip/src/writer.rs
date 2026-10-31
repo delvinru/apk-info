@@ -123,9 +123,11 @@ impl ZipEntry {
     ///
     /// # Errors
     ///
-    /// Returns a [ZipError] if an entry cannot be read out: [ZipError::FileNotFound]
-    /// if it cannot be located, [ZipError::EOF] if its data can't be sliced out,
-    /// or [ZipError::DecompressionError] if it fails to decode.
+    /// Returns a [`ZipError`](crate::ZipError) if an entry cannot be read out:
+    /// [`ZipError::FileNotFound`](crate::ZipError::FileNotFound) if it cannot be
+    /// located, [`ZipError::EOF`](crate::ZipError::EOF) if its data can't be
+    /// sliced out, or [`ZipError::DecompressionError`](crate::ZipError::DecompressionError)
+    /// if it fails to decode.
     pub fn repack(&self) -> Result<Vec<u8>, crate::ZipError> {
         let names = self.namelist().count();
 
