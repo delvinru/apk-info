@@ -94,6 +94,69 @@ pub struct EntryInfo {
     pub tampered: bool,
 }
 
+/// Largest expansion of DEFLATE: a 258-byte match coded in about 2 bits.
+const MAX_DEFLATE_RATIO: usize = 1032;
+
+/// Output of [`inflate`].
+struct Inflated {
+    data: Vec<u8>,
+
+    /// The stream reached its end marker.
+    complete: bool,
+
+    /// Compressed bytes consumed.
+    consumed: usize,
+}
+
+/// Inflates raw DEFLATE data without trusting the declared size.
+///
+/// The buffer starts at the declared size, capped by what the input can
+/// expand to, so an honest entry is inflated in one pass with no reallocation
+/// while a lying one can't make it allocate gigabytes up front. It then grows
+/// until the end of the stream, up to [`MAX_UNCOMPRESSED_SIZE`].
+fn inflate(compressed: &[u8], declared: usize) -> Result<Inflated, ZipError> {
+    let capacity = declared
+        .min(compressed.len().saturating_mul(MAX_DEFLATE_RATIO))
+        .min(MAX_UNCOMPRESSED_SIZE);
+    let mut data = Vec::with_capacity(capacity);
+    let mut decompress = Decompress::new(false);
+
+    let complete = loop {
+        let consumed = decompress.total_in() as usize;
+        let produced = data.len();
+
+        let status = decompress
+            .decompress_vec(&compressed[consumed..], &mut data, FlushDecompress::Finish)
+            .map_err(|_| ZipError::DecompressionError)?;
+        if status == Status::StreamEnd {
+            break true;
+        }
+
+        if data.len() == data.capacity() {
+            if data.len() >= MAX_UNCOMPRESSED_SIZE {
+                return Err(ZipError::FileTooLarge);
+            }
+            let grow = data
+                .len()
+                .max(64 * 1024)
+                .min(MAX_UNCOMPRESSED_SIZE - data.len());
+            data.reserve_exact(grow);
+            continue;
+        }
+
+        // room left but no progress: the input ended before the stream did
+        if decompress.total_in() as usize == consumed && data.len() == produced {
+            break false;
+        }
+    };
+
+    Ok(Inflated {
+        data,
+        complete,
+        consumed: decompress.total_in() as usize,
+    })
+}
+
 /// Implementation of basic methods
 impl ZipEntry {
     /// Compression method `0`: uncompressed entry data.
@@ -454,6 +517,21 @@ impl ZipEntry {
             .map(|x| x.as_ref())
     }
 
+    /// Whether the archive has an entry named `filename`, without reading it.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use apk_info_zip::ZipEntry;
+    /// # let zip = ZipEntry::open("app.xapk").unwrap();
+    /// if zip.contains("manifest.json") {
+    ///     println!("looks like an xapk");
+    /// }
+    /// ```
+    pub fn contains(&self, filename: &str) -> bool {
+        self.central_directory.entries.contains_key(filename)
+    }
+
     /// Returns metadata of `filename` (sizes, compression method, tamper flag)
     /// without reading or decompressing its data.
     ///
@@ -559,22 +637,29 @@ impl ZipEntry {
             (Self::METHOD_DEFLATED, _) => {
                 // deflate default
                 let compressed_data = read_data(compressed_size)?;
-                let mut uncompressed_data = Vec::with_capacity(uncompressed_size);
+                let inflated = inflate(&compressed_data, uncompressed_size)?;
 
-                Decompress::new(false)
-                    .decompress_vec(
-                        &compressed_data,
-                        &mut uncompressed_data,
-                        FlushDecompress::Finish,
-                    )
-                    .map_err(|_| ZipError::DecompressionError)?;
+                // a size that disagrees with the data is tampered metadata:
+                // the real data is returned, never cut to the declared size
+                let size_mismatch = inflated.data.len() != uncompressed_size;
+                if !inflated.complete {
+                    warn!(
+                        "{filename}: deflate stream ends early, {} of {uncompressed_size} declared bytes recovered",
+                        inflated.data.len()
+                    );
+                } else if size_mismatch {
+                    warn!(
+                        "{filename}: inflates to {} bytes, the central directory declares {uncompressed_size}",
+                        inflated.data.len()
+                    );
+                }
 
-                let compression = if tampered {
+                let compression = if tampered || size_mismatch {
                     FileCompressionType::DeflatedTampered
                 } else {
                     FileCompressionType::Deflated
                 };
-                Ok((uncompressed_data, compression))
+                Ok((inflated.data, compression))
             }
             (_, true) => {
                 // unknown method but stored-sized
@@ -584,20 +669,13 @@ impl ZipEntry {
             (_, false) => {
                 // unknown method: try deflate, then fall back to stored
                 let compressed_data = read_data(compressed_size)?;
-                let mut uncompressed_data = Vec::with_capacity(uncompressed_size);
-                let mut decompressor = Decompress::new(false);
 
-                let status = decompressor.decompress_vec(
-                    &compressed_data,
-                    &mut uncompressed_data,
-                    FlushDecompress::Finish,
-                );
-
-                // check if decompression was actually successful
-                let is_valid = decompressor.total_in() == compressed_data.len() as u64;
-                match status {
-                    Ok(Status::Ok) | Ok(Status::StreamEnd) if is_valid => {
-                        Ok((uncompressed_data, FileCompressionType::DeflatedTampered))
+                // only a whole, valid stream that uses up the data counts as deflate
+                match inflate(&compressed_data, uncompressed_size) {
+                    Ok(inflated)
+                        if inflated.complete && inflated.consumed == compressed_data.len() =>
+                    {
+                        Ok((inflated.data, FileCompressionType::DeflatedTampered))
                     }
                     _ => {
                         // fallback to stored tampered
@@ -1465,6 +1543,125 @@ mod tests {
     use ahash::AHashMap;
 
     use super::*;
+
+    fn deflate_raw(data: &[u8]) -> Vec<u8> {
+        let mut compress = flate2::Compress::new(flate2::Compression::default(), false);
+        let mut out = Vec::with_capacity(data.len() + 1024);
+        compress
+            .compress_vec(data, &mut out, flate2::FlushCompress::Finish)
+            .unwrap();
+        out
+    }
+
+    /// Mixed data: compressible but not trivially.
+    fn sample(len: usize) -> Vec<u8> {
+        (0..len)
+            .map(|i| (i * 31 % 251) as u8 ^ (i / 1000) as u8)
+            .collect()
+    }
+
+    #[test]
+    fn inflate_honest_size_needs_no_reallocation() {
+        for len in [0, 1, 100, 65_536, 3 * 1024 * 1024] {
+            let data = sample(len);
+            let inflated = inflate(&deflate_raw(&data), len).unwrap();
+            assert!(inflated.complete);
+            assert_eq!(inflated.data, data);
+            assert_eq!(inflated.data.capacity(), len, "len {len}");
+        }
+    }
+
+    #[test]
+    fn inflate_ignores_understated_size() {
+        let data = sample(100_000);
+        let inflated = inflate(&deflate_raw(&data), 1000).unwrap();
+        assert!(inflated.complete);
+        assert_eq!(inflated.data, data);
+    }
+
+    #[test]
+    fn inflate_caps_overstated_size_by_the_input() {
+        let compressed = deflate_raw(b"tiny");
+        let inflated = inflate(&compressed, MAX_UNCOMPRESSED_SIZE).unwrap();
+        assert_eq!(inflated.data, b"tiny");
+        assert!(inflated.data.capacity() <= compressed.len() * MAX_DEFLATE_RATIO);
+    }
+
+    #[test]
+    fn inflate_reports_truncated_stream() {
+        let data = sample(100_000);
+        let compressed = deflate_raw(&data);
+        let inflated = inflate(&compressed[..compressed.len() / 2], data.len()).unwrap();
+        assert!(!inflated.complete);
+        assert!(!inflated.data.is_empty());
+        assert_eq!(&data[..inflated.data.len()], &inflated.data[..]);
+    }
+
+    #[test]
+    fn read_returns_whole_entry_despite_understated_size() {
+        let data = sample(100_000);
+        let compressed = deflate_raw(&data);
+        let mut archive = deflated_archive("a.bin", &compressed, data.len() as u32);
+        // understate the central directory's uncompressed size
+        let cd = memmem::rfind(&archive, b"PK\x01\x02").unwrap();
+        archive[cd + 24..cd + 28].copy_from_slice(&1000u32.to_le_bytes());
+
+        let zip = ZipEntry::new(archive).unwrap();
+        let (read, compression) = zip.read("a.bin").unwrap();
+        assert_eq!(read, data);
+        assert_eq!(compression, FileCompressionType::DeflatedTampered);
+    }
+
+    #[test]
+    fn read_honest_deflated_entry_is_not_tampered() {
+        let data = sample(10_000);
+        let archive = deflated_archive("a.bin", &deflate_raw(&data), data.len() as u32);
+        let zip = ZipEntry::new(archive).unwrap();
+        assert_eq!(
+            zip.read("a.bin").unwrap(),
+            (data, FileCompressionType::Deflated)
+        );
+    }
+
+    /// One deflated entry, sizes as given.
+    fn deflated_archive(name: &str, compressed: &[u8], uncompressed: u32) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(b"PK\x03\x04");
+        out.extend_from_slice(&20u16.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(&8u16.to_le_bytes()); // deflated
+        out.extend_from_slice(&[0u8; 8]); // time, date, crc
+        out.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+        out.extend_from_slice(&uncompressed.to_le_bytes());
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(compressed);
+
+        let cd_offset = out.len() as u32;
+        out.extend_from_slice(b"PK\x01\x02");
+        out.extend_from_slice(&20u16.to_le_bytes());
+        out.extend_from_slice(&20u16.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out.extend_from_slice(&8u16.to_le_bytes());
+        out.extend_from_slice(&[0u8; 8]);
+        out.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+        out.extend_from_slice(&uncompressed.to_le_bytes());
+        out.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        out.extend_from_slice(&[0u8; 12]);
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(name.as_bytes());
+        let cd_size = out.len() as u32 - cd_offset;
+
+        out.extend_from_slice(b"PK\x05\x06");
+        out.extend_from_slice(&0u32.to_le_bytes());
+        out.extend_from_slice(&1u16.to_le_bytes());
+        out.extend_from_slice(&1u16.to_le_bytes());
+        out.extend_from_slice(&cd_size.to_le_bytes());
+        out.extend_from_slice(&cd_offset.to_le_bytes());
+        out.extend_from_slice(&0u16.to_le_bytes());
+        out
+    }
 
     /// Builds a minimal, well-formed two-file STORED zip archive and returns it
     /// together with the byte position of each central directory entry's
