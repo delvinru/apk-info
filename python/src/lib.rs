@@ -12,7 +12,7 @@ use ::apk_info::models::{
 };
 use ::apk_info_zip::{
     CertificateInfo as ZipCertificateInfo, FileCompressionType as ZipFileCompressionType,
-    Signature as ZipSignature,
+    Signature as ZipSignature, ZipEntry,
 };
 use pyo3::conversion::IntoPyObject;
 use pyo3::exceptions::{PyException, PyFileNotFoundError, PyTypeError, PyValueError};
@@ -591,6 +591,8 @@ struct Service {
     process: Option<String>,
     #[pyo3(get)]
     stop_with_task: Option<String>,
+    #[pyo3(get)]
+    intent_filters: Vec<IntentFilter>,
 }
 
 impl<'a> From<ApkService<'a>> for Service {
@@ -608,6 +610,11 @@ impl<'a> From<ApkService<'a>> for Service {
             permission: service.permission.map(String::from),
             process: service.process.map(String::from),
             stop_with_task: service.stop_with_task.map(String::from),
+            intent_filters: service
+                .intent_filters
+                .into_iter()
+                .map(IntentFilter::from)
+                .collect(),
         }
     }
 }
@@ -633,6 +640,9 @@ impl Service {
         push_field!(permission);
         push_field!(process);
         push_field!(stop_with_task);
+        if !self.intent_filters.is_empty() {
+            parts.push(format!("intent_filters={:?}", self.intent_filters));
+        }
 
         format!("Service({})", parts.join(", "))
     }
@@ -664,6 +674,9 @@ struct Receiver {
 
     #[pyo3(get)]
     pub process: Option<String>,
+
+    #[pyo3(get)]
+    pub intent_filters: Vec<IntentFilter>,
 }
 
 impl<'a> From<ApkReceiver<'a>> for Receiver {
@@ -677,6 +690,11 @@ impl<'a> From<ApkReceiver<'a>> for Receiver {
             name: receiver.name.map(String::from),
             permission: receiver.permission.map(String::from),
             process: receiver.process.map(String::from),
+            intent_filters: receiver
+                .intent_filters
+                .into_iter()
+                .map(IntentFilter::from)
+                .collect(),
         }
     }
 }
@@ -700,6 +718,9 @@ impl Receiver {
         push_field!(name);
         push_field!(permission);
         push_field!(process);
+        if !self.intent_filters.is_empty() {
+            parts.push(format!("intent_filters={:?}", self.intent_filters));
+        }
 
         format!("Receiver({})", parts.join(", "))
     }
@@ -747,6 +768,15 @@ struct Apk {
     apkrs: ApkRust,
 }
 
+impl Apk {
+    /// The base APK of a `xapk`/`apkm`/`apks` container, or the APK itself.
+    fn base_zip(&self) -> PyResult<&ZipEntry> {
+        self.apkrs
+            .get_base_zip()
+            .map_err(|e| APKError::new_err(e.to_string()))
+    }
+}
+
 #[pymethods]
 impl Apk {
     #[new]
@@ -770,19 +800,30 @@ impl Apk {
         Ok(Apk { apkrs })
     }
 
-    pub fn read(&self, filename: &Bound<'_, PyString>) -> PyResult<(Vec<u8>, String)> {
+    #[pyo3(signature = (filename, base = false))]
+    pub fn read(&self, filename: &Bound<'_, PyString>, base: bool) -> PyResult<(Vec<u8>, String)> {
         let name: &str = filename
             .extract()
             .map_err(|_| PyValueError::new_err("bad filename"))?;
 
-        self.apkrs
-            .read(name)
+        let result = if base {
+            self.base_zip()?.read(name)
+        } else {
+            self.apkrs.read(name)
+        };
+
+        result
             .map(|(data, compression)| (data, compression_hint(compression).to_owned()))
             .map_err(|e| APKError::new_err(e.to_string()))
     }
 
-    pub fn namelist(&self) -> Vec<&str> {
-        self.apkrs.namelist().collect()
+    #[pyo3(signature = (base = false))]
+    pub fn namelist(&self, base: bool) -> PyResult<Vec<&str>> {
+        if base {
+            Ok(self.base_zip()?.namelist().collect())
+        } else {
+            Ok(self.apkrs.namelist().collect())
+        }
     }
 
     pub fn is_multidex(&self) -> bool {

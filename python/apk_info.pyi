@@ -39,7 +39,7 @@ class APK:
         """
 
     def read(
-        self, filename: str
+        self, filename: str, base: bool = False
     ) -> tuple[
         bytes,
         Literal[
@@ -56,6 +56,10 @@ class APK:
         ----------
         filename: str
             The path to the file inside the APK archive
+        base: bool
+            Read from the base APK instead of the file itself. For `xapk`/`apkm`/`apks`
+            containers this reads `classes.dex` and other files of the app rather
+            than the container's own entries; for a plain APK it changes nothing.
 
         Raises
         ------
@@ -73,12 +77,23 @@ class APK:
         print(compression)
         with open("AndroidManifest.xml", "wb") as fd:
             fd.write(data)
+
+        # the app's DEX file inside an xapk
+        bundle = APK("./file.xapk")
+        dex, _ = bundle.read("classes.dex", base=True)
         ```
         """
 
-    def namelist(self) -> list[str]:
+    def namelist(self, base: bool = False) -> list[str]:
         """
         The list of files contained in the APK, obtained from the central directory (zip)
+
+        Parameters
+        ----------
+        base: bool
+            List the base APK instead of the file itself. For `xapk`/`apkm`/`apks`
+            containers this lists the app's files rather than the container's
+            entries (`manifest.json`, split APKs); for a plain APK it changes nothing.
 
         Examples
         --------
@@ -1462,6 +1477,13 @@ class Service:
     See: https://developer.android.com/guide/topics/manifest/service-element#stopWithTask
     """
 
+    intent_filters: list[IntentFilter]
+    """
+    A list of all declared `<intent-filter>` for a given service
+
+    See: https://developer.android.com/guide/topics/manifest/intent-filter-element
+    """
+
 @dataclass(frozen=True)
 class Receiver:
     """
@@ -1525,6 +1547,13 @@ class Receiver:
     The name of the process in which the broadcast receiver should run.
 
     See: https://developer.android.com/guide/topics/manifest/receiver-element#proc
+    """
+
+    intent_filters: list[IntentFilter]
+    """
+    A list of all declared `<intent-filter>` for a given receiver
+
+    See: https://developer.android.com/guide/topics/manifest/intent-filter-element
     """
 
 class Attribution:

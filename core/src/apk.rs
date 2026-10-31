@@ -821,7 +821,7 @@ impl Apk {
                 icon: el.attr("icon"),
                 label: el.attr("label"),
                 name: el.attr("name"),
-                parent_activity_name: el.attr("parent_activity_name"),
+                parent_activity_name: el.attr("parentActivityName"),
                 permission: el.attr("permission"),
                 process: el.attr("process"),
                 intent_filters: self.get_intent_filters(el).collect(),
@@ -860,17 +860,18 @@ impl Apk {
             .filter(|&el| el.name() == "service")
             .map(|el| Service {
                 description: el.attr("description"),
-                direct_boot_aware: el.attr("direct_boot_aware"),
+                direct_boot_aware: el.attr("directBootAware"),
                 enabled: el.attr("enabled"),
                 exported: el.attr("exported"),
-                foreground_service_type: el.attr("foreground_service_type"),
+                foreground_service_type: el.attr("foregroundServiceType"),
                 icon: el.attr("icon"),
-                isolated_process: el.attr("isolated_process"),
+                isolated_process: el.attr("isolatedProcess"),
                 label: el.attr("label"),
                 name: el.attr("name"),
                 permission: el.attr("permission"),
                 process: el.attr("process"),
-                stop_with_task: el.attr("stop_with_task"),
+                stop_with_task: el.attr("stopWithTask"),
+                intent_filters: self.get_intent_filters(el).collect(),
             })
     }
 
@@ -884,7 +885,7 @@ impl Apk {
             .descendants()
             .filter(|&el| el.name() == "receiver")
             .map(|el| Receiver {
-                direct_boot_aware: el.attr("direct_boot_aware"),
+                direct_boot_aware: el.attr("directBootAware"),
                 enabled: el.attr("enabled"),
                 exported: el.attr("exported"),
                 icon: el.attr("icon"),
@@ -892,6 +893,7 @@ impl Apk {
                 name: el.attr("name"),
                 permission: el.attr("permission"),
                 process: el.attr("process"),
+                intent_filters: self.get_intent_filters(el).collect(),
             })
     }
 
@@ -907,19 +909,19 @@ impl Apk {
             .map(|el| Provider {
                 authorities: el.attr("authorities"),
                 enabled: el.attr("enabled"),
-                direct_boot_aware: el.attr("direct_boot_aware"),
+                direct_boot_aware: el.attr("directBootAware"),
                 exported: el.attr("exported"),
-                grant_uri_permissions: el.attr("grant_uri_permissions"),
+                grant_uri_permissions: el.attr("grantUriPermissions"),
                 icon: el.attr("icon"),
-                init_order: el.attr("init_order"),
+                init_order: el.attr("initOrder"),
                 label: el.attr("label"),
                 multiprocess: el.attr("multiprocess"),
                 name: el.attr("name"),
                 permission: el.attr("permission"),
                 process: el.attr("process"),
-                read_permission: el.attr("read_permission"),
+                read_permission: el.attr("readPermission"),
                 syncable: el.attr("syncable"),
-                write_permission: el.attr("write_permission"),
+                write_permission: el.attr("writePermission"),
             })
     }
 
@@ -954,6 +956,18 @@ impl Apk {
             })
             .as_ref()
             .ok_or(APKError::ZipError(ZipError::ParseError))
+    }
+
+    /// Returns the zip archive of the APK the manifest and resources come from.
+    ///
+    /// For a plain APK this is the file itself; for a `xapk`/`apkm`/`apks`
+    /// container it is the base APK inside it, see [`Apk::get_inner_zip`].
+    pub fn get_base_zip(&self) -> Result<&ZipEntry, APKError> {
+        if self.base_apk_name.is_some() {
+            self.get_inner_zip()
+        } else {
+            Ok(&self.zip)
+        }
     }
 
     /// Returns the app signatures (v1, v2, v3, v3.1, etc).

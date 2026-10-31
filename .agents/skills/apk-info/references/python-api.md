@@ -141,9 +141,9 @@ apk.get_attributions()      # set[Attribution]
 
 **`IntentFilter`** fields: `actions: list[str]`, `categories: list[str]`.
 
-**`Service`** fields: `description`, `direct_boot_aware`, `enabled`, `exported`, `foreground_service_type`, `icon`, `isolated_process`, `label`, `name`, `permission`, `process`, `stop_with_task`.
+**`Service`** fields: `description`, `direct_boot_aware`, `enabled`, `exported`, `foreground_service_type`, `icon`, `isolated_process`, `label`, `name`, `permission`, `process`, `stop_with_task`, `intent_filters: list[IntentFilter]`.
 
-**`Receiver`** fields: `direct_boot_aware`, `enabled`, `exported`, `icon`, `label`, `name`, `permission`, `process`.
+**`Receiver`** fields: `direct_boot_aware`, `enabled`, `exported`, `icon`, `label`, `name`, `permission`, `process`, `intent_filters: list[IntentFilter]`.
 
 **`Provider`** fields: `authorities`, `enabled`, `direct_boot_aware`, `exported`, `grant_uri_permissions`, `icon`, `init_order`, `label`, `multiprocess`, `name`, `permission`, `process`, `read_permission`, `syncable`, `write_permission`.
 
@@ -204,15 +204,27 @@ with open("out.bin", "wb") as f:
     f.write(data)
 ```
 
-`read(filename: str) -> tuple[bytes, str]` reports the compression mode as a short
+`read(filename: str, base: bool = False) -> tuple[bytes, str]` reports the compression mode as a short
 string hint. `"stored_tampered"` / `"deflated_tampered"` indicate the BadPack
 technique — the declared compression method didn't match reality, but the data
 was still correctly decompressed.
+
+For `xapk`/`apkm`/`apks` containers, `read()` and `namelist()` work on the outer
+archive (`manifest.json`, `toc.pb`, split APKs). Pass `base=True` to work on the
+app's base APK instead (`classes.dex`, `lib/`, `assets/`). For a plain APK
+`base=True` changes nothing.
+
+```python
+apk = APK("./app.xapk")
+dex = [n for n in apk.namelist(base=True) if n.endswith(".dex")]
+data, _ = apk.read("classes.dex", base=True)
+```
 
 ## File listing & multidex
 
 ```python
 apk.namelist()      # list[str] — all entries in the zip central directory
+apk.namelist(base=True)  # list[str] — entries of the base APK of a container
 apk.is_multidex()   # bool — True if more than one classes*.dex exists
 ```
 

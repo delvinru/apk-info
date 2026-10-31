@@ -23,6 +23,11 @@ manifest() {
     android:versionCode="7"
     android:versionName="1.0.7">
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission-sdk-23 android:name="android.permission.POST_NOTIFICATIONS" />
+    <permission android:name="io.github.delvinru.apkstest.READ" android:protectionLevel="signature" />
     $1
     <application android:label="@string/app_name" android:icon="@drawable/icon" android:hasCode="false">
         <activity android:name=".MainActivity" android:exported="true">
@@ -30,7 +35,32 @@ manifest() {
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="apkstest" />
+            </intent-filter>
         </activity>
+        <activity android:name=".SettingsActivity" android:exported="false"
+            android:parentActivityName=".MainActivity" />
+        <service android:name=".SyncService" android:exported="false"
+            android:directBootAware="true" android:foregroundServiceType="dataSync"
+            android:isolatedProcess="false" android:stopWithTask="true">
+            <intent-filter>
+                <action android:name="io.github.delvinru.apkstest.SYNC" />
+            </intent-filter>
+        </service>
+        <receiver android:name=".BootReceiver" android:exported="true" android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+        <provider android:name=".DataProvider" android:exported="false"
+            android:authorities="io.github.delvinru.apkstest.data" android:grantUriPermissions="true"
+            android:initOrder="5" android:readPermission="io.github.delvinru.apkstest.READ"
+            android:writePermission="io.github.delvinru.apkstest.WRITE" />
     </application>
 </manifest>
 EOF

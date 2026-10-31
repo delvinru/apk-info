@@ -84,3 +84,62 @@ fn instant_apks_parse_instant_base_master() {
     assert!(inner.namelist().any(|n| n == "AndroidManifest.xml"));
     assert!(!inner.namelist().any(|n| n.starts_with("lib/")));
 }
+
+/// Component attributes are read by their camelCase manifest names, and
+/// services and receivers carry their intent filters.
+#[test]
+fn components_expose_attributes_and_intent_filters() {
+    let apk = Apk::new(fixture("apks-universal.apks")).expect("universal apks must parse");
+
+    let settings = apk
+        .get_activities()
+        .find(|a| a.name == Some(".SettingsActivity"))
+        .expect("settings activity");
+    assert_eq!(settings.parent_activity_name, Some(".MainActivity"));
+
+    let service = apk.get_services().next().expect("sync service");
+    assert_eq!(service.name, Some(".SyncService"));
+    assert_eq!(service.direct_boot_aware, Some("true"));
+    assert_eq!(service.foreground_service_type, Some("dataSync"));
+    assert_eq!(service.isolated_process, Some("false"));
+    assert_eq!(service.stop_with_task, Some("true"));
+    assert_eq!(service.intent_filters.len(), 1);
+    assert_eq!(
+        service.intent_filters[0].actions,
+        ["io.github.delvinru.apkstest.SYNC"]
+    );
+
+    let receiver = apk.get_receivers().next().expect("boot receiver");
+    assert_eq!(receiver.name, Some(".BootReceiver"));
+    assert_eq!(receiver.direct_boot_aware, Some("true"));
+    assert_eq!(
+        receiver.intent_filters[0].actions,
+        ["android.intent.action.BOOT_COMPLETED"]
+    );
+    assert_eq!(
+        receiver.intent_filters[0].categories,
+        ["android.intent.category.DEFAULT"]
+    );
+
+    let provider = apk.get_providers().next().expect("data provider");
+    assert_eq!(provider.grant_uri_permissions, Some("true"));
+    assert_eq!(provider.init_order, Some("5"));
+    assert_eq!(
+        provider.read_permission,
+        Some("io.github.delvinru.apkstest.READ")
+    );
+    assert_eq!(
+        provider.write_permission,
+        Some("io.github.delvinru.apkstest.WRITE")
+    );
+}
+
+/// `get_base_zip` is the inner apk of a container and the file itself otherwise.
+#[test]
+fn base_zip_of_container_is_inner_apk() {
+    let apk = Apk::new(fixture("apks-universal.apks")).expect("universal apks must parse");
+
+    let base = apk.get_base_zip().expect("base zip");
+    assert!(base.namelist().any(|n| n == "AndroidManifest.xml"));
+    assert!(!apk.namelist().any(|n| n == "AndroidManifest.xml"));
+}

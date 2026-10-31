@@ -308,6 +308,11 @@ pub struct Service<'a> {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/service-element#stopWithTask>
     pub stop_with_task: Option<&'a str>,
+
+    /// A list of all declared `<intent-filter>` for a given service
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/intent-filter-element>
+    pub intent_filters: Vec<IntentFilter<'a>>,
 }
 
 /// Represents `<receiver>` in manifest
@@ -354,6 +359,11 @@ pub struct Receiver<'a> {
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/receiver-element#proc>
     pub process: Option<&'a str>,
+
+    /// A list of all declared `<intent-filter>` for a given receiver
+    ///
+    /// See: <https://developer.android.com/guide/topics/manifest/intent-filter-element>
+    pub intent_filters: Vec<IntentFilter<'a>>,
 }
 
 /// This helps trace data access back to logical parts of application code.
