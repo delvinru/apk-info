@@ -927,13 +927,17 @@ impl Apk {
 
     fn collect_signatures(zip: &ZipEntry) -> Result<Vec<Signature>, APKError> {
         let mut signatures = Vec::new();
-        if let Ok(v1_sig) = zip.get_signature_v1() {
+        if let Ok(Some(v1_sig)) = zip.get_signature_v1() {
             signatures.push(v1_sig);
         }
-        signatures.extend(
-            zip.get_signatures_other()
-                .map_err(APKError::CertificateError)?,
-        );
+
+        // an unreadable signing block must not hide the v1 signature
+        match zip.get_signatures_other() {
+            Ok(other) => signatures.extend(other),
+            Err(err) if signatures.is_empty() => return Err(APKError::CertificateError(err)),
+            Err(_) => {}
+        }
+
         Ok(signatures)
     }
 

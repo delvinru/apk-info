@@ -25,7 +25,7 @@ fn subject(cert: &apk_info_zip::CertificateInfo) -> &str {
 #[test]
 fn v1_only_jar_signing() {
     let zip = ZipEntry::open(fixture("v1-only-with-rsa-2048.apk")).unwrap();
-    let Signature::V1(certs) = zip.get_signature_v1().expect("v1 signature expected") else {
+    let Some(Signature::V1(certs)) = zip.get_signature_v1().expect("v1 signature expected") else {
         panic!("expected a v1 signature");
     };
     assert_eq!(certs.len(), 1);
@@ -167,7 +167,8 @@ fn ber_v1_certificate_keeps_original_encoding() {
     // original bytes, not by a DER re-encoding (apksig
     // `testV1SchemeSignatureCertNotReencoded`)
     let zip = ZipEntry::open(fixture("v1-only-with-rsa-1024-cert-not-der.apk")).unwrap();
-    let Signature::V1(certs) = zip.get_signature_v1().expect("BER certificate must parse") else {
+    let Some(Signature::V1(certs)) = zip.get_signature_v1().expect("BER certificate must parse")
+    else {
         panic!("expected a v1 signature");
     };
     assert_eq!(certs.len(), 1);

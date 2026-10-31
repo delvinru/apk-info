@@ -60,7 +60,7 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
 }
 ```
 
-`path` is the input file. Files that fail to parse are reported on stderr and skipped, so stdout is always valid JSONL. The `signatures` field is omitted unless `--signatures` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also omitted unless `--signatures` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
+`path` is the input file. Files that fail to parse are reported on stderr and skipped, so stdout is always valid JSONL. The `signatures` field is omitted unless `--signatures` is passed, in which case it contains an array of signature objects: signature schemes first (v1, v2, v3, v3.1, v3.2, source stamps), then the other blocks. The `container_signatures` field is also omitted unless `--signatures` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
 
 ## `extract` (alias `x`) — unpack the APK
 

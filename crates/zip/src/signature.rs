@@ -95,10 +95,6 @@ pub enum Signature {
     /// Usually a JSON object with feature flags, returned as is.
     #[serde(rename = "bytedance")]
     ByteDance(String),
-
-    /// Got something that we don't know yet
-    #[serde(rename = "unknown")]
-    Unknown,
 }
 
 impl Signature {
@@ -132,7 +128,6 @@ impl Signature {
             Signature::GooglePlayFrosting => "Google Play Frosting".to_owned(),
             Signature::VasDollyV2(_) => "v2-VasDolly".to_owned(),
             Signature::ByteDance(_) => "ByteDance".to_owned(),
-            Signature::Unknown => "unknown".to_owned(),
         }
     }
 }

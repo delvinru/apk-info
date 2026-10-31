@@ -31,8 +31,7 @@ fn assert_app(apk: &Apk) {
     assert!(
         apk.get_container_signatures()
             .expect("container signatures")
-            .iter()
-            .all(|s| matches!(s, Signature::Unknown)),
+            .is_empty()
     );
 }
 

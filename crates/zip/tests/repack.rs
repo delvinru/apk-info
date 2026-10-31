@@ -70,9 +70,6 @@ fn repacked_fixture_is_unsigned() {
     let repacked = original.repack().unwrap();
     let reparsed = ZipEntry::new(repacked).unwrap();
 
-    assert!(matches!(
-        reparsed.get_signature_v1(),
-        Ok(apk_info_zip::Signature::Unknown)
-    ));
+    assert!(matches!(reparsed.get_signature_v1(), Ok(None)));
     assert!(reparsed.get_signatures_other().unwrap().is_empty());
 }

@@ -711,13 +711,13 @@ impl ZipEntry {
     /// # let zip_data = std::fs::read("archive.zip").unwrap();
     /// # let archive = ZipEntry::new(zip_data).unwrap();
     /// match archive.get_signature_v1() {
-    ///     Ok(Signature::V1(certs)) => println!("Found {} certificates", certs.len()),
-    ///     Ok(Signature::Unknown) => println!("No v1 signature found"),
-    ///     Ok(_) => println!("v1 call returned a non-v1 signature"),
+    ///     Ok(Some(Signature::V1(certs))) => println!("Found {} certificates", certs.len()),
+    ///     Ok(Some(_)) => println!("v1 call returned a non-v1 signature"),
+    ///     Ok(None) => println!("No v1 signature found"),
     ///     Err(err) => eprintln!("Error parsing signature: {:?}", err),
     /// }
     /// ```
-    pub fn get_signature_v1(&self) -> Result<Signature, CertificateError> {
+    pub fn get_signature_v1(&self) -> Result<Option<Signature>, CertificateError> {
         let names: AHashSet<&str> = self.namelist().collect();
 
         let mut certificates: Vec<CertificateInfo> = Vec::new();
@@ -756,10 +756,10 @@ impl ZipEntry {
         }
 
         match (parsed, failed) {
-            (true, _) => Ok(Signature::V1(certificates)),
+            (true, _) => Ok(Some(Signature::V1(certificates))),
             (false, true) => Err(CertificateError::ParseError),
             // just apk without signatures
-            (false, false) => Ok(Signature::Unknown),
+            (false, false) => Ok(None),
         }
     }
 
@@ -961,14 +961,14 @@ impl ZipEntry {
         }
 
         let mut signatures: Vec<Signature> =
-            repeat::<&[u8], Signature, Vec<Signature>, ContextError, _>(
+            repeat::<&[u8], Option<Signature>, Vec<Option<Signature>>, ContextError, _>(
                 0..,
                 self.parse_apk_signatures(),
             )
             .parse_next(&mut slice)
             .map_err(|_| CertificateError::ParseError)?
             .into_iter()
-            .filter(|signature| signature != &Signature::Unknown)
+            .flatten()
             .collect();
 
         // schemes go first regardless of the pair order in the block
@@ -1144,7 +1144,8 @@ impl ZipEntry {
         }
     }
 
-    fn parse_apk_signatures<'a>(&self) -> impl Parser<&'a [u8], Signature, ContextError> {
+    /// Parses one ID-value pair, `None` for a pair that is skipped.
+    fn parse_apk_signatures<'a>(&self) -> impl Parser<&'a [u8], Option<Signature>, ContextError> {
         // Android looks a pair up by ID and takes the first match
         // (apksig `ApkSigningBlockUtils.findApkSignatureSchemeBlock`), so a
         // repeated ID is never seen by the platform
@@ -1159,7 +1160,7 @@ impl ZipEntry {
                 );
                 let _ = take::<usize, &[u8], ContextError>(size.saturating_sub(4) as usize)
                     .parse_next(input)?;
-                return Ok(Signature::Unknown);
+                return Ok(None);
             }
 
             // A malformed pair must not hide the blocks that follow it
@@ -1180,19 +1181,20 @@ impl ZipEntry {
                     let _ = take::<usize, &[u8], ContextError>(size.saturating_sub(4) as usize)
                         .parse_next(input)?;
 
-                    Ok(Signature::Unknown)
+                    Ok(None)
                 }
             }
         }
     }
 
-    /// Parses the value of a single ID-value pair of the APK Signing Block.
+    /// Parses the value of a single ID-value pair of the APK Signing Block,
+    /// `None` for padding and blocks that are not reported.
     fn parse_signature_pair_value<'a>(
         id: u32,
         size: u64,
-    ) -> impl Parser<&'a [u8], Signature, ContextError> {
+    ) -> impl Parser<&'a [u8], Option<Signature>, ContextError> {
         move |input: &mut &'a [u8]| {
-            match id {
+            let signature = match id {
                 Self::SIGNATURE_SCHEME_V2_BLOCK_ID => {
                     let mut signers_data = length_take(le_u32).parse_next(input)?;
 
@@ -1319,7 +1321,7 @@ impl ZipEntry {
                 | Self::BYTEDANCE_PADDING_BLOCK_ID => {
                     // not interesting blocks
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
-                    Ok(Signature::Unknown)
+                    return Ok(None);
                 }
                 // no block uses a zero id, it shows up when the pairs lost alignment
                 0 => {
@@ -1329,7 +1331,7 @@ impl ZipEntry {
 
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
 
-                    Ok(Signature::Unknown)
+                    return Ok(None);
                 }
                 _ => {
                     // highlight new interesting blocks
@@ -1340,9 +1342,11 @@ impl ZipEntry {
 
                     let _ = take(size.saturating_sub(4) as usize).parse_next(input)?;
 
-                    Ok(Signature::Unknown)
+                    return Ok(None);
                 }
-            }
+            };
+
+            signature.map(Some)
         }
     }
 }

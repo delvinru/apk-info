@@ -167,7 +167,7 @@ fn missing_eocd_is_reported() {
 #[test]
 fn v1_over_empty_apk_body_is_parsed() {
     let zip = ZipEntry::open(fixture("broken-v1-only-empty.apk")).unwrap();
-    assert!(matches!(zip.get_signature_v1(), Ok(Signature::V1(_))));
+    assert!(matches!(zip.get_signature_v1(), Ok(Some(Signature::V1(_)))));
     assert!(zip.get_signatures_other().unwrap().is_empty());
 }
 
@@ -176,7 +176,7 @@ fn v1_over_empty_apk_body_is_parsed() {
 #[test]
 fn max_sized_eocd_comment_is_tolerated() {
     let v1 = ZipEntry::open(fixture("broken-v1-only-max-sized-eocd-comment.apk")).unwrap();
-    assert!(matches!(v1.get_signature_v1(), Ok(Signature::V1(_))));
+    assert!(matches!(v1.get_signature_v1(), Ok(Some(Signature::V1(_)))));
 
     let v2 = ZipEntry::open(fixture("broken-v2-only-max-sized-eocd-comment.apk")).unwrap();
     assert!(matches!(
@@ -237,7 +237,7 @@ fn stripped_signing_block_falls_back_to_v1() {
         "broken-v1v2v3-with-rsa-2048-lineage-3-signers-no-sig-block.apk",
     ))
     .unwrap();
-    assert!(matches!(zip.get_signature_v1(), Ok(Signature::V1(_))));
+    assert!(matches!(zip.get_signature_v1(), Ok(Some(Signature::V1(_)))));
     assert!(zip.get_signatures_other().unwrap().is_empty());
 }
 
@@ -364,7 +364,7 @@ fn rsa_1024_block() -> Vec<u8> {
 
 fn v1_subjects(files: &[(&str, &[u8])]) -> Vec<String> {
     let zip = ZipEntry::new(zip_with_files(files)).unwrap();
-    let Signature::V1(certs) = zip.get_signature_v1().expect("v1 must parse") else {
+    let Some(Signature::V1(certs)) = zip.get_signature_v1().expect("v1 must parse") else {
         panic!("expected a v1 signature");
     };
     certs.into_iter().map(|cert| cert.subject).collect()
@@ -464,7 +464,7 @@ fn v1_reports_only_the_signer_info_certificate() {
         ("META-INF/CERT.RSA", &block),
     ]))
     .unwrap();
-    let Signature::V1(certs) = zip.get_signature_v1().unwrap() else {
+    let Some(Signature::V1(certs)) = zip.get_signature_v1().unwrap() else {
         panic!("expected a v1 signature");
     };
     let serials: Vec<String> = certs.into_iter().map(|cert| cert.serial_number).collect();

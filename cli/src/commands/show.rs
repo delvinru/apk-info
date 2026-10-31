@@ -58,27 +58,14 @@ fn collect_apk_info(path: &Path, show_signatures: &bool) -> Result<ApkInfo> {
     let apk = Apk::new(path)?;
 
     let signatures = if *show_signatures {
-        Some(
-            apk.get_signatures()?
-                .into_iter()
-                .filter(|s| !matches!(s, Signature::Unknown))
-                .collect::<Vec<_>>(),
-        )
+        Some(apk.get_signatures()?)
     } else {
         None
     };
 
     let container_signatures = if *show_signatures {
         let sigs = apk.get_container_signatures()?;
-        let filtered = sigs
-            .into_iter()
-            .filter(|s| !matches!(s, Signature::Unknown))
-            .collect::<Vec<_>>();
-        if filtered.is_empty() {
-            None
-        } else {
-            Some(filtered)
-        }
+        if sigs.is_empty() { None } else { Some(sigs) }
     } else {
         None
     };
