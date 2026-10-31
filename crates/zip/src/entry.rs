@@ -1,6 +1,8 @@
 //! Describes a `zip` archive
 
+use std::any::Any;
 use std::fmt::Write;
+use std::fs::File;
 use std::io::Cursor;
 use std::path::Path;
 
@@ -28,7 +30,7 @@ use crate::structs::{
     CentralDirectory, CentralDirectoryEntry, EndOfCentralDirectory, LocalFileHeader,
     Zip64EndOfCentralDirectory,
 };
-use crate::{CertificateError, FileCompressionType, ReadSeek, ZipError, ber};
+use crate::{CertificateError, FileCompressionType, ReadSeek, ZipError, ber, name};
 
 /// Maximum allowed uncompressed size for a file entry.
 const MAX_UNCOMPRESSED_SIZE: usize = u32::MAX as usize;
@@ -297,6 +299,15 @@ impl ZipEntry {
     /// let zip = ZipEntry::from_reader(file).expect("failed to parse ZIP archive");
     /// ```
     pub fn from_reader(reader: impl ReadSeek + 'static) -> Result<ZipEntry, ZipError> {
+        // a file gets positional reads, no seek before every read
+        let mut reader = Some(reader);
+        if let Some(file) = (&mut reader as &mut dyn Any).downcast_mut::<Option<File>>()
+            && let Some(file) = file.take()
+        {
+            return Self::parse(Source::from_file(file)?);
+        }
+
+        let reader = reader.expect("taken only for a file");
         Self::parse(Source::new(Box::new(reader))?)
     }
 
@@ -423,11 +434,18 @@ impl ZipEntry {
     /// Accepts a candidate only if its comment reaches the exact end of the
     /// stream ([`Self::eocd_spans_to_end`]) — Android's invariant, which ignores
     /// a fake `PK\x05\x06` planted in the archive comment. Falls back to the
-    /// rightmost match when none qualifies, so a broken archive still parses.
+    /// rightmost match when none qualifies, so an archive with a broken comment
+    /// length or trailing data still parses.
+    ///
+    /// Like Android's `libziparchive`, searches only the last `22 + u16::MAX`
+    /// bytes, the most a comment can span. Android rejects a file whose EOCD
+    /// is further back (a truncated archive, one with data appended after it)
+    /// as "not zip", and a full scan of such a file would read all of it.
     fn find_eocd_offset(source: &Source) -> Option<usize> {
         const MAGIC: &[u8; 4] = b"PK\x05\x06";
 
         let total_len = source.len();
+        let search_start = total_len.saturating_sub(22 + u16::MAX as usize);
         let mut fallback = None;
 
         // one reusable window for the whole backward scan
@@ -442,6 +460,9 @@ impl ZipEntry {
             let mut upto = len;
             while let Some(pos) = memmem::rfind(&window[..upto], MAGIC) {
                 let offset = start + pos;
+                if offset < search_start {
+                    break;
+                }
                 if Self::eocd_spans_to_end(source, &window[..len], start, offset, total_len) {
                     return Some(offset);
                 }
@@ -451,7 +472,7 @@ impl ZipEntry {
                 upto = pos + MAGIC.len() - 1;
             }
 
-            if start == 0 {
+            if start <= search_start {
                 return fallback;
             }
 
@@ -1501,8 +1522,8 @@ fn certificate_info(certificate: &Certificate, raw: &[u8]) -> CertificateInfo {
 
     CertificateInfo {
         serial_number: hex(cert.serial_number().as_bytes()),
-        subject: cert.subject().to_string(),
-        issuer: cert.issuer().to_string(),
+        subject: name::to_string(cert.subject()),
+        issuer: name::to_string(cert.issuer()),
         valid_from: cert.validity().not_before.to_string(),
         valid_until: cert.validity().not_after.to_string(),
         signature_type: DB
@@ -1519,7 +1540,7 @@ fn certificate_info(certificate: &Certificate, raw: &[u8]) -> CertificateInfo {
 /// ignoring the string type and case: a `SignerInfo` may spell the issuer as
 /// `PrintableString` while the certificate uses `UTF8String`.
 fn same_name(a: &Name, b: &Name) -> bool {
-    a == b || a.to_string().to_lowercase() == b.to_string().to_lowercase()
+    a == b || name::to_string(a).to_lowercase() == name::to_string(b).to_lowercase()
 }
 
 /// Parses a certificate as strict DER, falling back to BER like Android does.
@@ -1976,5 +1997,44 @@ mod tests {
 
         let zip = ZipEntry::new(data).unwrap();
         assert_eq!(zip.read("a.txt").unwrap().0, b"hello");
+    }
+
+    /// Trailing data after the EOCD leaves no candidate reaching the end; the
+    /// rightmost one is used without scanning the rest of the file.
+    #[test]
+    fn eocd_before_trailing_data_is_found_without_full_scan() {
+        let big = vec![0x41u8; 1024 * 1024];
+        let (mut data, _) = build_archive(&[("big.bin", &big), ("a.txt", b"hello")]);
+        data.extend_from_slice(&[0u8; 185]);
+
+        let (source, counter) = CountingSource::new(data);
+        let zip = ZipEntry::from_reader(source).unwrap();
+        assert_eq!(zip.read("a.txt").unwrap().0, b"hello");
+        assert!(
+            counter.load(std::sync::atomic::Ordering::Relaxed) < 128 * 1024,
+            "construction read {} bytes, scanned past the comment range",
+            counter.load(std::sync::atomic::Ordering::Relaxed)
+        );
+    }
+
+    /// An EOCD further from the end than the longest comment, e.g. in a
+    /// truncated archive or one with data appended, is not searched for:
+    /// Android rejects such a file as "EOCD not found" too.
+    #[test]
+    fn eocd_beyond_comment_range_is_not_found() {
+        let big = vec![0x41u8; 1024 * 1024];
+        let (mut data, _) = build_archive(&[("a.txt", b"hello")]);
+        data.extend_from_slice(&big);
+
+        let (source, counter) = CountingSource::new(data);
+        assert_eq!(
+            ZipEntry::from_reader(source).unwrap_err(),
+            ZipError::NotFoundEOCD
+        );
+        assert!(
+            counter.load(std::sync::atomic::Ordering::Relaxed) < 128 * 1024,
+            "read {} bytes looking for the EOCD",
+            counter.load(std::sync::atomic::Ordering::Relaxed)
+        );
     }
 }

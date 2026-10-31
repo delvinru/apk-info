@@ -1,9 +1,10 @@
 //! The lazy byte source behind every [`ZipEntry`](crate::ZipEntry).
 //!
-//! A [`Source`] wraps one seekable reader behind a mutex and serves bounded
+//! A [`Source`] wraps one file or seekable reader and serves bounded
 //! `read_exact_at` calls, so an archive never occupies more memory than the
 //! regions actually requested.
 
+use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -19,23 +20,28 @@ impl<T: Read + Seek + Send> ReadSeek for T {}
 
 /// A seekable byte source with its length resolved once at construction.
 ///
-/// Reads are bounded `seek` + `read_exact` calls behind a mutex, so
-/// [`ZipEntry`](crate::ZipEntry) can share the source through `&self` and only
-/// hold the requested region. The trait object is boxed once, at the
-/// [`ZipEntry::from_reader`](crate::ZipEntry::from_reader) boundary.
+/// A file is read with positional reads, one system call each and no lock.
+/// Any other reader is read with `seek` + `read_exact` behind a mutex. Either
+/// way [`ZipEntry`](crate::ZipEntry) can share the source through `&self` and
+/// only hold the requested region.
 ///
 /// A source is a window `[base, base + len)` over the shared stream.
 /// [`Source::slice`] carves out a sub-window, so a stored archive nested in a
 /// `xapk`/`apkm` parses in place with no copy into memory.
 #[derive(Clone)]
 pub(crate) struct Source {
-    inner: Arc<Mutex<Box<dyn ReadSeek>>>,
+    inner: Arc<Backend>,
 
     /// Absolute offset of this window in the backing stream.
     base: usize,
 
     /// Length of this window.
     len: usize,
+}
+
+enum Backend {
+    File(File),
+    Stream(Mutex<Box<dyn ReadSeek>>),
 }
 
 impl Source {
@@ -45,7 +51,18 @@ impl Source {
             usize::try_from(inner.seek(SeekFrom::End(0))?).map_err(|_| ZipError::ParseError)?;
 
         Ok(Source {
-            inner: Arc::new(Mutex::new(inner)),
+            inner: Arc::new(Backend::Stream(Mutex::new(inner))),
+            base: 0,
+            len,
+        })
+    }
+
+    /// A source over a file, read with positional reads.
+    pub(crate) fn from_file(file: File) -> Result<Source, ZipError> {
+        let len = usize::try_from(file.metadata()?.len()).map_err(|_| ZipError::ParseError)?;
+
+        Ok(Source {
+            inner: Arc::new(Backend::File(file)),
             base: 0,
             len,
         })
@@ -80,9 +97,15 @@ impl Source {
             return Err(ZipError::EOF);
         }
 
-        let mut src = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
-        src.seek(SeekFrom::Start((self.base + offset) as u64))?;
-        src.read_exact(buf)?;
+        let position = (self.base + offset) as u64;
+        match &*self.inner {
+            Backend::File(file) => read_file_at(file, buf, position)?,
+            Backend::Stream(stream) => {
+                let mut src = stream.lock().unwrap_or_else(PoisonError::into_inner);
+                src.seek(SeekFrom::Start(position))?;
+                src.read_exact(buf)?;
+            }
+        }
         Ok(())
     }
 
@@ -92,6 +115,35 @@ impl Source {
         self.read_exact_at(offset, &mut buf)?;
         Ok(buf)
     }
+}
+
+#[cfg(unix)]
+fn read_file_at(file: &File, buf: &mut [u8], position: u64) -> std::io::Result<()> {
+    std::os::unix::fs::FileExt::read_exact_at(file, buf, position)
+}
+
+#[cfg(windows)]
+fn read_file_at(file: &File, mut buf: &mut [u8], mut position: u64) -> std::io::Result<()> {
+    use std::os::windows::fs::FileExt;
+
+    while !buf.is_empty() {
+        match file.seek_read(buf, position) {
+            Ok(0) => return Err(std::io::ErrorKind::UnexpectedEof.into()),
+            Ok(n) => {
+                buf = &mut buf[n..];
+                position += n as u64;
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(err) => return Err(err),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn read_file_at(mut file: &File, buf: &mut [u8], position: u64) -> std::io::Result<()> {
+    file.seek(SeekFrom::Start(position))?;
+    file.read_exact(buf)
 }
 
 #[cfg(test)]
@@ -145,6 +197,25 @@ mod tests {
         let mut buf = [0u8; 2];
         assert_eq!(sub.read_exact_at(4, &mut buf).unwrap_err(), ZipError::EOF);
         assert!(matches!(sub.slice(3, 3), Err(ZipError::EOF)));
+    }
+
+    #[test]
+    fn file_is_read_at_positions() {
+        let path = std::env::temp_dir().join(format!("apk-info-source-{}.bin", std::process::id()));
+        std::fs::write(&path, b"hello world").unwrap();
+        let src = Source::from_file(File::open(&path).unwrap()).unwrap();
+
+        assert_eq!(src.len(), 11);
+        assert_eq!(src.read_bytes_at(6, 5).unwrap(), b"world");
+        assert_eq!(
+            src.slice(6, 5).unwrap().read_bytes_at(1, 3).unwrap(),
+            b"orl"
+        );
+        assert_eq!(src.read_bytes_at(0, 5).unwrap(), b"hello");
+        assert_eq!(src.read_bytes_at(8, 4).unwrap_err(), ZipError::EOF);
+
+        drop(src);
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
