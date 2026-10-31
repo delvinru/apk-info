@@ -127,7 +127,9 @@ impl ZipEntry {
     /// [`ZipError::FileNotFound`](crate::ZipError::FileNotFound) if it cannot be
     /// located, [`ZipError::EOF`](crate::ZipError::EOF) if its data can't be
     /// sliced out, or [`ZipError::DecompressionError`](crate::ZipError::DecompressionError)
-    /// if it fails to decode.
+    /// if it fails to decode. Returns [`ZipError::FileTooLarge`](crate::ZipError::FileTooLarge)
+    /// if the result would need ZIP64 (over 4 GiB or 65535 entries), which the
+    /// writer doesn't produce.
     pub fn repack(&self) -> Result<Vec<u8>, crate::ZipError> {
         let names = self.namelist().count();
 
@@ -152,6 +154,15 @@ impl ZipEntry {
             let crc32 = crc32fast::hash(&data);
             let (compressed, uncompressed) = deflate(&data);
 
+            // the writer has no ZIP64: an archive past 4 GiB or 65535 entries
+            // is an error rather than wrapped offsets
+            let entry_len = u32::try_from(compressed.len())
+                .ok()
+                .and_then(|len| len.checked_add(LOCAL_HEADER_LEN + name.len() as u32));
+            let (Some(entry_len), Some(next_count)) = (entry_len, count.checked_add(1)) else {
+                return Err(crate::ZipError::FileTooLarge);
+            };
+
             write_local_header(
                 &mut output,
                 name.as_bytes(),
@@ -174,12 +185,16 @@ impl ZipEntry {
                 8, // deflate
             );
 
-            offset += LOCAL_HEADER_LEN + name.len() as u32 + compressed.len() as u32;
-            count += 1;
+            offset = offset
+                .checked_add(entry_len)
+                .ok_or(crate::ZipError::FileTooLarge)?;
+            count = next_count;
         }
 
         // --- end of central directory record ---
-        let central_dir_offset = output.len() as u32;
+        let central_dir_offset = offset;
+        let central_dir_len =
+            u32::try_from(central_directory.len()).map_err(|_| crate::ZipError::FileTooLarge)?;
         output
             .write_all(&central_directory)
             .expect("write to Vec can't fail");
@@ -189,7 +204,7 @@ impl ZipEntry {
             .u16(0) // disk with central directory
             .u16(count) // entries on this disk
             .u16(count) // total entries
-            .u32(central_directory.len() as u32) // central directory size
+            .u32(central_dir_len) // central directory size
             .u32(central_dir_offset) // central directory offset
             .u16(0); // comment length
 

@@ -30,9 +30,11 @@ pub(crate) struct CentralDirectoryEntry {
     #[allow(unused)]
     pub(crate) crc32: u32,
 
-    pub(crate) compressed_size: u32,
+    /// Compressed size, from the ZIP64 extra field when the record holds `0xFFFFFFFF`
+    pub(crate) compressed_size: u64,
 
-    pub(crate) uncompressed_size: u32,
+    /// Uncompressed size, from the ZIP64 extra field when the record holds `0xFFFFFFFF`
+    pub(crate) uncompressed_size: u64,
 
     #[allow(unused)]
     pub(crate) file_name_length: u16,
@@ -52,13 +54,19 @@ pub(crate) struct CentralDirectoryEntry {
     #[allow(unused)]
     pub(crate) external_attrs: u32,
 
-    pub(crate) local_header_offset: u32,
+    /// Local header offset, from the ZIP64 extra field when the record holds `0xFFFFFFFF`
+    pub(crate) local_header_offset: u64,
 
     pub(crate) file_name: Arc<str>,
 }
 
 impl CentralDirectoryEntry {
     const MAGIC: u32 = 0x02014b50;
+
+    /// Header id of the ZIP64 extended information extra field.
+    ///
+    /// See: <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT> (4.5.3)
+    const ZIP64_EXTRA_ID: u16 = 0x0001;
 
     #[inline(always)]
     fn parse(input: &mut &[u8]) -> ModalResult<CentralDirectoryEntry> {
@@ -106,8 +114,8 @@ impl CentralDirectoryEntry {
         )
             .parse_next(input)?;
 
-        // extra field and comment are unused: skip them without copying
-        let (file_name, _, _) = (
+        // the comment is unused: skip it without copying
+        let (file_name, extra_field, _) = (
             take(file_name_length),
             take(extra_field_length),
             take(file_comment_length),
@@ -115,6 +123,13 @@ impl CentralDirectoryEntry {
             .parse_next(input)?;
 
         let file_name = std::str::from_utf8(file_name).map_err(|_| ErrMode::from_input(input))?;
+
+        let (uncompressed_size, compressed_size, local_header_offset) = Self::apply_zip64(
+            extra_field,
+            uncompressed_size,
+            compressed_size,
+            local_header_offset,
+        );
 
         Ok(CentralDirectoryEntry {
             version_made_by,
@@ -135,6 +150,56 @@ impl CentralDirectoryEntry {
             local_header_offset,
             file_name: Arc::from(file_name),
         })
+    }
+
+    /// Replaces the 32-bit fields that hold `0xFFFFFFFF` with their 64-bit
+    /// values from the ZIP64 extra field.
+    ///
+    /// The extra field carries only the saturated fields, in this order:
+    /// uncompressed size, compressed size, local header offset. A missing or
+    /// short extra field leaves the 32-bit values as they are.
+    fn apply_zip64(
+        mut extra: &[u8],
+        uncompressed_size: u32,
+        compressed_size: u32,
+        local_header_offset: u32,
+    ) -> (u64, u64, u64) {
+        let mut fields = [
+            u64::from(uncompressed_size),
+            u64::from(compressed_size),
+            u64::from(local_header_offset),
+        ];
+        if !fields.contains(&u64::from(u32::MAX)) {
+            return (fields[0], fields[1], fields[2]);
+        }
+
+        while let Some((header, rest)) = extra.split_first_chunk::<4>() {
+            let id = u16::from_le_bytes([header[0], header[1]]);
+            let size = u16::from_le_bytes([header[2], header[3]]) as usize;
+            let Some(data) = rest.get(..size) else {
+                break;
+            };
+            extra = &rest[size..];
+
+            if id != Self::ZIP64_EXTRA_ID {
+                continue;
+            }
+
+            let mut data = data;
+            for field in fields
+                .iter_mut()
+                .filter(|field| **field == u64::from(u32::MAX))
+            {
+                let Some((value, rest)) = data.split_first_chunk::<8>() else {
+                    break;
+                };
+                *field = u64::from_le_bytes(*value);
+                data = rest;
+            }
+            break;
+        }
+
+        (fields[0], fields[1], fields[2])
     }
 }
 
@@ -309,6 +374,52 @@ mod tests {
 
         let result = CentralDirectory::parse(&data, 9999, 1);
         assert!(result.is_err(), "expected error for out-of-bounds offset");
+    }
+
+    fn zip64_extra(values: &[u64]) -> Vec<u8> {
+        let mut extra = Vec::new();
+        extra.extend_from_slice(&0x0001u16.to_le_bytes());
+        extra.extend_from_slice(&((values.len() * 8) as u16).to_le_bytes());
+        for value in values {
+            extra.extend_from_slice(&value.to_le_bytes());
+        }
+        extra
+    }
+
+    #[test]
+    fn zip64_extra_replaces_saturated_fields() {
+        // an unrelated extra block first, then ZIP64 with all three fields
+        let mut extra = vec![0xfe, 0xca, 0x02, 0x00, 0xaa, 0xbb];
+        extra.extend(zip64_extra(&[5 << 32, 4 << 32, 6 << 32]));
+        let data = make_cde_record("big.obb", &extra, b"", u32::MAX, u32::MAX, u32::MAX);
+
+        let entry = CentralDirectoryEntry::parse(&mut &data[..]).unwrap();
+        assert_eq!(entry.uncompressed_size, 5 << 32);
+        assert_eq!(entry.compressed_size, 4 << 32);
+        assert_eq!(entry.local_header_offset, 6 << 32);
+    }
+
+    #[test]
+    fn zip64_extra_holds_only_saturated_fields() {
+        // only the offset is saturated, so the extra field has one value
+        let extra = zip64_extra(&[7 << 32]);
+        let data = make_cde_record("base.apk", &extra, b"", 10, 20, u32::MAX);
+
+        let entry = CentralDirectoryEntry::parse(&mut &data[..]).unwrap();
+        assert_eq!(entry.compressed_size, 10);
+        assert_eq!(entry.uncompressed_size, 20);
+        assert_eq!(entry.local_header_offset, 7 << 32);
+    }
+
+    #[test]
+    fn short_zip64_extra_keeps_32_bit_values() {
+        let mut extra = zip64_extra(&[1 << 32]);
+        extra.truncate(8); // declares 8 bytes, has 4
+        let data = make_cde_record("x", &extra, b"", u32::MAX, u32::MAX, 0);
+
+        let entry = CentralDirectoryEntry::parse(&mut &data[..]).unwrap();
+        assert_eq!(entry.uncompressed_size, u64::from(u32::MAX));
+        assert_eq!(entry.compressed_size, u64::from(u32::MAX));
     }
 
     #[test]

@@ -26,6 +26,7 @@ use crate::signature::{CertificateInfo, Signature};
 use crate::source::Source;
 use crate::structs::{
     CentralDirectory, CentralDirectoryEntry, EndOfCentralDirectory, LocalFileHeader,
+    Zip64EndOfCentralDirectory,
 };
 use crate::{CertificateError, FileCompressionType, ReadSeek, ZipError, ber};
 
@@ -84,10 +85,10 @@ pub struct EntryInfo {
     pub compression_method: u16,
 
     /// Compressed size, in bytes
-    pub compressed_size: u32,
+    pub compressed_size: u64,
 
     /// Uncompressed size, in bytes
-    pub uncompressed_size: u32,
+    pub uncompressed_size: u64,
 
     /// The local header's compression method disagrees with the central directory's
     pub tampered: bool,
@@ -141,7 +142,8 @@ impl ZipEntry {
         &self,
         entry: &CentralDirectoryEntry,
     ) -> Result<LocalFileHeader, ZipError> {
-        let claim = entry.local_header_offset as usize;
+        // an offset past usize can't be read; the scan below then finds nothing
+        let claim = usize::try_from(entry.local_header_offset).unwrap_or(usize::MAX);
         let expected_name = entry.file_name.as_bytes();
 
         if let Ok(header) = self.read_local_header_at(claim)
@@ -270,11 +272,31 @@ impl ZipEntry {
         let eocd =
             EndOfCentralDirectory::parse(&mut &eocd_bytes[..]).map_err(|_| ZipError::ParseError)?;
 
+        // ZIP64: the 64-bit values replace the EOCD fields saturated at their
+        // maximum, and the CD ends where the ZIP64 record starts
+        let zip64 = Self::read_zip64_eocd(&source, eocd_offset);
+        let wide =
+            |narrow: u64, max: u64, wide: fn(&Zip64EndOfCentralDirectory) -> u64| match &zip64 {
+                Some((_, record)) if narrow == max => wide(record),
+                _ => narrow,
+            };
+        let total_entries = wide(eocd.total_entries.into(), u16::MAX.into(), |r| {
+            r.total_entries
+        });
+        let central_dir_size = wide(eocd.central_dir_size.into(), u32::MAX.into(), |r| {
+            r.central_dir_size
+        });
+        let central_dir_offset = wide(eocd.central_dir_offset.into(), u32::MAX.into(), |r| {
+            r.central_dir_offset
+        });
+        let cd_end = zip64.as_ref().map_or(eocd_offset, |(offset, _)| *offset);
+
         // Prefer the EOCD's declared CD offset;
         // derive it (`eocd - cd_size`) only when prepended/polyglot data left it stale.
-        let declared = eocd.central_dir_offset as usize;
-        let derived = eocd_offset
-            .checked_sub(eocd.central_dir_size as usize)
+        let declared = usize::try_from(central_dir_offset).unwrap_or(usize::MAX);
+        let derived = usize::try_from(central_dir_size)
+            .ok()
+            .and_then(|size| cd_end.checked_sub(size))
             .ok_or(ZipError::ParseError)?;
 
         let mut cd_magic = [0u8; 4];
@@ -294,7 +316,8 @@ impl ZipEntry {
         // entry such as the manifest.
         let cd_bytes =
             source.read_bytes_at(central_dir_offset, source.len() - central_dir_offset)?;
-        let central_directory = CentralDirectory::parse(&cd_bytes, 0, eocd.total_entries as usize)
+        let total_entries = usize::try_from(total_entries).unwrap_or(usize::MAX);
+        let central_directory = CentralDirectory::parse(&cd_bytes, 0, total_entries)
             .map_err(|_| ZipError::ParseError)?;
 
         Ok(ZipEntry {
@@ -302,6 +325,33 @@ impl ZipEntry {
             central_dir_offset,
             central_directory,
         })
+    }
+
+    /// Reads the ZIP64 EOCD record through the locator right before the EOCD.
+    ///
+    /// Tries the offset declared in the locator, then the spot right before
+    /// the locator, for an archive with prepended data. Returns the record's
+    /// offset along with it.
+    fn read_zip64_eocd(
+        source: &Source,
+        eocd_offset: usize,
+    ) -> Option<(usize, Zip64EndOfCentralDirectory)> {
+        let locator_offset = eocd_offset.checked_sub(Zip64EndOfCentralDirectory::LOCATOR_LEN)?;
+        let locator = source
+            .read_bytes_at(locator_offset, Zip64EndOfCentralDirectory::LOCATOR_LEN)
+            .ok()?;
+        let declared = Zip64EndOfCentralDirectory::parse_locator(&locator)?;
+        let derived = locator_offset.checked_sub(Zip64EndOfCentralDirectory::RECORD_LEN);
+
+        [usize::try_from(declared).ok(), derived]
+            .into_iter()
+            .flatten()
+            .find_map(|offset| {
+                let record = source
+                    .read_bytes_at(offset, Zip64EndOfCentralDirectory::RECORD_LEN)
+                    .ok()?;
+                Some((offset, Zip64EndOfCentralDirectory::parse_record(&record)?))
+            })
     }
 
     /// Finds the EOCD, scanning 4KB windows backward with a 3-byte overlap so a
@@ -477,11 +527,15 @@ impl ZipEntry {
         let local_header = self.read_local_header_verified(central_directory_entry)?;
 
         let method = central_directory_entry.compression_method;
-        let compressed_size = central_directory_entry.compressed_size as usize;
-        let uncompressed_size = central_directory_entry.uncompressed_size as usize;
         let tampered = local_header.compression_method != method;
 
-        if uncompressed_size > MAX_UNCOMPRESSED_SIZE {
+        let (Ok(compressed_size), Ok(uncompressed_size)) = (
+            usize::try_from(central_directory_entry.compressed_size),
+            usize::try_from(central_directory_entry.uncompressed_size),
+        ) else {
+            return Err(ZipError::FileTooLarge);
+        };
+        if uncompressed_size > MAX_UNCOMPRESSED_SIZE || compressed_size > MAX_UNCOMPRESSED_SIZE {
             return Err(ZipError::FileTooLarge);
         }
 
@@ -583,12 +637,13 @@ impl ZipEntry {
             .ok_or(ZipError::FileNotFound)?;
 
         let method = entry.compression_method;
-        let size = entry.uncompressed_size as usize;
+        let size = usize::try_from(entry.uncompressed_size).map_err(|_| ZipError::FileTooLarge)?;
 
         let stored = method == Self::METHOD_STORED
             || (method != Self::METHOD_DEFLATED
                 && entry.compressed_size == entry.uncompressed_size);
-        if !stored || size > MAX_UNCOMPRESSED_SIZE {
+        // a stored archive is read in place, so its size costs no memory
+        if !stored {
             let (data, _) = self.read(filename)?;
             return Self::new(data);
         }

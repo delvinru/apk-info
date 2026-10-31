@@ -78,6 +78,57 @@ impl EndOfCentralDirectory {
     }
 }
 
+/// The 64-bit counterpart of the EOCD fields, written by ZIP64 archives.
+///
+/// See: <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT> (4.3.14, 4.3.15)
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Zip64EndOfCentralDirectory {
+    pub(crate) total_entries: u64,
+    pub(crate) central_dir_size: u64,
+    pub(crate) central_dir_offset: u64,
+}
+
+impl Zip64EndOfCentralDirectory {
+    /// Length of the locator that sits right before the EOCD.
+    pub(crate) const LOCATOR_LEN: usize = 20;
+
+    /// Length of the fixed part of the ZIP64 EOCD record.
+    pub(crate) const RECORD_LEN: usize = 56;
+
+    const LOCATOR_MAGIC: u32 = 0x07064b50;
+    const RECORD_MAGIC: u32 = 0x06064b50;
+
+    /// Returns the declared ZIP64 EOCD record offset from a locator.
+    pub(crate) fn parse_locator(locator: &[u8]) -> Option<u64> {
+        if locator.len() < Self::LOCATOR_LEN || read_u32(locator, 0) != Self::LOCATOR_MAGIC {
+            return None;
+        }
+
+        Some(read_u64(locator, 8))
+    }
+
+    /// Parses the fixed part of a ZIP64 EOCD record.
+    pub(crate) fn parse_record(record: &[u8]) -> Option<Zip64EndOfCentralDirectory> {
+        if record.len() < Self::RECORD_LEN || read_u32(record, 0) != Self::RECORD_MAGIC {
+            return None;
+        }
+
+        Some(Zip64EndOfCentralDirectory {
+            total_entries: read_u64(record, 32),
+            central_dir_size: read_u64(record, 40),
+            central_dir_offset: read_u64(record, 48),
+        })
+    }
+}
+
+fn read_u32(data: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes(data[at..at + 4].try_into().expect("4 bytes"))
+}
+
+fn read_u64(data: &[u8], at: usize) -> u64 {
+    u64::from_le_bytes(data[at..at + 8].try_into().expect("8 bytes"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,5 +220,48 @@ mod tests {
         );
         let parsed = result.unwrap();
         assert!(parsed.comment.is_empty());
+    }
+
+    #[test]
+    fn zip64_locator_and_record_parse() {
+        let mut locator = Vec::new();
+        locator.extend_from_slice(&0x07064b50u32.to_le_bytes());
+        locator.extend_from_slice(&0u32.to_le_bytes()); // disk
+        locator.extend_from_slice(&(5u64 << 32).to_le_bytes()); // record offset
+        locator.extend_from_slice(&1u32.to_le_bytes()); // total disks
+        assert_eq!(
+            Zip64EndOfCentralDirectory::parse_locator(&locator),
+            Some(5 << 32)
+        );
+
+        let mut record = Vec::new();
+        record.extend_from_slice(&0x06064b50u32.to_le_bytes());
+        record.extend_from_slice(&44u64.to_le_bytes()); // record size
+        record.extend_from_slice(&45u16.to_le_bytes()); // version made by
+        record.extend_from_slice(&45u16.to_le_bytes()); // version needed
+        record.extend_from_slice(&0u32.to_le_bytes()); // disk
+        record.extend_from_slice(&0u32.to_le_bytes()); // cd disk
+        record.extend_from_slice(&70000u64.to_le_bytes()); // entries on disk
+        record.extend_from_slice(&70000u64.to_le_bytes()); // total entries
+        record.extend_from_slice(&(1u64 << 33).to_le_bytes()); // cd size
+        record.extend_from_slice(&(3u64 << 32).to_le_bytes()); // cd offset
+        assert_eq!(
+            Zip64EndOfCentralDirectory::parse_record(&record),
+            Some(Zip64EndOfCentralDirectory {
+                total_entries: 70000,
+                central_dir_size: 1 << 33,
+                central_dir_offset: 3 << 32,
+            })
+        );
+
+        // wrong magic or too short
+        assert_eq!(
+            Zip64EndOfCentralDirectory::parse_locator(&record[..20]),
+            None
+        );
+        assert_eq!(
+            Zip64EndOfCentralDirectory::parse_record(&record[..40]),
+            None
+        );
     }
 }
