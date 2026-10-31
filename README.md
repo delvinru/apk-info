@@ -137,58 +137,25 @@ container_signatures = apk.get_container_signatures()
 
 ## Performance Analysis
 
-Environment:
+One thread, cold page cache, the same metadata read by each tool from Python. Apple M3 Pro, macOS 26.6.1.
 
-- OS: macOS Tahoe 26.6.1 arm64
-- CPU: Apple M3 Pro (12) @ 4.06 GHz
+**Clean apps**: 5,714 APK and XAPK files from app stores, 429 GB.
 
-The [script](examples/benchmark/bench.py):
+|                  | Time    | Files/s | Peak memory | Failed |
+| ---------------- | ------- | ------- | ----------- | ------ |
+| apk-info 1.1.0   | 29.7 s  | 192     | 745 MB      | 0      |
+| apk-info 1.0.13  | 71.4 s  | 80      | 770 MB      | 0      |
+| androguard 4.1.4 | 926.3 s | 6       | 5.8 GB      | 784    |
 
-1. Extract all available signatures from a file;
-2. Extract the package name;
-3. Extract the minimum sdk version;
-4. Get a list of all Main Activities;
-5. Get the application name;
+**Malware**: 23,745 files from the [VirusShare Android collection](https://vx-underground.org/Samples/Virusshare%20Collection/Downloadable%20Releases), 106 GB.
 
-apk-info library:
+|                  | Time    | Files/s | Peak memory | Failed |
+| ---------------- | ------- | ------- | ----------- | ------ |
+| apk-info 1.1.0   | 44.7 s  | 531     | 88 MB       | 692    |
+| apk-info 1.0.13  | 76.0 s  | 312     | 87 MB       | 691    |
+| androguard 4.1.4 | 362.6 s | 65      | 794 MB      | 737    |
 
-- Build - `release-lto`;
-- Python bindings (honest comparison);
-
----
-
-test case (clean collection):
-
-- 152 apk files;
-- Total size - 20GB;
-- Logging mode - warning;
-
-| #   | **apk-info**                                | **androguard**                                 |
-| --- | ------------------------------------------- | ---------------------------------------------- |
-| 1   | 0.98s user 4.32s system 80% cpu 6.584 total | 57.39s user 4.88s system 97% cpu 1:03.85 total |
-| 2   | 0.96s user 4.23s system 79% cpu 6.486 total | 57.98s user 5.04s system 97% cpu 1:04.80 total |
-| 3   | 0.95s user 4.15s system 79% cpu 6.422 total | 55.56s user 4.48s system 97% cpu 1:01.55 total |
-
----
-
-test case (malware collection):
-
-- 13374 apk files (from the [VirusShare Android APK collection](https://vx-underground.org/Samples/Virusshare%20Collection/Downloadable%20Releases));
-- Total size - 68GB;
-- Logging mode - warning;
-
-> [!NOTE]
-> The collection has 14026 downloaded samples. 652 of them are completely broken (not valid ZIP/APK archives) and rejected by both tools, so they are excluded from the benchmark — leaving 13374.
-
-| #   | **apk-info**                                | **androguard**                                  |
-| --- | ------------------------------------------- | ----------------------------------------------- |
-| 1   | 5.15s user 12.53s system 66% cpu 26.990 total | 152.85s user 15.56s system 95% cpu 2:58.01 total |
-| 2   | 5.41s user 13.08s system 69% cpu 27.010 total | 151.84s user 15.08s system 95% cpu 2:56.74 total |
-| 3   | 5.25s user 12.76s system 68% cpu 26.610 total | 152.26s user 15.26s system 95% cpu 2:57.20 total |
-
----
-
-On average, the speed gain is about x6.6 on this corpus.
+Methodology, per-file timings and failure reasons: [Benchmarks](https://delvinru.github.io/apk-info/benchmarks/).
 
 ## FAQ
 

@@ -63,7 +63,7 @@ Full AXML and ARSC parsers, resource resolution, apktool-style decoding, and the
 XAPK, APKM and APKS open through their base APK; resources of all splits decode into one tree. See [XAPK, APKM and APKS](guides/containers.md).
 
 **Speed**
-6.6× faster than androguard on 13,374 malware samples, 9.8× on clean apps. See [Benchmarks](benchmarks.md).
+On one thread, 34× faster than androguard on clean apps and 8× on 23,745 malware samples, with a fraction of its memory. See [Benchmarks](benchmarks.md).
 
 **Read-only**
 Never modifies, signs or decompiles anything. `repack` writes a clean copy of a damaged archive so other tools can open it.

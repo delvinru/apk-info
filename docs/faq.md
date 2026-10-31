@@ -2,7 +2,7 @@
 
 ## Why not androguard?
 
-androguard decompiles DEX files and builds call graphs, which apk-info doesn't do. For metadata across many APKs, androguard is 6–10× slower (see [Benchmarks](benchmarks.md)) and fails on tampered samples that Android installs. Use apk-info for the metadata, and hand the DEX files to androguard, jadx or another decompiler.
+androguard decompiles DEX files and builds call graphs, which apk-info doesn't do. For metadata across many APKs, androguard is 8–34× slower (see [Benchmarks](benchmarks.md)) and fails on tampered samples that Android installs. Use apk-info for the metadata, and hand the DEX files to androguard, jadx or another decompiler.
 
 ## Can apk-info modify or sign APKs?
 
