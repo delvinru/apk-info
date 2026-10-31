@@ -9,7 +9,7 @@ metadata:
 
 # apk-info
 
-`apk-info` is a fast, malware-friendly, **read-only** APK parser. It extracts information from APK/XAPK/APKM/APKS files: package name, version, SDK requirements, main activity, permissions, signatures, manifest components, and individual files. It ships as a CLI (`apk-info`) and a Python library (`apk-info` on PyPI, ≥3.10, with full type stubs).
+`apk-info` is a fast, malware-friendly, **read-only** APK parser. It extracts information from APK/XAPK/APKM/APKS files: package name, version, SDK requirements, main activity, permissions, signatures, manifest components, and individual files. It ships as a CLI (`apk-info`) and a Python library (`apk-info` on PyPI, ≥3.11, with full type stubs).
 
 Its key strength is robustness against malformed/malicious inputs (BadPack technique, tampered zip headers, garbage AXML chunks, corrupt `resources.arsc`) where standard parsers like androguard fail or are ~10× slower. A deliberately broken resource table never aborts parsing — the manifest, DEX and signatures are still analyzed.
 

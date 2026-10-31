@@ -22,7 +22,7 @@ A full-featured `apk` parser.
   - Apk Channel Block;
   - Google Play Frosting (there are plans, but there is critically little information about it);
 - Correct extraction of the MainActivity based on how the Android OS [does it](https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310);
-- Bindings for python 3.10+ with typings - no more `# type: ignore`;
+- Bindings for python 3.11+ with typings - no more `# type: ignore`;
 - And of course just a fast parser - 🙃
 
 ## Usage

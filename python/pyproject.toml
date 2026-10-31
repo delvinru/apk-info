@@ -1,6 +1,6 @@
 [project]
 name = "apk-info"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 authors = [{ name = "Alexey", email = "delvinru@gmail.com" }]
 classifiers = [
@@ -8,7 +8,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Programming Language :: Rust",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -36,13 +35,9 @@ requires = ["maturin>=1.14.1,<2.0"]
 build-backend = "maturin"
 
 [dependency-groups]
-tests = ["pytest"]
 docs = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.7.7",
     "mkdocstrings-python>=2.0.6",
     "mkdocstrings[python]>=1.0.6",
 ]
-
-[tool.uv]
-default-groups = ["tests"]

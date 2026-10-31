@@ -1,6 +1,6 @@
 # Python API reference
 
-Complete catalog of the `apk_info` Python API (≥3.10, full type stubs included). Import with `from apk_info import APK`. All examples assume `apk = APK("./file.apk")`.
+Complete catalog of the `apk_info` Python API (≥3.11, full type stubs included). Import with `from apk_info import APK`. All examples assume `apk = APK("./file.apk")`.
 
 ## Contents
 
