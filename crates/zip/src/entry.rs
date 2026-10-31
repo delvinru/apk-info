@@ -209,7 +209,10 @@ impl ZipEntry {
     ) -> Result<LocalFileHeader, ZipError> {
         // an offset past usize can't be read; the scan below then finds nothing
         let claim = usize::try_from(entry.local_header_offset).unwrap_or(usize::MAX);
-        let expected_name = entry.file_name.as_bytes();
+        let expected_name = entry
+            .raw_file_name
+            .as_deref()
+            .unwrap_or(entry.file_name.as_bytes());
 
         if let Ok(header) = self.read_local_header_at(claim)
             && header.file_name.as_ref() == expected_name
@@ -2015,6 +2018,26 @@ mod tests {
             "construction read {} bytes, scanned past the comment range",
             counter.load(std::sync::atomic::Ordering::Relaxed)
         );
+    }
+
+    /// A name that isn't UTF-8 neither hides the entries after it nor makes
+    /// its own entry unreadable: it's read under its U+FFFD name.
+    #[test]
+    fn entries_after_a_non_utf8_name_are_read() {
+        let (mut data, _) = build_archive(&[
+            ("a.txt", b"first"),
+            ("Xbad.txt", b"hidden"),
+            ("resources.arsc", b"table"),
+        ]);
+        // the same invalid lead byte in the local header and in the CD
+        for at in memmem::find_iter(&data.clone(), b"Xbad.txt") {
+            data[at] = 0xC0;
+        }
+
+        let zip = ZipEntry::new(data).unwrap();
+        assert_eq!(zip.namelist().count(), 3);
+        assert_eq!(zip.read("resources.arsc").unwrap().0, b"table");
+        assert_eq!(zip.read("\u{fffd}bad.txt").unwrap().0, b"hidden");
     }
 
     /// An EOCD further from the end than the longest comment, e.g. in a

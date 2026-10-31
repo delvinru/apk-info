@@ -264,7 +264,9 @@ impl Apk {
             ));
         }
 
-        Err(error.unwrap_or(APKError::InvalidInput("is it apk/xapk/apkm/apks?")))
+        Err(error.unwrap_or(APKError::InvalidInput(
+            "no AndroidManifest.xml and no base apk in the archive",
+        )))
     }
 
     /// Parses the manifest and the resource table of an apk.

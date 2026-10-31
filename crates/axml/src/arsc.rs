@@ -106,17 +106,32 @@ impl ARSC {
         }
     }
 
-    /// Retrieves a resource value by its resolved name.
+    /// Retrieves a resource value by its name, e.g. `string/app_name`.
     pub fn get_resource_value_by_name(&self, name: &str) -> Option<String> {
-        let reference_names = self.reference_names.borrow();
+        self.get_resource_id(name)
+            .and_then(|id| self.get_resource_value(id))
+    }
 
-        let id = reference_names
+    /// Returns the id of a resource by its name, e.g. `string/app_name`.
+    ///
+    /// A `package:` prefix is skipped, except `android:`: the framework's
+    /// resources are not in the app's table. Among packages, the lowest id
+    /// wins.
+    pub fn get_resource_id(&self, name: &str) -> Option<u32> {
+        let name = match name.split_once(':') {
+            Some(("android", _)) => return None,
+            Some((_, name)) => name,
+            None => name,
+        };
+        let (type_name, key) = name.split_once('/')?;
+
+        self.packages
             .iter()
-            .filter(|(_, v)| v == &name)
-            .map(|(&id, _)| id)
-            .min()?;
-
-        self.get_resource_value(id)
+            .filter_map(|(&package_id, package)| {
+                let (type_id, entry_id) = package.find_entry_id(type_name, key)?;
+                Some(u32::from(package_id) << 24 | u32::from(type_id) << 16 | u32::from(entry_id))
+            })
+            .min()
     }
 
     /// Returns the full resource name for a given resource ID.

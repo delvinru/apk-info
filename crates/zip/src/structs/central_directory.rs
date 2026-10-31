@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use ahash::AHashMap;
+use log::warn;
 use winnow::binary::{le_u16, le_u32};
 use winnow::combinator::repeat;
-use winnow::error::{ErrMode, Needed, ParserError};
+use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
@@ -57,7 +58,12 @@ pub(crate) struct CentralDirectoryEntry {
     /// Local header offset, from the ZIP64 extra field when the record holds `0xFFFFFFFF`
     pub(crate) local_header_offset: u64,
 
+    /// The name as UTF-8; invalid bytes are replaced with U+FFFD
     pub(crate) file_name: Arc<str>,
+
+    /// The name as stored, kept only when it isn't valid UTF-8: the local
+    /// header is matched against these bytes
+    pub(crate) raw_file_name: Option<Arc<[u8]>>,
 }
 
 impl CentralDirectoryEntry {
@@ -122,7 +128,15 @@ impl CentralDirectoryEntry {
         )
             .parse_next(input)?;
 
-        let file_name = std::str::from_utf8(file_name).map_err(|_| ErrMode::from_input(input))?;
+        // Android rejects a name that isn't UTF-8, but the rest of the archive
+        // is still worth reading; U+FFFD can't turn such a name into a valid one
+        let (file_name, raw_file_name) = match std::str::from_utf8(file_name) {
+            Ok(name) => (Arc::from(name), None),
+            Err(_) => (
+                Arc::from(String::from_utf8_lossy(file_name).as_ref()),
+                Some(Arc::from(file_name)),
+            ),
+        };
 
         let (uncompressed_size, compressed_size, local_header_offset) = Self::apply_zip64(
             extra_field,
@@ -148,7 +162,8 @@ impl CentralDirectoryEntry {
             internal_attrs,
             external_attrs,
             local_header_offset,
-            file_name: Arc::from(file_name),
+            file_name,
+            raw_file_name,
         })
     }
 
@@ -237,7 +252,14 @@ impl CentralDirectory {
         // record's data; `ordered_names` keeps the first record's position.
         let mut entries = AHashMap::with_capacity(parsed.len());
         let mut ordered_names = Vec::with_capacity(parsed.len());
-        for entry in parsed {
+        for (index, entry) in parsed.into_iter().enumerate() {
+            if entry.raw_file_name.is_some() {
+                warn!(
+                    "entry {index}: name is not valid UTF-8, read as {:?}; Android rejects this archive",
+                    entry.file_name
+                );
+            }
+
             let name = Arc::clone(&entry.file_name);
             if entries
                 .insert(Arc::clone(&entry.file_name), entry)
@@ -323,7 +345,7 @@ mod tests {
     #[test]
     fn test_parse_non_utf8_filename() {
         // Filename bytes that are invalid UTF-8
-        let bad_bytes = [0xFF, 0xFE, 0xFD];
+        let bad_bytes = [b'a', 0xFF, 0xFE, b'b'];
         let mut data = make_cde_record("", &[], &[], 0, 0, 0);
         let name_len = bad_bytes.len() as u16;
 
@@ -332,9 +354,26 @@ mod tests {
         data.extend_from_slice(&bad_bytes);
 
         let mut input = &data[..];
-        let entry = CentralDirectoryEntry::parse(&mut input);
+        let entry = CentralDirectoryEntry::parse(&mut input).unwrap();
 
-        assert!(entry.is_err());
+        assert_eq!(entry.file_name.as_ref(), "a\u{fffd}\u{fffd}b");
+        assert_eq!(entry.raw_file_name.as_deref(), Some(&bad_bytes[..]));
+    }
+
+    #[test]
+    fn non_utf8_name_does_not_end_the_directory() {
+        let mut bad = make_cde_record("ab", &[], &[], 0, 0, 0);
+        let name_at = bad.len() - 2;
+        bad[name_at] = 0xC0; // an overlong lead byte
+
+        let mut data = make_cde_record("first.txt", &[], &[], 0, 0, 0);
+        data.extend_from_slice(&bad);
+        data.extend_from_slice(&make_cde_record("resources.arsc", &[], &[], 0, 0, 0));
+
+        let cd = CentralDirectory::parse(&data, 0, 3).unwrap();
+        assert_eq!(cd.ordered_names.len(), 3);
+        assert!(cd.entries.contains_key("resources.arsc"));
+        assert!(cd.entries.contains_key("\u{fffd}b"));
     }
 
     #[test]

@@ -249,3 +249,17 @@ fn payload_of_a_broken_apk_is_not_guessed() {
         Err(APKError::ManifestError(_))
     ));
 }
+
+/// A zip with neither a root manifest nor a base apk, e.g. one with the
+/// manifest in a subdirectory, says so instead of asking what it is.
+#[test]
+fn archive_without_manifest_is_reported() {
+    let files = [
+        ("apk/AndroidManifest.xml", &b"garbage"[..]),
+        ("classes.dex", &b"dex"[..]),
+    ];
+    let Err(APKError::InvalidInput(message)) = open("no-manifest", &files) else {
+        panic!("an archive without a manifest must be rejected with a clear message");
+    };
+    assert!(message.contains("no AndroidManifest.xml"), "{message}");
+}

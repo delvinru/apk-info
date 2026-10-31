@@ -1035,12 +1035,57 @@ impl ResTablePackage {
     /// Allows you to get the name of a resource depending on its type.
     #[inline]
     fn get_entry_key(&self, entry: &ResTableEntry) -> Option<Cow<'_, str>> {
+        self.key_strings.get(Self::entry_key_index(entry)?)
+    }
+
+    /// Index of the entry's name in the key string pool.
+    #[inline]
+    fn entry_key_index(entry: &ResTableEntry) -> Option<u32> {
         match entry {
-            ResTableEntry::Compact(e) => self.key_strings.get(u32::from(e.key)),
-            ResTableEntry::Complex(e) => self.key_strings.get(e.index),
-            ResTableEntry::Default(e) => self.key_strings.get(e.index),
+            ResTableEntry::Compact(e) => Some(u32::from(e.key)),
+            ResTableEntry::Complex(e) => Some(e.index),
+            ResTableEntry::Default(e) => Some(e.index),
             ResTableEntry::NoEntry => None,
         }
+    }
+
+    /// Finds the type and entry ids of the resource `type_name/key`, e.g.
+    /// `string` and `app_name`, in any configuration.
+    ///
+    /// Obfuscated tables can give many resources the same name; the lowest id
+    /// wins, so the answer doesn't depend on the order of the configurations.
+    pub fn find_entry_id(&self, type_name: &str, key: &str) -> Option<(u8, u16)> {
+        let type_id = (0..self.type_strings.len() as u32)
+            .find(|&i| self.type_strings.get(i).as_deref() == Some(type_name))
+            .and_then(|i| u8::try_from(i + 1).ok())?;
+
+        let keys: Vec<u32> = (0..self.key_strings.len() as u32)
+            .filter(|&i| self.key_strings.get(i).as_deref() == Some(key))
+            .collect();
+        if keys.is_empty() {
+            return None;
+        }
+
+        self.resources
+            .values()
+            .filter_map(|type_map| type_map.get(&type_id))
+            .flat_map(|entries| {
+                entries
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, entry)| {
+                        Self::entry_key_index(entry).is_some_and(|index| keys.contains(&index))
+                    })
+                    .filter_map(|(position, _)| match &entries.entry_ids {
+                        // sparse: the id is stored per entry
+                        Some(ids) => ids.get(position).copied(),
+                        // dense: the position is the id
+                        None => u16::try_from(position).ok(),
+                    })
+            })
+            .min()
+            .map(|entry_id| (type_id, entry_id))
     }
 }
 
@@ -1135,6 +1180,47 @@ mod tests {
 
         // undeclared ids resolve to nothing
         assert!(pkg.find_entry(&config, 1, 0x9999).is_none());
+
+        // and back from the names, through the stored ids
+        assert_eq!(
+            pkg.find_entry_id("string", "application_name"),
+            Some((1, 0x24))
+        );
+        assert_eq!(
+            pkg.find_entry_id("string", "common_google_play_services_try_again_text"),
+            Some((1, 0x51))
+        );
+    }
+
+    #[test]
+    fn find_entry_id_by_name() {
+        let mut type_map = HashMap::new();
+        type_map.insert(
+            1u8,
+            ResTableTypeEntries {
+                entry_ids: None,
+                // dense: positions are the ids; key 0 is used twice
+                entries: vec![
+                    ResTableEntry::NoEntry,
+                    default_entry(1),
+                    default_entry(0),
+                    default_entry(0),
+                ],
+            },
+        );
+        let pkg = pkg(type_map);
+
+        assert_eq!(
+            pkg.find_entry_id("string", "common_google_play_services_try_again_text"),
+            Some((1, 1))
+        );
+        // a repeated name resolves to the lowest id
+        assert_eq!(
+            pkg.find_entry_id("string", "application_name"),
+            Some((1, 2))
+        );
+        assert_eq!(pkg.find_entry_id("string", "missing"), None);
+        assert_eq!(pkg.find_entry_id("drawable", "application_name"), None);
     }
 
     /// Dense/offset16 tables are indexed by position: `None` ids mean `entry_id` is
