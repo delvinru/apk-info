@@ -9,33 +9,28 @@ use serde::Serialize;
 use crate::commands::path_helpers::get_all_files;
 
 pub(crate) fn command_show(paths: &[PathBuf], show_signatures: &bool, jsonl: &bool) -> Result<()> {
-    let files = get_all_files(paths);
+    let mut printed = false;
 
-    for (i, path) in files.iter().enumerate() {
-        show(path, show_signatures, jsonl)?;
+    for path in get_all_files(paths) {
+        let info = match collect_apk_info(&path, show_signatures) {
+            Ok(v) => v,
+            Err(e) => {
+                // stderr keeps the jsonl on stdout parseable
+                eprintln!("{:?} - {}", path, e.to_string().red());
+                continue;
+            }
+        };
 
-        // Add a newline between APKs except after the last one
-        if i != files.len() - 1 {
-            println!();
+        if *jsonl {
+            println!("{}", serde_json::to_string(&info)?);
+        } else {
+            // a blank line between APKs
+            if printed {
+                println!();
+            }
+            pretty_print(&info);
         }
-    }
-
-    Ok(())
-}
-
-fn show(path: &Path, show_signatures: &bool, jsonl: &bool) -> Result<()> {
-    let info = match collect_apk_info(path, show_signatures) {
-        Ok(v) => v,
-        Err(e) => {
-            println!("{:?} - {}", path, e.to_string().red());
-            return Ok(());
-        }
-    };
-
-    if *jsonl {
-        print!("{}", serde_json::to_string(&info)?);
-    } else {
-        pretty_print(&info);
+        printed = true;
     }
 
     Ok(())
@@ -43,6 +38,7 @@ fn show(path: &Path, show_signatures: &bool, jsonl: &bool) -> Result<()> {
 
 #[derive(Serialize)]
 struct ApkInfo {
+    pub path: PathBuf,
     pub package_name: String,
     pub version_name: String,
     pub version_code: String,
@@ -88,6 +84,7 @@ fn collect_apk_info(path: &Path, show_signatures: &bool) -> Result<ApkInfo> {
     };
 
     Ok(ApkInfo {
+        path: path.to_path_buf(),
         package_name: apk.get_package_name().unwrap_or_else(|| "-".to_string()),
         version_name: apk.get_version_name().unwrap_or_else(|| "-".to_string()),
         version_code: apk.get_version_code().unwrap_or_else(|| "-".to_string()),

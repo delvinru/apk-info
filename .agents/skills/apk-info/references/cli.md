@@ -47,6 +47,7 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
 
 ```json
 {
+  "path": "./app.apk",
   "package_name": "com.example.app",
   "version_name": "1.2.3",
   "version_code": "2025101912",
@@ -55,13 +56,11 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
   "max_sdk_version": "-",
   "target_sdk_version": "34",
   "application_label": "Example App",
-  "abis": ["arm64-v8a", "armeabi-v7a"],
-  "signatures": null,
-  "container_signatures": null
+  "abis": ["arm64-v8a", "armeabi-v7a"]
 }
 ```
 
-The `signatures` field is `null` unless `--signatures` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also `null` unless `--signatures` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
+`path` is the input file. Files that fail to parse are reported on stderr and skipped, so stdout is always valid JSONL. The `signatures` field is omitted unless `--signatures` is passed, in which case it contains an array of signature objects (filtered to exclude `Unknown`). The `container_signatures` field is also omitted unless `--signatures` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
 
 ## `extract` (alias `x`) — unpack the APK
 
@@ -225,7 +224,7 @@ apk-info show ./malware.repacked.apk                  # package info readable
 
 ## Exit codes & error behavior
 
-- On a per-file parse error, `show` prints the error in red and continues to the next file (exit 0 unless a fatal error occurs). This makes it safe to run over large collections of potentially-malformed files.
+- On a per-file parse error, `show` prints the error in red to stderr and continues to the next file (exit 0 unless a fatal error occurs). This makes it safe to run over large collections of potentially-malformed files.
 - `extract`, `axml` and `repack` propagate errors via `anyhow`, print them with `{:#}` formatting and exit with status `1`.
 - `show` separates multiple APKs with a blank line in human-readable mode; JSONL mode emits one line per APK with no separator.
 
@@ -235,8 +234,13 @@ apk-info show ./malware.repacked.apk                  # package info readable
 # Collect all package names from a folder
 apk-info show --json ./apks/ | jq -r .package_name | sort -u
 
-# Find APKs signed by a specific certificate (by SHA256 fingerprint)
-apk-info show --json --signatures ./apks/ | jq -r 'select(.signatures[].certificates[].sha256_fingerprint == "ab:cd:...") | .package_name'
+# Find APKs signed by a specific certificate (SHA256 fingerprint: lowercase hex, no separators).
+# Each signature is {"<scheme>": [certs]} or {"stamp_block_v2": cert}; Play Frosting is the bare string "google_play_frosting".
+apk-info show --json --signatures ./apks/ | jq -r --arg fp "<sha256>" '
+  select([.signatures[] | objects | to_entries[].value
+          | if type == "array" then .[] else . end
+          | objects | .sha256_fingerprint] | index($fp))
+  | .package_name'
 
 # Dump every manifest to its own file
 for apk in ./apks/*.apk; do

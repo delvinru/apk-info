@@ -137,6 +137,7 @@ dependencies = [
  "clap_complete",
  "colored",
  "env_logger",
+ "libc",
  "log",
  "md-5",
  "mimalloc",

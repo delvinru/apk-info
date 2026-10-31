@@ -58,10 +58,10 @@ A command-line tool to inspect and extract APK files
 Usage: apk-info [COMMAND]
 
 Commands:
-  show        Show basic information about apk file
-  extract     Unpack apk files as zip archive [aliases: x]
+  show        Show basic information about the APK file
+  extract     Unpack apk files as zip archive [alias: x]
   axml        Read and pretty-print binary AndroidManifest.xml
-  repack      Unpack and repack a BadPack-damaged APK into a standard, well-formed zip archive
+  repack      Repack a BadPack-damaged APK into a clean, well-formed zip archive
   completion  Generate shell completion
   help        Print this message or the help of the given subcommand(s)
 

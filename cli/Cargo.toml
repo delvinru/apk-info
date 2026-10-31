@@ -30,6 +30,9 @@ serde_json.workspace = true
 walkdir.workspace = true
 mimalloc.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
 [[bin]]
 name = "apk-info"
 path = "src/main.rs"

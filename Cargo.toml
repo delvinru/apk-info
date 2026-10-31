@@ -42,6 +42,7 @@ cms = "0.3.0-pre.2"
 colored = "3.1.1"
 crc32fast = "1.5.2"
 env_logger = { version = "0.11.11", features = ["auto-color"] }
+libc = "0.2.190"
 flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs"] }
 log = "0.4.34"
 md-5 = "0.11.0"

@@ -106,6 +106,13 @@ enum Commands {
 }
 
 fn main() {
+    // Rust ignores SIGPIPE, so printing into a closed pipe (`apk-info ... | head`)
+    // panics; restore the default so the process exits quietly like other tools
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+
     env_logger::init();
 
     let cli = Cli::parse();
