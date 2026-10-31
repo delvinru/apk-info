@@ -92,6 +92,10 @@ pub struct Apk {
     /// The lowest SDK of the variants in an APKS archive's `toc.pb`, read on
     /// first use.
     apks_min_sdk: OnceLock<Option<u32>>,
+
+    /// The app signatures, parsed on the first successful
+    /// [`Apk::get_signatures`].
+    signatures: OnceLock<Vec<Signature>>,
 }
 
 /// What [`Apk::resolve`] found in an archive.
@@ -456,6 +460,7 @@ impl Apk {
             base_apk_name: parsed.base_apk_name,
             inner_zip: parsed.inner_zip,
             apks_min_sdk: OnceLock::new(),
+            signatures: OnceLock::new(),
         })
     }
 
@@ -1166,12 +1171,16 @@ impl Apk {
     /// For a `xapk`/`apkm`/`apks` container this is the signature of the inner base APK,
     /// which is the actual app identity.
     /// See [`Apk::get_container_signatures`] for the signature of the container itself.
+    ///
+    /// The signing block is parsed on the first call; later calls return a
+    /// copy of the result.
     pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
-        if self.base_apk_name.is_some() {
-            let inner = self.get_inner_zip()?;
-            return Self::collect_signatures(inner);
+        if let Some(signatures) = self.signatures.get() {
+            return Ok(signatures.clone());
         }
-        Self::collect_signatures(&self.zip)
+
+        let signatures = Self::collect_signatures(self.get_base_zip()?)?;
+        Ok(self.signatures.get_or_init(|| signatures).clone())
     }
 
     /// Returns the container signature of a `xapk`/`apkm`/`apks` file, if it is signed.

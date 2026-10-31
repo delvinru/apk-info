@@ -18,6 +18,8 @@ fn assert_app(apk: &Apk) {
     assert_eq!(apk.get_supported_abis(), ["x86_64"]);
 
     let signatures = apk.get_signatures().expect("base apk signatures");
+    // the second call comes from the cache
+    assert_eq!(apk.get_signatures().unwrap(), signatures);
     let subjects: Vec<&str> = signatures
         .iter()
         .filter_map(|s| match s {
