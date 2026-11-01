@@ -1,8 +1,20 @@
-//! Wrapper around `phf` with manifest attributes.
+//! The names of the enum and flag values of the framework's attributes.
 
 use std::borrow::Cow;
 
-include!(concat!(env!("OUT_DIR"), "/attrs_manifest_phf.rs"));
+mod table;
+
+/// How the values of an attribute combine.
+#[derive(Clone, Copy)]
+enum Kind {
+    /// One value at a time.
+    Enum,
+    /// Values ORed together.
+    Flag,
+}
+
+/// The values of an attribute: names with their values.
+type Values = &'static [(&'static str, u32)];
 
 /// If AndroidManifest.xml If it contains a system attribute, then it finds the value by its name.
 ///
@@ -10,21 +22,20 @@ include!(concat!(env!("OUT_DIR"), "/attrs_manifest_phf.rs"));
 ///
 /// See: <https://cs.android.com/android/platform/superproject/main/+/main:frameworks/base/core/res/res/values/attrs_manifest.xml>
 pub fn get_attr_value<'a>(name: &'a str, value: &'a u32) -> Option<Cow<'a, str>> {
-    let attrs = ATTRS_MANIFEST.get(name)?;
+    let (kind, items) = table::attr(name)?;
 
     let mut attribute_value = *value;
-    match attrs.0 {
-        "enum" => {
-            for &(item_name, item_value) in attrs.1.iter() {
+    match kind {
+        Kind::Enum => {
+            for &(item_name, item_value) in items {
                 if item_value == attribute_value {
                     return Some(Cow::Borrowed(item_name));
                 }
             }
             Some(Cow::Owned(u32::to_string(value)))
         }
-        "flag" => {
-            let parts: Vec<&str> = attrs
-                .1
+        Kind::Flag => {
+            let parts: Vec<&str> = items
                 .iter()
                 .filter_map(|&(name, val)| {
                     if val != 0 && (val & attribute_value) == val {
@@ -44,7 +55,6 @@ pub fn get_attr_value<'a>(name: &'a str, value: &'a u32) -> Option<Cow<'a, str>>
                 Some(Cow::Owned(parts.join("|")))
             }
         }
-        _ => unreachable!(),
     }
 }
 
