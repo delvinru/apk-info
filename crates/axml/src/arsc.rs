@@ -5,6 +5,7 @@ use log::warn;
 use winnow::combinator::repeat;
 use winnow::prelude::*;
 
+use crate::anomaly::{self, ResAnomaly};
 use crate::errors::ARCSError;
 use crate::structs::{
     ResTableConfig, ResTableEntry, ResTableHeader, ResTablePackage, ResourceValue,
@@ -24,31 +25,40 @@ pub struct ARSC {
     ///
     /// A mutex, not a `RefCell`, so a parsed table can be shared between threads.
     reference_names: Mutex<HashMap<u32, String>>,
+
+    /// Defects the parser recovered from, in the order met.
+    anomalies: Vec<ResAnomaly>,
 }
 
 impl ARSC {
     /// Parses raw ARSC bytes into an `ARSC` structure.
-    pub fn new(input: &mut &[u8]) -> Result<ARSC, ARCSError> {
-        if input.len() < 12 {
+    pub fn new(bytes: &mut &[u8]) -> Result<ARSC, ARCSError> {
+        if bytes.len() < 12 {
             return Err(ARCSError::TooSmallError);
         }
 
-        let header = ResTableHeader::parse(input).map_err(|_| ARCSError::HeaderError)?;
+        let mut input = anomaly::input(bytes);
+
+        let header = ResTableHeader::parse(&mut input.input).map_err(|_| ARCSError::HeaderError)?;
 
         if header.package_count < 1 {
             warn!(
                 "expected at least one resource package, but got {}",
                 header.package_count
             );
+            input.state.push(ResAnomaly::NoPackages);
         }
 
         let global_string_pool =
-            StringPool::parse(input).map_err(|_| ARCSError::StringPoolError)?;
+            StringPool::parse(&mut input).map_err(|_| ARCSError::StringPoolError)?;
 
         let table_packages: Vec<ResTablePackage> =
             repeat(header.package_count as usize, ResTablePackage::parse)
-                .parse_next(input)
+                .parse_next(&mut input)
                 .map_err(|_| ARCSError::ResourceTableError)?;
+
+        *bytes = input.input;
+        let mut anomalies = input.state;
 
         // There is often a single package, so we do a little optimization (i think)
         let mut packages = HashMap::with_capacity(table_packages.len().max(1));
@@ -59,6 +69,7 @@ impl ARSC {
                     "malformed resource packages, duplicate package id - 0x{:02x}, skipped",
                     id
                 );
+                anomalies.push(ResAnomaly::DuplicatePackageId { id });
                 continue;
             }
 
@@ -70,7 +81,17 @@ impl ARSC {
             packages,
             // preallocate some space
             reference_names: Mutex::new(HashMap::with_capacity(32)),
+            anomalies: anomalies.into_vec(),
         })
+    }
+
+    /// Defects in the resource table that the parser recovered from.
+    ///
+    /// An empty slice means the table is well-formed, as far as the parser
+    /// can tell.
+    #[inline]
+    pub fn anomalies(&self) -> &[ResAnomaly] {
+        &self.anomalies
     }
 
     /// Retrieves a resource value by its numeric ID.

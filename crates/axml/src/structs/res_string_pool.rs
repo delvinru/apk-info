@@ -8,6 +8,7 @@ use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
+use crate::anomaly::{Input, ResAnomaly};
 use crate::structs::{ResChunkHeader, ResourceHeaderType, XMLResourceMap};
 
 bitflags! {
@@ -42,8 +43,8 @@ pub struct ResStringPoolHeader {
 }
 
 impl ResStringPoolHeader {
-    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResStringPoolHeader> {
-        let mut header = ResChunkHeader::parse(input)?;
+    pub(crate) fn parse(input: &mut Input<'_>) -> ModalResult<ResStringPoolHeader> {
+        let mut header = ResChunkHeader::parse(&mut input.input)?;
 
         // The shitty APKEditor confuser that is used for malware purposes, fuck it
         // https://github.com/REAndroid/APKEditor/blob/master/src/main/java/com/reandroid/apkeditor/protect/TableConfuser.java#L41
@@ -53,8 +54,12 @@ impl ResStringPoolHeader {
             let garbage_bytes = header.size.saturating_sub(ResChunkHeader::size_of() as u32);
             let _ = take(garbage_bytes as usize).parse_next(input)?;
             info!("malformed string pool, skipped {} bytes", garbage_bytes);
+            input.state.push(ResAnomaly::StringPoolGarbageChunk {
+                chunk_type: (&header.type_).into(),
+                skipped: garbage_bytes,
+            });
 
-            header = ResChunkHeader::parse(input)?;
+            header = ResChunkHeader::parse(&mut input.input)?;
         }
 
         let (string_count, style_count, flags, strings_start, styles_start) =
@@ -100,7 +105,7 @@ pub struct StringPool {
 }
 
 impl StringPool {
-    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<StringPool> {
+    pub(crate) fn parse(input: &mut Input<'_>) -> ModalResult<StringPool> {
         let mut string_header = ResStringPoolHeader::parse(input)?;
 
         let calculated_string_count = string_header.strings_start.saturating_sub(
@@ -115,11 +120,15 @@ impl StringPool {
                 "malformed string pool, expected {} strings, actually {} strings",
                 string_header.string_count, calculated_string_count
             );
+            input.state.push(ResAnomaly::StringCountMismatch {
+                declared: string_header.string_count,
+                actual: calculated_string_count,
+            });
 
             string_header.string_count = calculated_string_count;
         }
 
-        let offsets = Self::parse_u32_array(input, string_header.string_count as usize)?;
+        let offsets = Self::parse_u32_array(&mut input.input, string_header.string_count as usize)?;
 
         // style_offsets are not used, but there may be cases when this value is not equal to 0, so we need to consume input
         if string_header.style_count != 0 {
@@ -136,9 +145,20 @@ impl StringPool {
 
         // take just string chunk, because malware likes tampering string pool
         let (slice, rest) = input
+            .input
             .split_at_checked(string_pool_size)
             .ok_or_else(|| ErrMode::Incomplete(Needed::Unknown))?;
-        *input = rest;
+        input.input = rest;
+
+        let out_of_bounds = offsets
+            .iter()
+            .filter(|&&offset| offset as usize >= slice.len())
+            .count();
+        if out_of_bounds != 0 {
+            input.state.push(ResAnomaly::StringOffsetsOutOfBounds {
+                count: out_of_bounds,
+            });
+        }
 
         Ok(StringPool {
             header: string_header,
@@ -390,9 +410,9 @@ mod tests {
         }
         chunk.extend_from_slice(&data);
 
-        let mut input = &chunk[..];
+        let mut input = crate::anomaly::input(&chunk);
         let pool = StringPool::parse(&mut input).expect("test pool should parse");
-        assert!(input.is_empty(), "parse must consume the whole chunk");
+        assert!(input.input.is_empty(), "parse must consume the whole chunk");
         pool
     }
 

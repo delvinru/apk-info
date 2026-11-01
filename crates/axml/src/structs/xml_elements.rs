@@ -4,6 +4,7 @@ use winnow::combinator::repeat;
 use winnow::prelude::*;
 use winnow::token::take;
 
+use crate::anomaly::{Input, ResAnomaly};
 use crate::structs::{ResChunkHeader, ResourceValue, system_types};
 
 #[derive(Debug)]
@@ -71,7 +72,7 @@ impl XMLHeader {
 }
 
 pub trait XmlParse {
-    fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
+    fn parse(input: &mut Input<'_>, header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized;
 }
@@ -92,7 +93,7 @@ pub struct XmlNamespace {
 
 impl XmlParse for XmlNamespace {
     #[inline]
-    fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
+    fn parse(input: &mut Input<'_>, header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
     {
@@ -187,7 +188,7 @@ pub struct XmlStartElement {
 }
 
 impl XmlParse for XmlStartElement {
-    fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
+    fn parse(input: &mut Input<'_>, header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
     {
@@ -220,17 +221,26 @@ impl XmlParse for XmlStartElement {
             attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE);
         if tampered_attribute_size != 0 {
             debug!("skip tampered attribute size: {}", attribute_start);
+            input
+                .state
+                .push(ResAnomaly::AttributeStartShifted { attribute_start });
 
             let _ =
                 take(attribute_start.saturating_sub(XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE))
                     .parse_next(input)?;
         }
 
+        if attribute_count != 0 && attribute_size > XmlAttributeElement::DEFAULT_ATTRIBUTE_SIZE {
+            input
+                .state
+                .push(ResAnomaly::AttributeSizeMismatch { attribute_size });
+        }
+
         let attributes = repeat(
             attribute_count as usize,
             XmlAttributeElement::parse(attribute_size),
         )
-        .parse_next(input)?;
+        .parse_next(&mut input.input)?;
 
         let read_bytes = start - input.len();
 
@@ -238,6 +248,9 @@ impl XmlParse for XmlStartElement {
         let tampered_chunk_size = header.content_size().saturating_sub(read_bytes as u32);
         if tampered_chunk_size != 0 {
             debug!("skip garbage bytes in chunk: {}", tampered_chunk_size);
+            input.state.push(ResAnomaly::ElementTrailingBytes {
+                len: tampered_chunk_size,
+            });
             let _ = take(tampered_chunk_size).parse_next(input)?;
         }
 
@@ -274,7 +287,7 @@ pub struct XmlEndElement {
 
 impl XmlParse for XmlEndElement {
     #[inline]
-    fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
+    fn parse(input: &mut Input<'_>, header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
     {
@@ -304,12 +317,12 @@ pub struct XmlCData {
 
 impl XmlParse for XmlCData {
     #[inline]
-    fn parse(input: &mut &[u8], header: XMLHeader) -> ModalResult<Self>
+    fn parse(input: &mut Input<'_>, header: XMLHeader) -> ModalResult<Self>
     where
         Self: Sized,
     {
         let data = le_u32(input)?;
-        let typed_data = ResourceValue::parse(input)?;
+        let typed_data = ResourceValue::parse(&mut input.input)?;
 
         Ok(XmlCData {
             header,

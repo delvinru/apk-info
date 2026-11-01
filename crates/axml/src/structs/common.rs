@@ -42,6 +42,32 @@ pub enum ResourceHeaderType {
     Unknown(u16),
 }
 
+impl From<&ResourceHeaderType> for u16 {
+    fn from(value: &ResourceHeaderType) -> Self {
+        match value {
+            ResourceHeaderType::Null => 0x0000,
+            ResourceHeaderType::StringPool => 0x0001,
+            ResourceHeaderType::Table => 0x0002,
+            ResourceHeaderType::Xml => 0x0003,
+            ResourceHeaderType::XmlStartNamespace => 0x0100,
+            ResourceHeaderType::XmlEndNamespace => 0x0101,
+            ResourceHeaderType::XmlStartElement => 0x0102,
+            ResourceHeaderType::XmlEndElement => 0x0103,
+            ResourceHeaderType::XmlCdata => 0x0104,
+            ResourceHeaderType::XmlLastChunk => 0x017f,
+            ResourceHeaderType::XmlResourceMap => 0x0180,
+            ResourceHeaderType::TablePackage => 0x0200,
+            ResourceHeaderType::TableType => 0x0201,
+            ResourceHeaderType::TableTypeSpec => 0x0202,
+            ResourceHeaderType::TableLibrary => 0x0203,
+            ResourceHeaderType::TableOverlayable => 0x0204,
+            ResourceHeaderType::TableOverlayablePolicy => 0x0205,
+            ResourceHeaderType::TableStagedAlias => 0x0206,
+            ResourceHeaderType::Unknown(other) => *other,
+        }
+    }
+}
+
 impl From<u16> for ResourceHeaderType {
     fn from(value: u16) -> Self {
         match value {

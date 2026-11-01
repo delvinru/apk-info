@@ -12,6 +12,7 @@ use winnow::prelude::*;
 use winnow::stream::Stream;
 use winnow::token::take;
 
+use crate::anomaly::{Input, ResAnomaly};
 use crate::structs::{
     ResChunkHeader, ResTableConfig, ResTableConfigFlags, ResourceHeaderType, ResourceValue,
     StringPool,
@@ -104,7 +105,7 @@ pub struct ResTablePackageHeader {
 }
 
 impl ResTablePackageHeader {
-    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTablePackageHeader> {
+    pub(crate) fn parse(input: &mut Input<'_>) -> ModalResult<ResTablePackageHeader> {
         let (header, id, name, type_strings, last_public_type, key_strings, last_public_key) = (
             ResChunkHeader::parse,
             le_u32,
@@ -114,7 +115,7 @@ impl ResTablePackageHeader {
             le_u32,
             le_u32,
         )
-            .parse_next(input)?;
+            .parse_next(&mut input.input)?;
 
         let name = name.try_into().expect("expected 256 bytes for name field");
         let header_size = header.header_size;
@@ -136,6 +137,9 @@ impl ResTablePackageHeader {
                 "malformed resource table package, skipped {} bytes",
                 skipped
             );
+            input
+                .state
+                .push(ResAnomaly::PackageHeaderSize { header_size });
 
             type_id_offset
         };
@@ -492,11 +496,14 @@ pub struct ResTableType {
 }
 
 impl ResTableType {
-    pub(crate) fn parse(header: ResChunkHeader, input: &mut &[u8]) -> ModalResult<ResTableType> {
+    pub(crate) fn parse(
+        header: ResChunkHeader,
+        input: &mut Input<'_>,
+    ) -> ModalResult<ResTableType> {
         let start_chunk = input.len();
 
         let (id, flags, reserved, entry_count, entries_start, config) =
-            (u8, u8, le_u16, le_u32, le_u32, ResTableConfig::parse).parse_next(input)?;
+            (u8, u8, le_u16, le_u32, le_u32, ResTableConfig::parse).parse_next(&mut input.input)?;
 
         // Another malicious technique that goes beyond the boundaries of the specified header
         // ff93324321b245d0dd678f1e5fbf59a64dbc5f4493a71c9630cab6ecf28b71e0
@@ -504,6 +511,9 @@ impl ResTableType {
         let offset_size = if Self::is_offset16(flags) { 2u32 } else { 4u32 };
         if offset_size.saturating_mul(entry_count) > header.content_size() {
             warn!("type's entry indices extend beyond its boundaries");
+            input
+                .state
+                .push(ResAnomaly::TypeEntriesOutOfBounds { type_id: id });
 
             // consume input until next chunk
             let already_read = (start_chunk - input.len()) as u32;
@@ -583,10 +593,11 @@ impl ResTableType {
 
         let entries_size = header.size.saturating_sub(entries_start) as usize;
         let (entries_slice, rest) = input
+            .input
             .split_at_checked(entries_size)
             .ok_or_else(|| ErrMode::Incomplete(Needed::Unknown))?;
 
-        *input = rest;
+        input.input = rest;
 
         let mut entries = Vec::with_capacity(entry_count as usize);
         let entries_len = entries_slice.len();
@@ -914,7 +925,7 @@ pub struct ResTablePackage {
 }
 
 impl ResTablePackage {
-    pub(crate) fn parse(input: &mut &[u8]) -> ModalResult<ResTablePackage> {
+    pub(crate) fn parse(input: &mut Input<'_>) -> ModalResult<ResTablePackage> {
         let (package_header, type_strings, key_strings) = (
             ResTablePackageHeader::parse,
             StringPool::parse,
@@ -924,13 +935,15 @@ impl ResTablePackage {
 
         let mut resources: BTreeMap<ResTableConfig, HashMap<u8, ResTableTypeEntries>> =
             BTreeMap::new();
+        // a run of unknown chunks is one anomaly: a crafted file has thousands
+        let mut in_unknown_run = false;
 
         loop {
             // save position before parsing header
             // requires for restoring position
             let checkpoint = input.checkpoint();
 
-            let header = match ResChunkHeader::parse(input) {
+            let header = match ResChunkHeader::parse(&mut input.input) {
                 // got other package, need return
                 Ok(v) if v.type_ == ResourceHeaderType::TablePackage => {
                     input.reset(&checkpoint);
@@ -944,7 +957,7 @@ impl ResTablePackage {
             match header.type_ {
                 ResourceHeaderType::TableTypeSpec => {
                     // parsed, but the data is not used yet
-                    let _ = ResTableTypeSpec::parse(header, input)?;
+                    let _ = ResTableTypeSpec::parse(header, &mut input.input)?;
                 }
                 ResourceHeaderType::TableType => {
                     let type_chunk = ResTableType::parse(header, input)?;
@@ -962,23 +975,36 @@ impl ResTablePackage {
                         slot.insert(ResTableTypeEntries { entry_ids, entries });
                     } else {
                         debug!("skipped a duplicate type chunk (id {})", id);
+                        input
+                            .state
+                            .push(ResAnomaly::DuplicateTypeChunk { type_id: id });
                     }
                 }
                 ResourceHeaderType::TableLibrary => {
                     // parsed, but the data is not used yet
-                    let _ = ResTableLibrary::parse(header, input)?;
+                    let _ = ResTableLibrary::parse(header, &mut input.input)?;
                 }
                 ResourceHeaderType::TableOverlayable => {
-                    let _ = ResTableOverlayble::parse(header, input)?;
+                    let _ = ResTableOverlayble::parse(header, &mut input.input)?;
                 }
                 ResourceHeaderType::TableOverlayablePolicy => {
-                    let _ = ResTableOverlayblePolicy::parse(header, input)?;
+                    let _ = ResTableOverlayblePolicy::parse(header, &mut input.input)?;
                 }
                 ResourceHeaderType::TableStagedAlias => {
-                    let _ = ResTableStagedAlias::parse(header, input)?;
+                    let _ = ResTableStagedAlias::parse(header, &mut input.input)?;
                 }
-                _ => warn!("got unknown header: {:?}", header),
+                _ => {
+                    warn!("got unknown header: {:?}", header);
+                    if !in_unknown_run {
+                        input.state.push(ResAnomaly::UnknownChunk {
+                            chunk_type: (&header.type_).into(),
+                        });
+                    }
+                    in_unknown_run = true;
+                    continue;
+                }
             }
+            in_unknown_run = false;
         }
 
         Ok(ResTablePackage {
