@@ -4,7 +4,7 @@ description: Parses and inspects Android APK/XAPK/APKM/APKS files, extracting pa
 license: Apache-2.0
 metadata:
   author: delvinru
-  version: 1.0.13
+  version: 1.1.0
 ---
 
 # apk-info

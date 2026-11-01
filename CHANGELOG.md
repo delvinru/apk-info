@@ -9,34 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `apks` archives from `bundletool build-apks` (marked by `toc.pb`): the base is `splits/base-master.apk`, `universal.apk`, `system/system.apk`, `archive/archive.apk`, `instant/instant-base-master.apk` or the first standalone apk. `extract -r` merges the splits of the base's variant (`splits/` for default and `system` mode, `instant/` for instant mode). `apk::apks_base_apk_name()` exposes the lookup.
-- Support for the APK Signature Scheme v3.2 (hybrid classical + post-quantum ML-DSA signing block, ID `0x70e1c89f`, introduced in Android 17 / API level 37). The new `Signature::V32` variant carries both signers' certificates and is surfaced in the CLI (`show -s`) and the Python bindings.
-- A curated suite of golden signature fixtures from the AOSP `apksig` test resources (valid schemes + deliberately malformed archives), with integration tests for every parser path.
-- `ZipEntry::open_nested()` parses an archive stored inside another one (the base apk of a `xapk`/`apkm`) without copying it into memory.
-- `ZipEntry::METHOD_STORED` and `ZipEntry::METHOD_DEFLATED` constants for `EntryInfo::compression_method`.
-- `prek.toml` with `cargo fmt` and `cargo clippy` (warnings denied) pre-commit hooks.
+- APKS archives from `bundletool build-apks`, in all build modes.
+- APK Signature Scheme v3.2 (`Signature::V32`).
+- `Signature::ByteDance` for the ByteDance block of Toutiao and Douyin.
+- ZIP64 archives, e.g. containers over 4 GB.
+- A base APK is guessed in containers with an unusual layout.
+- Clear errors for `.aab`, encrypted `.apkm` and a zip without a manifest.
+- Intent filters of services and receivers.
+- Documentation site: <https://delvinru.github.io/apk-info/>.
 
 ### Changed
 
-- `get_supported_abis()` reports `x86_64` from a `config.x86_64.apk` split; the name was read as `x86-64` before.
-- A malformed ID-value pair in the APK Signing Block no longer hides the blocks after it: the pair is skipped by its declared length and the walk continues.
-- A signing block whose leading and trailing sizes disagree is treated as absent instead of failing the whole signature listing.
-- `repack` integration tests now run against the golden APK fixtures through the library's own reader instead of host `zip`/`7zz` tools.
-- `flate2` uses the pure-Rust `zlib-rs` backend; `repack` output is about 1% larger.
-- `Debug` for `StringPool` shows the string count and the first decoded strings instead of the raw chunk.
+- v1 signers are resolved like apksig; BER certificates are accepted.
+- Signature schemes are listed first; a repeated block ID keeps its first value, like Android.
+- The EOCD is searched for like Android does: truncated archives are rejected.
+- An entry name that isn't UTF-8 no longer hides the entries after it.
+- `get_min_sdk_version()` of an APKS reports the app's lowest SDK, not 21.
+- `show --json` keeps errors on stderr; a closed pipe exits quietly.
+- Python: `APK` can be shared between threads; reprs are Python-like.
+
+### Fixed
+
+- `get_resource_value("@string/...")` missed resources the manifest doesn't use.
+- `extract` could write outside the output directory.
+- A deflated entry was cut to its declared size.
 
 ### Performance
 
-- `resources.arsc` and manifest string pools decode strings on access instead of all at once at parse time.
-- `xapk`/`apkm` containers read a stored inner apk in place: about 11× faster to open and about 3× less peak memory.
-- Fewer allocations while reading the central directory and resource type chunks.
-- Faster decompression from `zlib-rs`: whole-archive extraction about 1.4×, `repack` about 1.7×.
-- Opening the 5714-file test corpus with `show` went from 72 s to 26.5 s, with identical output.
+- 2.4× faster on store apps (XAPK and APKM about 10×), 1.7× on malware samples.
+- Python releases the GIL: a thread pool scales with the cores.
 
 ### Breaking Changes
 
-- CLI: `show --sigs` is renamed to `show --signatures`; the short `-s` is unchanged.
-- `apk-info-axml`: `StringPool::strings` is removed; `StringPool::get()` and `get_with_resources()` return `Cow<str>`.
+- CLI: `show --sigs` is renamed to `show --signatures`.
+- `Signature::Unknown` and `Signature::V4` are removed.
+- `ZipEntry::get_signature_v1()` returns `Result<Option<Signature>, _>`; `EntryInfo` sizes are `u64`.
+- `XAPKManifest` fields changed; `StringPool::strings` is removed.
+- Python 3.10 is no longer supported.
 
 ## [1.0.13] - 2026-09-10
 
