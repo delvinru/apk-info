@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
-use apk_info_xml::Element;
+use apk_info_xml::{Element, is_valid_name};
 use log::warn;
 use winnow::error::{ContextError, ErrMode};
 use winnow::prelude::*;
@@ -153,8 +153,8 @@ impl AXML {
                             continue;
                         };
 
-                        // skip garbage strings
-                        if attribute_name.contains(char::is_whitespace) {
+                        // skip garbage strings: they can't be written as xml
+                        if !is_valid_name(&attribute_name) {
                             warn!("skipped garbage attribute name: {:?}", attribute_name);
                             continue;
                         }

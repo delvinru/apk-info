@@ -94,6 +94,69 @@ fn is_valid_xml_char(ch: char) -> bool {
     )
 }
 
+/// Returns whether `name` can be written as an element or attribute local name:
+/// a non-empty XML 1.0 `Name` without `:` (an `NCName`), since the prefix is
+/// written separately.
+///
+/// # Examples
+/// ```
+/// use apk_info_xml::is_valid_name;
+///
+/// assert!(is_valid_name("versionCode"));
+/// assert!(is_valid_name("intent-filter"));
+/// assert!(!is_valid_name("1.0"));
+/// assert!(!is_valid_name("a:b"));
+/// assert!(!is_valid_name(""));
+/// ```
+pub fn is_valid_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    let Some(&first) = bytes.first() else {
+        return false;
+    };
+
+    // fast path: real manifests only use ASCII names
+    if name.is_ascii() {
+        return (first.is_ascii_alphabetic() || first == b'_')
+            && bytes[1..]
+                .iter()
+                .all(|&b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'));
+    }
+
+    let mut chars = name.chars();
+    chars.next().is_some_and(is_name_start_char) && chars.all(is_name_char)
+}
+
+/// `NameStartChar` of XML 1.0 (Fifth Edition), without `:`.
+fn is_name_start_char(ch: char) -> bool {
+    matches!(
+        ch,
+        'A'..='Z'
+            | '_'
+            | 'a'..='z'
+            | '\u{C0}'..='\u{D6}'
+            | '\u{D8}'..='\u{F6}'
+            | '\u{F8}'..='\u{2FF}'
+            | '\u{370}'..='\u{37D}'
+            | '\u{37F}'..='\u{1FFF}'
+            | '\u{200C}'..='\u{200D}'
+            | '\u{2070}'..='\u{218F}'
+            | '\u{2C00}'..='\u{2FEF}'
+            | '\u{3001}'..='\u{D7FF}'
+            | '\u{F900}'..='\u{FDCF}'
+            | '\u{FDF0}'..='\u{FFFD}'
+            | '\u{10000}'..='\u{EFFFF}'
+    )
+}
+
+/// `NameChar` of XML 1.0 (Fifth Edition), without `:`.
+fn is_name_char(ch: char) -> bool {
+    is_name_start_char(ch)
+        || matches!(
+            ch,
+            '-' | '.' | '0'..='9' | '\u{B7}' | '\u{300}'..='\u{36F}' | '\u{203F}'..='\u{2040}'
+        )
+}
+
 /// Writes `value` to `f` escaped for use inside an XML attribute value.
 ///
 /// The written output is always well-formed XML 1.0:
