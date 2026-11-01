@@ -1,6 +1,6 @@
 ---
 name: apk-info
-description: Parses and inspects Android APK/XAPK/APKM/APKS files, extracting package name, version, SDK levels, main activity, permissions, manifest components (activities, services, receivers, providers), signing certificates (v1/v2/v3/v3.1/v3.2, source stamps, channel blocks), the decoded AndroidManifest.xml, and apktool-style resources. Ships as a CLI and a Python library; a faster, malware-robust alternative to androguard (handles BadPack and tampered zip headers). Use when analyzing or inspecting an APK/XAPK/APKM/APKS, when unzip/7z fail or drop the manifest on an APK (BadPack, unsupported compression, empty manifest), when a .zip is actually an APK, when decoding resources/manifest, or when extracting APK metadata/files programmatically. Read-only analysis - does not build, sign, modify, or decompile APKs.
+description: Parses and inspects Android APK/XAPK/APKM/APKS files, extracting package name, version, SDK levels, main activity, permissions, manifest components (activities, services, receivers, providers), signing certificates (v1/v2/v3/v3.1/v3.2, source stamps, channel blocks), the decoded AndroidManifest.xml, and apktool-style resources; checks an APK for tampering (BadPack headers, garbage manifest/resource chunks, zip tricks) with a severity per finding. Ships as a CLI and a Python library; a faster, malware-robust alternative to androguard (handles BadPack and tampered zip headers). Use when analyzing or inspecting an APK/XAPK/APKM/APKS, when unzip/7z fail or drop the manifest on an APK (BadPack, unsupported compression, empty manifest), when a .zip is actually an APK, when asked whether an APK is tampered or built to break analysis tools, when decoding resources/manifest, or when extracting APK metadata/files programmatically. Read-only analysis - does not build, sign, modify, or decompile APKs.
 license: Apache-2.0
 metadata:
   author: delvinru
@@ -19,7 +19,7 @@ Its key strength is robustness against malformed/malicious inputs (BadPack techn
 
 - **`references/cli.md`** — Full CLI reference (`show`, `extract`, `axml`, `repack`, `completion`) with all flags and examples.
 - **`references/python-api.md`** — Python API catalog grouped by task; use when writing Python that calls `apk_info`.
-- **`references/recipes.md`** — Copy-paste recipes (extract icon, dump manifest, batch a folder, certificates, BadPack/unzip-vs-apk-info, decode resources).
+- **`references/recipes.md`** — Copy-paste recipes (extract icon, dump manifest, batch a folder, certificates, tampering check / BadPack, unzip-vs-apk-info, decode resources).
 
 ## Installation
 
@@ -42,6 +42,9 @@ apk-info show ./app.apk
 
 # Include signature/certificate details
 apk-info show --signatures ./app.apk
+
+# Check for tampering: verdict + anomalies with severity (slower: reads every zip local header)
+apk-info show --anomalies ./app.apk
 
 # Machine-readable output (one JSON object per APK) — pipe to jq
 apk-info show --json ./app.apk | jq .package_name
@@ -66,7 +69,7 @@ apk-info extract ./app.apk -r
 apk-info repack ./malware.apk -d ./clean/
 ```
 
-> **Why not just `unzip`?** Malware often tampers with zip headers (BadPack technique): the compression method field is set to a bogus value while the data is stored normally. `unzip` silently skips such entries (`unsupported compression method 55914`, exit 0) and `7z` creates empty 0-byte files — you lose `AndroidManifest.xml` without knowing it. `apk-info` detects the tampering, flags it as `StoredTampered`/`DeflatedTampered`, and extracts the data correctly. See `references/recipes.md` §9 and §16 for real-world examples.
+> **Why not just `unzip`?** Malware often tampers with zip headers (BadPack technique): the compression method field is set to a bogus value while the data is stored normally. `unzip` silently skips such entries (`unsupported compression method 55914`, exit 0) and `7z` creates empty 0-byte files — you lose `AndroidManifest.xml` without knowing it. `apk-info` detects the tampering, flags it as `StoredTampered`/`DeflatedTampered`, and extracts the data correctly. `show --anomalies` / `anomalies()` reports this and ~30 other structural tricks. See `references/recipes.md` §9 and §16 for real-world examples.
 
 ### Python
 
@@ -97,6 +100,12 @@ for sig in apk.get_signatures():
         case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31() | Signature.V32():
             for cert in sig.certificates:
                 print(cert.subject, cert.sha256_fingerprint)
+
+# Tampering check (separate pass, not part of APK(): reads every zip local header)
+print(apk.is_tampered())             # True if any anomaly is rated "tampered"
+for a in apk.anomalies():
+    print(a.severity, a.code, a.location, a.detail)
+    # tampered compression_method_mismatch AndroidManifest.xml compression method 8 in ...
 ```
 
 ## What apk-info can extract
@@ -110,6 +119,7 @@ for sig in apk.get_signatures():
 | Application label                             | `show`        | `get_application_label()`                                                      |
 | Supported ABIs (native libs)                  | `show`        | `get_supported_abis()`                                                         |
 | Signatures & certificates                     | `show --signatures` | `get_signatures()`                                                             |
+| Tampering verdict & anomalies                 | `show --anomalies`  | `is_tampered()` / `anomalies()`                                                |
 | Permissions                                   | —             | `get_permissions()`                                                            |
 | Declared permissions                          | —             | `get_declared_permissions()`                                                   |
 | Features (device capabilities)                | —             | `get_features()`                                                               |

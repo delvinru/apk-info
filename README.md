@@ -18,15 +18,13 @@ Documentation: <https://delvinru.github.io/apk-info/>
 
 ```console
 $ apk-info show apkstest.apk
-Package Name: io.github.delvinru.apkstest
-Main Activity: io.github.delvinru.apkstest/.MainActivity
-Min SDK Version: 21
-Max SDK Version: -
-Target SDK Version: 35
-Application Label: APKS Test
-Version Name: 1.0.7
-Version Code: 7
-ABIs: x86_64
+apkstest.apk
+  Package         io.github.delvinru.apkstest
+  Label           APKS Test
+  Version         1.0.7 (7)
+  SDK             min 21 · target 35
+  Main activity   io.github.delvinru.apkstest/.MainActivity
+  ABIs            x86_64
 ```
 
 ## Features
@@ -174,11 +172,11 @@ Androguard is a great tool in itself, but it is simply not possible to maintain 
 
 - I want to modify the apk, how do I do it using this library?
 
-The library is designed for read-only mode only, because i need a good tool with which i can easily and quickly extract information from the apk. There are many other good tools out there.
+The library is designed for read-only mode, because i need a good tool with which i can easily and quickly extract information from the apk. There are many other good tools out there.
 
 - I repacked an apk, how do I sign it?
 
-The `repack` command produces an unsigned apk. To re-sign it, we recommend [uber-apk-signer](https://github.com/patrickfav/uber-apk-signer) — a simple one-command tool that signs with v1/v2/v3 and zipaligns in a single pass:
+The `repack` command produces an unsigned apk. To re-sign it, we recommend [uber-apk-signer](https://github.com/patrickfav/uber-apk-signer) - a simple one-command tool that signs with v1/v2/v3 and zipaligns in a single pass:
 
 ```bash
 java -jar uber-apk-signer.jar --apks ./malware.repacked.apk

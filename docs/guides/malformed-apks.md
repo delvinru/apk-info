@@ -27,18 +27,25 @@ Without the manifest you get no package name, no permissions and no components, 
 
 apk-info reads the file and flags the tampered header:
 
-```console hl_lines="8"
-$ apk-info show badpack.apk
-Package Name: io.github.delvinru.apkstest
-Main Activity: io.github.delvinru.apkstest/.MainActivity
-...
+```console hl_lines="10 11 15"
+$ apk-info show --anomalies badpack.apk
+badpack.apk
+  Package         io.github.delvinru.apkstest
+  Label           APKS Test
+  Version         1.0.7 (7)
+  SDK             min 21 · target 35
+  Main activity   io.github.delvinru.apkstest/.MainActivity
+  ABIs            x86_64
+
+Tampering         YES · 1 tampered
+  ✗ compression_method_mismatch     AndroidManifest.xml: compression method 8 in the central directory, 55914 in the local header
 
 $ apk-info extract -l badpack.apk -f AndroidManifest.xml
       size  method           csize  name
       6028  Deflate!          1738  AndroidManifest.xml
 ```
 
-The `!`{ .hl } marks an entry whose local header disagrees with the central directory.
+`--anomalies` names the technique, and in `extract -l` the `!`{ .hl } marks an entry whose local header disagrees with the central directory.
 
 Other tricks seen in the wild that apk-info handles:
 
@@ -51,6 +58,39 @@ Other tricks seen in the wild that apk-info handles:
 - garbage chunks in `AndroidManifest.xml` and a `resources.arsc` broken on purpose.
 
 Like Android, apk-info rejects a file with no end-of-central-directory record in its last 64 KB: a truncated archive, or one with data appended after it.
+
+## Checking an APK for tampering
+
+`anomalies()` lists the structural defects of an APK: the zip tricks above, a damaged `AndroidManifest.xml` or `resources.arsc`, an odd container layout. Each anomaly has a stable `code`, a `severity`, the `location` (an entry name, `base.apk!classes.dex` inside a container, or none for the archive itself) and a human-readable description. `is_tampered()` is true when any anomaly is rated `tampered`.
+
+| Severity     | Meaning                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| `tampered`   | a known technique against static analysis tools                                             |
+| `suspicious` | no ordinary build tool produces it, but plain corruption, an exotic tool or a protector can |
+| `info`       | a quirk that ordinary build tools produce too                                               |
+
+None of the 5,714 store apps from the [Benchmarks](../benchmarks.md) has a `tampered` anomaly. See [Anomalies](../reference/anomalies.md) for how each severity is decided and the list of every anomaly.
+
+=== "Python"
+
+    ```python
+    --8<-- "examples/guides/files.py:anomalies"
+    ```
+
+    ```text
+    [tampered] AndroidManifest.xml: compression method 8 in the central directory, 55914 in the local header
+    tampered: True
+    ```
+
+=== "Rust"
+
+    ```rust
+    --8<-- "core/examples/files.rs:anomalies"
+    ```
+
+    `ZipEntry::anomalies()` from the `apk-info-zip` crate checks a bare zip archive, and `AXML::anomalies()` / `ARSC::anomalies()` from `apk-info-axml` report what their parsers recovered from.
+
+The check is not part of opening the APK: it reads the local header of every zip entry, one small read per entry. That's instant for a file in the page cache, but on a slow disk it costs a random read per entry.
 
 ## Detecting tampered entries
 

@@ -1,4 +1,4 @@
-"""Reading files from an APK: listing, DEX, the app icon and tampered entries.
+"""Reading files from an APK: listing, DEX, the app icon, tampered entries and anomalies.
 
 Usage: python files.py <path-to-apk> <output-dir>
 """
@@ -44,3 +44,9 @@ for name in apk.namelist():
     if compression in ("stored_tampered", "deflated_tampered"):
         print(f"tampered header: {name} ({compression})")
 # --8<-- [end:tampered]
+
+# --8<-- [start:anomalies]
+for anomaly in apk.anomalies():
+    print(f"[{anomaly.severity}] {anomaly.location or '-'}: {anomaly.detail}")
+print(f"tampered: {apk.is_tampered()}")
+# --8<-- [end:anomalies]

@@ -45,15 +45,13 @@ Then point it at an APK:
 
 ```console
 $ apk-info show apkstest.apk
-Package Name: io.github.delvinru.apkstest
-Main Activity: io.github.delvinru.apkstest/.MainActivity
-Min SDK Version: 21
-Max SDK Version: -
-Target SDK Version: 35
-Application Label: APKS Test
-Version Name: 1.0.7
-Version Code: 7
-ABIs: x86_64
+apkstest.apk
+  Package         io.github.delvinru.apkstest
+  Label           APKS Test
+  Version         1.0.7 (7)
+  SDK             min 21 · target 35
+  Main activity   io.github.delvinru.apkstest/.MainActivity
+  ABIs            x86_64
 ```
 
 ## What it handles

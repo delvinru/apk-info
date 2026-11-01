@@ -14,7 +14,7 @@ The `apk-info` CLI has five subcommands. Run `apk-info --help` or `apk-info <com
 
 ## `show` — basic APK info
 
-Prints package name, version, SDK versions, main activity, application label, and ABIs. Optionally includes signatures.
+Prints package name, version, SDK versions, main activity, application label, and ABIs. Optionally includes signatures and a tampering check.
 
 ```bash
 apk-info show <PATH> [<PATH> ...]
@@ -23,6 +23,7 @@ apk-info show <PATH> [<PATH> ...]
 **Options:**
 
 - `-s, --signatures` — also show APK signature block contents (v1/v2/v3/v3.1/v3.2 certificates, stamp blocks, Walle/VasDolly/ByteDance channel blocks, Packer-NG). For `xapk`/`apkm`/`apks` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
+- `-a, --anomalies` — also check the APK for tampering: prints a `Tampering  YES · 2 tampered, 1 suspicious` verdict line, then one line per kind of anomaly: a marker (`✗` tampered, `!` suspicious, `·` info), the code, the number of entries and the first two locations (or `location: detail` for a single one). JSON has every anomaly. Slower: it reads the local header of every zip entry, several times the cost of `show` on a slow disk, near free when the file is in the page cache. Severities and codes: see `python-api.md` → Anomalies & tampering.
 - `-j, --json` — output as JSONL (one JSON object per APK) instead of colored text. Suitable for piping to `jq` or other tools.
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
 
@@ -38,6 +39,12 @@ apk-info show ./app.apk ./other.apk ./folder-of-apks/
 # Include signatures
 apk-info show --signatures ./app.apk
 
+# Tampering check
+apk-info show --anomalies ./suspicious.apk
+
+# Only the tampered files of a collection
+apk-info show --anomalies --json ./malware-collection/ | jq -c 'select(.tampered) | {path, codes: [.anomalies[].code] | unique}'
+
 # JSONL output for scripting
 apk-info show --json ./app.apk
 apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name, version: .version_name}'
@@ -51,16 +58,32 @@ apk-info show --json ./malware-collection/ | jq -c '. | {package: .package_name,
   "package_name": "com.example.app",
   "version_name": "1.2.3",
   "version_code": "2025101912",
-  "main_activity": "com.example.app/.MainActivity",
+  "main_activity": ".MainActivity",
   "min_sdk_version": "26",
-  "max_sdk_version": "-",
+  "max_sdk_version": null,
   "target_sdk_version": "34",
   "application_label": "Example App",
   "abis": ["arm64-v8a", "armeabi-v7a"]
 }
 ```
 
-`path` is the input file. Files that fail to parse are reported on stderr and skipped, so stdout is always valid JSONL. The `signatures` field is omitted unless `--signatures` is passed, in which case it contains an array of signature objects: signature schemes first (v1, v2, v3, v3.1, v3.2, source stamps), then the other blocks. The `container_signatures` field is also omitted unless `--signatures` is passed *and* the outer `xapk`/`apkm`/`apks` container is signed (most are not); when present it holds the distributor's signature, distinct from the app's own signatures under `signatures`.
+`path` is the input file. A missing value is `null`; versions and SDK levels are strings (`minSdkVersion` can be a codename like `"Q"`). `main_activity` is the name as written in the manifest, often relative to the package (`.MainActivity`); the text output shows `package/.MainActivity`, the `adb shell am start -n` form.
+
+A file that fails to parse, or a missing path, is reported on stderr and, with `--json`, also as a `{"path": "...", "error": "..."}` line on stdout: `select(.error)` picks the failures, `select(.error | not)` the parsed APKs.
+
+The `signatures` field is omitted unless `--signatures` is passed. Every element has a `scheme`, then `certificates` (always a list) or `value`: `v1`/`v2`/`v3`/`v31`/`v32`/`stamp_block_v1`/`stamp_block_v2` carry `certificates`; `apk_channel_block`/`vasdolly_v2`/`bytedance` a string `value`; `packer_next_gen_v2` a hex `value`; `google_play_frosting` neither (presence only). All SHA-256 fingerprints: `[.signatures[].certificates[]?.sha256_fingerprint]`. Signature schemes come first, then the other blocks. The `container_signatures` field has the same shape; it is present only with `--signatures` *and* when the outer `xapk`/`apkm`/`apks` container is signed (most are not), and holds the distributor's signature, distinct from the app's.
+
+The `tampered` (bool) and `anomalies` fields are omitted unless `--anomalies` is passed:
+
+```json
+"tampered": true,
+"anomalies": [
+  {"code": "unknown_compression_method", "severity": "tampered", "location": "AndroidManifest.xml", "detail": "unknown compression method 52219"},
+  {"code": "fake_eocd_in_comment", "severity": "tampered", "location": null, "detail": "end of central directory signature planted at 0xa5b, in the archive comment"}
+]
+```
+
+`location` is an entry name, `base.apk!classes.dex` inside a container, or `null` for the archive itself.
 
 ## `extract` (alias `x`) — unpack the APK
 
@@ -235,11 +258,8 @@ apk-info show ./malware.repacked.apk                  # package info readable
 apk-info show --json ./apks/ | jq -r .package_name | sort -u
 
 # Find APKs signed by a specific certificate (SHA256 fingerprint: lowercase hex, no separators).
-# Each signature is {"<scheme>": [certs]} or {"stamp_block_v2": cert}; Play Frosting is the bare string "google_play_frosting".
 apk-info show --json --signatures ./apks/ | jq -r --arg fp "<sha256>" '
-  select([.signatures[] | objects | to_entries[].value
-          | if type == "array" then .[] else . end
-          | objects | .sha256_fingerprint] | index($fp))
+  select(any(.signatures[].certificates[]?; .sha256_fingerprint == $fp))
   | .package_name'
 
 # Dump every manifest to its own file
