@@ -7,6 +7,10 @@ The examples use `apkstest.apk`, the small test app from the repository, but any
 unzip -p core/tests/fixtures/apks-universal.apks universal.apk > apkstest.apk
 ```
 
+The CLI on a malware sample, `show` and then `show --signatures`:
+
+![apk-info show and show --signatures on a malware sample](../assets/demo.gif)
+
 ## Basic information
 
 === "CLI"

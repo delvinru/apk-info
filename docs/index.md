@@ -10,7 +10,7 @@ hide:
 --8<-- "docs/assets/logo/wordmark.svg"
 </h1>
 
-<p class="apk-hero__lead"><strong>A fast, malware-friendly, read-only parser for Android APK files.</strong> Written in Rust, with a CLI and typed Python bindings.</p>
+<p class="apk-hero__lead"><strong>Fast, malware-robust parser for Android apk/xapk/apkm/apks files.</strong> Written in Rust, with a CLI and typed Python bindings.</p>
 
 [Quickstart](getting-started/quickstart.md){ .md-button .md-button--primary }
 [GitHub](https://github.com/delvinru/apk-info){ .md-button }
@@ -21,6 +21,12 @@ hide:
 
     ```bash
     brew install delvinru/tap/apk-info
+    ```
+
+=== "Nix"
+
+    ```bash
+    nix profile install github:delvinru/apk-info
     ```
 
 === "cargo"
@@ -35,14 +41,18 @@ hide:
     pip install apk-info
     ```
 
+Then point it at an APK:
+
 ```console
 $ apk-info show apkstest.apk
 Package Name: io.github.delvinru.apkstest
 Main Activity: io.github.delvinru.apkstest/.MainActivity
 Min SDK Version: 21
+Max SDK Version: -
 Target SDK Version: 35
 Application Label: APKS Test
 Version Name: 1.0.7
+Version Code: 7
 ABIs: x86_64
 ```
 
@@ -54,7 +64,7 @@ ABIs: x86_64
 Reads APKs built with the [BadPack](guides/malformed-apks.md) technique: fake compression methods, mismatched headers, fake EOCD records. A broken resource table doesn't stop the manifest, DEX files or signatures from being read.
 
 **Signatures**
-v1 to v3.2 certificates, source stamps, Walle, VasDolly and Packer-NG channels, Google Play Frosting. See [Signatures](guides/signatures.md).
+v1 to v3.2 certificates, source stamps, Walle, VasDolly, Packer-NG and ByteDance channels, Google Play Frosting. See [Signatures](guides/signatures.md).
 
 **Manifest and resources**
 Full AXML and ARSC parsers, resource resolution, apktool-style decoding, and the main activity resolved the way Android does it.

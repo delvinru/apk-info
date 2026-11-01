@@ -1,6 +1,6 @@
 ---
 name: apk-info
-description: Parses and inspects Android APK/XAPK/APKM/APKS files, extracting package name, version, SDK levels, main activity, permissions, manifest components (activities, services, receivers, providers), signing certificates (v1/v2/v3/v3.1, source stamps, channel blocks), the decoded AndroidManifest.xml, and apktool-style resources. Ships as a CLI and a Python library; a faster, malware-robust alternative to androguard (handles BadPack and tampered zip headers). Use when analyzing or inspecting an APK/XAPK/APKM/APKS, when unzip/7z fail or drop the manifest on an APK (BadPack, unsupported compression, empty manifest), when a .zip is actually an APK, when decoding resources/manifest, or when extracting APK metadata/files programmatically. Read-only analysis - does not build, sign, modify, or decompile APKs.
+description: Parses and inspects Android APK/XAPK/APKM/APKS files, extracting package name, version, SDK levels, main activity, permissions, manifest components (activities, services, receivers, providers), signing certificates (v1/v2/v3/v3.1/v3.2, source stamps, channel blocks), the decoded AndroidManifest.xml, and apktool-style resources. Ships as a CLI and a Python library; a faster, malware-robust alternative to androguard (handles BadPack and tampered zip headers). Use when analyzing or inspecting an APK/XAPK/APKM/APKS, when unzip/7z fail or drop the manifest on an APK (BadPack, unsupported compression, empty manifest), when a .zip is actually an APK, when decoding resources/manifest, or when extracting APK metadata/files programmatically. Read-only analysis - does not build, sign, modify, or decompile APKs.
 license: Apache-2.0
 metadata:
   author: delvinru
@@ -71,7 +71,7 @@ apk-info repack ./malware.apk -d ./clean/
 ### Python
 
 ```python
-from apk_info import APK
+from apk_info import APK, Signature
 
 apk = APK("./app.apk")
 
@@ -94,7 +94,7 @@ for perm in apk.get_permissions():
 # Signatures & certificates
 for sig in apk.get_signatures():
     match sig:
-        case type(sig).V1() | type(sig).V2() | type(sig).V3() | type(sig).V31():
+        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31() | Signature.V32():
             for cert in sig.certificates:
                 print(cert.subject, cert.sha256_fingerprint)
 ```

@@ -1,7 +1,7 @@
 [workspace.package]
 version = "1.1.0"
 authors = ["Alexey <delvinru@gmail.com>"]
-description = "Fast, malware-robust parser for Android APK/XAPK/APKM files"
+description = "Fast, malware-robust parser for Android apk/xapk/apkm/apks files"
 edition = "2024"
 keywords = ["android", "apk", "arsc", "axml", "malware"]
 license = "Apache-2.0"

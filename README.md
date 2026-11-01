@@ -12,31 +12,39 @@
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/apk-info?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=BLUE&left_text=pypi+downloads)](https://pepy.tech/projects/apk-info)
 [![license](https://img.shields.io/crates/l/apk-info)](./LICENSE)
 
-A full-featured `apk` parser.
+Fast, malware-robust parser for Android apk/xapk/apkm/apks files.
 
 Documentation: <https://delvinru.github.io/apk-info/>
 
-<img src="docs/assets/demo.gif" width="900" alt="apk-info demo" />
+```console
+$ apk-info show apkstest.apk
+Package Name: io.github.delvinru.apkstest
+Main Activity: io.github.delvinru.apkstest/.MainActivity
+Min SDK Version: 21
+Max SDK Version: -
+Target SDK Version: 35
+Application Label: APKS Test
+Version Name: 1.0.7
+Version Code: 7
+ABIs: x86_64
+```
 
 ## Features
 
-- A malware-friendly zip extractor. Great [article](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) about `BadPack` technique;
-- A malware-friendly axml and arsc extractor;
-- A full AXML (Android Binary XML) implementation;
-- A full ARSC (Android Resource) implementation;
-- Support for extracting information contained in the `APK Signature Block 42`:
+- A malware-friendly zip reader that reads archives the way Android does, including the `BadPack` technique (great [article](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) about it) and ZIP64;
+- XAPK, APKM and APKS containers, opened through their base APK;
+- A full AXML (Android Binary XML) and ARSC (Android Resource) implementation, robust against garbage chunks;
+- Support for extracting information contained in the `APK Signing Block`:
   - [APK Signature scheme v1](https://source.android.com/docs/security/features/apksigning);
   - [APK Signature scheme v2](https://source.android.com/docs/security/features/apksigning/v2);
   - [APK Signature scheme v3](https://source.android.com/docs/security/features/apksigning/v3);
   - [APK Signature scheme v3.1](https://source.android.com/docs/security/features/apksigning/v3-1);
   - [APK Signature scheme v3.2](https://source.android.com/docs/security/features/apksigning/v3-2);
   - Stamp Block v1 & v2;
-  - Apk Channel Block;
-  - [Packer NG v2](https://github.com/mcxiaoke/packer-ng-plugin/blob/ffbe05a2d27406f3aea574d083cded27f0742160/common/src/main/java/com/mcxiaoke/packer/common/PackerCommon.java#L20);
-  - [Vasdolly v2](https://main.qcloudimg.com/raw/document/intl/product/pdf/tencent-cloud_1145_54493_en.pdf)
-  - Google Play Frosting (there are plans, but there is critically little information about it);
+  - Channel blocks: [Walle](https://github.com/Meituan-Dianping/walle), [VasDolly v2](https://github.com/Tencent/VasDolly), [Packer NG v2](https://github.com/mcxiaoke/packer-ng-plugin), ByteDance;
+  - Google Play Frosting (presence only, its structure isn't public);
 - Correct extraction of the MainActivity based on how the Android OS [does it](https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310);
-- Bindings for python 3.11+ with typings - no more `# type: ignore`;
+- Bindings for python 3.11+ with typings - no more `# type: ignore`; parsing releases the GIL, so threads run in parallel;
 - And of course just a fast parser - 🙃
 
 ## Getting started
@@ -122,11 +130,11 @@ apk = APK(file)
 signatures = apk.get_signatures()
 for signature in signatures:
     match signature:
-        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31():
+        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31() | Signature.V32():
             for cert in signature.certificates:
                 print(f"{cert.subject=} {cert.issuer=} {cert.valid_from=} {cert.valid_until=}")
-        case Signature.ApkChannelBlock():
-            print(f"got apk channel block: {signature.value}")
+        case Signature.ApkChannelBlock() | Signature.VasDollyV2() | Signature.ByteDance():
+            print(f"got channel block: {signature.value}")
         case _:
             print(f"oh, cool, library added some new feature - {signature}")
 

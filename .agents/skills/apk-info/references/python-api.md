@@ -174,7 +174,7 @@ unsigned containers.
 ```python
 for sig in apk.get_signatures():
     match sig:
-        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31():
+        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31() | Signature.V32():
             # sig.certificates: list[CertificateInfo]
             for cert in sig.certificates:
                 print(cert.subject, cert.sha256_fingerprint)
@@ -187,6 +187,8 @@ for sig in apk.get_signatures():
             print("packer-ng:", sig.value.hex())
         case Signature.VasDollyV2():
             print("vasdolly:", sig.value)
+        case Signature.ByteDance():
+            print("bytedance:", sig.value)  # build config, usually JSON
         case Signature.GooglePlayFrosting():
             print("play frosting present")
 ```

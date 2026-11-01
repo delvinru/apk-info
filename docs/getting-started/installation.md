@@ -4,7 +4,7 @@
 
 | Package | For | Install |
 |---|---|---|
-| `apk-info` CLI | the terminal | Homebrew or `cargo install apk-info-cli` |
+| `apk-info` CLI | the terminal | Homebrew, Nix or `cargo install apk-info-cli` |
 | `apk-info` on PyPI | Python 3.11+ | `pip install apk-info` |
 | `apk-info` crate | Rust | `cargo add apk-info` |
 
@@ -15,6 +15,34 @@
     ```bash
     brew install delvinru/tap/apk-info
     ```
+
+=== "Nix"
+
+    Try it without installing:
+
+    ```bash
+    nix run github:delvinru/apk-info -- show app.apk
+    ```
+
+    Install it into your profile (newer Nix calls the command `nix profile add`):
+
+    ```bash
+    nix profile install github:delvinru/apk-info
+    ```
+
+    Or add the flake to a NixOS or home-manager configuration:
+
+    ```nix
+    # flake.nix
+    inputs.apk-info.url = "github:delvinru/apk-info";
+
+    # configuration.nix, or home.packages for home-manager
+    environment.systemPackages = [
+      inputs.apk-info.packages.${pkgs.stdenv.hostPlatform.system}.default
+    ];
+    ```
+
+    The flake builds the CLI from source and installs its shell completion. It needs [flakes](https://nixos.wiki/wiki/Flakes) enabled.
 
 === "cargo"
 
@@ -41,7 +69,7 @@ apk-info --version
 
 ### Shell completion
 
-`apk-info completion <SHELL>` prints a completion script for `bash`, `elvish`, `fish`, `powershell` or `zsh`:
+`apk-info completion <SHELL>` prints a completion script for `bash`, `elvish`, `fish`, `powershell` or `zsh`. The Nix package installs it for bash, fish and zsh already; otherwise:
 
 === "zsh"
 

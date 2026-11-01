@@ -21,7 +21,7 @@ for signature in apk.get_signatures():
                 print(f"  sha256:  {cert.sha256_fingerprint}")
         case Signature.StampBlockV1() | Signature.StampBlockV2():
             print(f"source stamp: {signature.certificate.subject}")
-        case Signature.ApkChannelBlock() | Signature.VasDollyV2():
+        case Signature.ApkChannelBlock() | Signature.VasDollyV2() | Signature.ByteDance():
             print(f"channel: {signature.value}")
         case Signature.PackerNextGenV2():
             print(f"Packer-NG: {signature.value.hex()}")

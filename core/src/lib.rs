@@ -1,20 +1,21 @@
-//! `apk-info` provides an easy way to parse apk files using rust
+//! Fast, malware-robust parser for Android apk/xapk/apkm/apks files.
 //!
-//! ## Introduction
+//! Documentation: <https://delvinru.github.io/apk-info/>
 //!
-//! - A malware-friendly zip extractor. Great [article](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) about `BadPack` technique;
-//! - A malware-friendly axml and arsc extractor;
-//! - A full AXML (Android Binary XML) implementation;
-//! - A full ARSC (Android Resource) implementation;
-//! - Support for extracting information contained in the `APK Signature Block 42`:
+//! ## Features
+//!
+//! - A malware-friendly zip reader that reads archives the way Android does, including the `BadPack` technique (great [article](https://unit42.paloaltonetworks.com/apk-badpack-malware-tampered-headers/) about it) and ZIP64;
+//! - XAPK, APKM and APKS containers, opened through their base APK;
+//! - A full AXML (Android Binary XML) and ARSC (Android Resource) implementation, robust against garbage chunks;
+//! - Support for extracting information contained in the `APK Signing Block`:
 //!     - [APK Signature scheme v1](https://source.android.com/docs/security/features/apksigning);
 //!     - [APK Signature scheme v2](https://source.android.com/docs/security/features/apksigning/v2);
 //!     - [APK Signature scheme v3](https://source.android.com/docs/security/features/apksigning/v3);
 //!     - [APK Signature scheme v3.1](https://source.android.com/docs/security/features/apksigning/v3-1);
-//!     - Stamp Block v1;
-//!     - Stamp Block v2;
-//!     - Apk Channel Block;
-//!     - Google Play Frosting (there are plans, but there is critically little information about it);
+//!     - [APK Signature scheme v3.2](https://source.android.com/docs/security/features/apksigning/v3-2);
+//!     - Stamp Block v1 & v2;
+//!     - Channel blocks: [Walle](https://github.com/Meituan-Dianping/walle), [VasDolly v2](https://github.com/Tencent/VasDolly), [Packer NG v2](https://github.com/mcxiaoke/packer-ng-plugin), ByteDance;
+//!     - Google Play Frosting (presence only, its structure isn't public);
 //! - Correct extraction of the MainActivity based on how the Android OS [does it](https://xrefandroid.com/android-16.0.0_r2/xref/frameworks/base/core/java/android/app/ApplicationPackageManager.java#310);
 //!
 //! ## Example

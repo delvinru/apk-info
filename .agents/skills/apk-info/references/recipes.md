@@ -60,7 +60,7 @@ from apk_info import APK, Signature
 apk = APK("./app.apk")
 for sig in apk.get_signatures():
     match sig:
-        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31():
+        case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31() | Signature.V32():
             print(f"--- {type(sig).__name__} ---")
             for cert in sig.certificates:
                 print(f"  Subject:    {cert.subject}")
@@ -78,6 +78,8 @@ for sig in apk.get_signatures():
             print(f"Packer-NG: {sig.value.hex()}")
         case Signature.VasDollyV2():
             print(f"VasDolly: {sig.value}")
+        case Signature.ByteDance():
+            print(f"ByteDance: {sig.value}")
         case Signature.GooglePlayFrosting():
             print("Google Play Frosting present")
 ```
@@ -380,7 +382,7 @@ def signing_keys(path):
     keys = set()
     for sig in apk.get_signatures():
         match sig:
-            case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31():
+            case Signature.V1() | Signature.V2() | Signature.V3() | Signature.V31() | Signature.V32():
                 for cert in sig.certificates:
                     keys.add(cert.sha256_fingerprint)
     return keys

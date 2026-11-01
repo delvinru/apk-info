@@ -92,6 +92,16 @@
   font-weight: 600;
 }
 
+/* Room between the Quickstart and GitHub buttons, also when they wrap */
+.apk-hero .md-button {
+  margin: 0 0.4rem 0.4rem 0;
+}
+
+/* No "Edit this page" on the landing page */
+.md-content__inner:has(.apk-hero) > .md-content__button {
+  display: none;
+}
+
 /* One slow blink, like a terminal cursor; static for reduced motion */
 @keyframes apk-blink {
   0%, 55% { opacity: 1; }

@@ -22,7 +22,7 @@ apk-info show <PATH> [<PATH> ...]
 
 **Options:**
 
-- `-s, --signatures` — also show APK signature block contents (v1/v2/v3/v3.1 certificates, stamp blocks, channel blocks, packers). For `xapk`/`apkm`/`apks` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
+- `-s, --signatures` — also show APK signature block contents (v1/v2/v3/v3.1/v3.2 certificates, stamp blocks, Walle/VasDolly/ByteDance channel blocks, Packer-NG). For `xapk`/`apkm`/`apks` containers the container's own signature (the distributor's, separate from the app's) is printed as its own block.
 - `-j, --json` — output as JSONL (one JSON object per APK) instead of colored text. Suitable for piping to `jq` or other tools.
 - Paths can be files or directories. Directories are walked recursively; dotfile entries are skipped.
 

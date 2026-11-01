@@ -46,7 +46,11 @@ Other tricks seen in the wild that apk-info handles:
 - central directory records past the declared entry count, used to shadow real entries;
 - wrong sizes and offsets in local headers;
 - entries named with path traversal (`../`), absurdly long names, or names that collide with directories;
+- an entry name that isn't valid UTF-8, read with `�` so the entries after it stay visible;
+- a compressed entry whose declared size disagrees with its data: the real data is returned and flagged as tampered;
 - garbage chunks in `AndroidManifest.xml` and a `resources.arsc` broken on purpose.
+
+Like Android, apk-info rejects a file with no end-of-central-directory record in its last 64 KB: a truncated archive, or one with data appended after it.
 
 ## Detecting tampered entries
 
