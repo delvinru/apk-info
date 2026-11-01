@@ -10,25 +10,24 @@ use winnow::token::take;
 
 #[derive(Debug)]
 pub(crate) struct CentralDirectoryEntry {
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) version_made_by: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) version_needed: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) general_purpose: u16,
 
-    #[allow(unused)]
     pub(crate) compression_method: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) last_mod_time: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) last_mod_date: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) crc32: u32,
 
     /// Compressed size, from the ZIP64 extra field when the record holds `0xFFFFFFFF`
@@ -37,22 +36,22 @@ pub(crate) struct CentralDirectoryEntry {
     /// Uncompressed size, from the ZIP64 extra field when the record holds `0xFFFFFFFF`
     pub(crate) uncompressed_size: u64,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) file_name_length: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) extra_field_length: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) file_comment_length: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) disk_number_start: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) internal_attrs: u16,
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) external_attrs: u32,
 
     /// Local header offset, from the ZIP64 extra field when the record holds `0xFFFFFFFF`

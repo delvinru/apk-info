@@ -27,6 +27,13 @@ pub struct XAPKSplitApk {
 
 impl XAPKManifest {
     /// Parses `manifest.json`, skipping a UTF-8 BOM if present.
+    ///
+    /// Every field is optional: a missing field or one of the wrong type is
+    /// read as absent.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`serde_json::Error`] when the data isn't valid JSON.
     pub fn from_json(data: &[u8]) -> Result<XAPKManifest, serde_json::Error> {
         let data = data.strip_prefix(b"\xef\xbb\xbf").unwrap_or(data);
         let value: serde_json::Value = serde_json::from_slice(data)?;

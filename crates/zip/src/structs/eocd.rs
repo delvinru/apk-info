@@ -6,27 +6,25 @@ use winnow::token::take;
 
 #[derive(Debug)]
 pub(crate) struct EndOfCentralDirectory {
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) disk_number: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) central_dir_start_disk: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) entries_on_this_disk: u16,
 
     pub(crate) total_entries: u16,
 
-    #[allow(unused)]
     pub(crate) central_dir_size: u32,
 
-    #[allow(unused)]
     pub(crate) central_dir_offset: u32,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) comment_length: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) comment: Arc<[u8]>,
 }
 
@@ -100,33 +98,35 @@ impl Zip64EndOfCentralDirectory {
 
     /// Returns the declared ZIP64 EOCD record offset from a locator.
     pub(crate) fn parse_locator(locator: &[u8]) -> Option<u64> {
-        if locator.len() < Self::LOCATOR_LEN || read_u32(locator, 0) != Self::LOCATOR_MAGIC {
+        if locator.len() < Self::LOCATOR_LEN || read_u32(locator, 0)? != Self::LOCATOR_MAGIC {
             return None;
         }
 
-        Some(read_u64(locator, 8))
+        read_u64(locator, 8)
     }
 
     /// Parses the fixed part of a ZIP64 EOCD record.
     pub(crate) fn parse_record(record: &[u8]) -> Option<Zip64EndOfCentralDirectory> {
-        if record.len() < Self::RECORD_LEN || read_u32(record, 0) != Self::RECORD_MAGIC {
+        if record.len() < Self::RECORD_LEN || read_u32(record, 0)? != Self::RECORD_MAGIC {
             return None;
         }
 
         Some(Zip64EndOfCentralDirectory {
-            total_entries: read_u64(record, 32),
-            central_dir_size: read_u64(record, 40),
-            central_dir_offset: read_u64(record, 48),
+            total_entries: read_u64(record, 32)?,
+            central_dir_size: read_u64(record, 40)?,
+            central_dir_offset: read_u64(record, 48)?,
         })
     }
 }
 
-fn read_u32(data: &[u8], at: usize) -> u32 {
-    u32::from_le_bytes(data[at..at + 4].try_into().expect("4 bytes"))
+fn read_u32(data: &[u8], at: usize) -> Option<u32> {
+    let bytes = data.get(at..at.checked_add(4)?)?;
+    Some(u32::from_le_bytes(bytes.try_into().ok()?))
 }
 
-fn read_u64(data: &[u8], at: usize) -> u64 {
-    u64::from_le_bytes(data[at..at + 8].try_into().expect("8 bytes"))
+fn read_u64(data: &[u8], at: usize) -> Option<u64> {
+    let bytes = data.get(at..at.checked_add(8)?)?;
+    Some(u64::from_le_bytes(bytes.try_into().ok()?))
 }
 
 #[cfg(test)]

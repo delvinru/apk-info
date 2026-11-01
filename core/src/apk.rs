@@ -402,9 +402,13 @@ impl Apk {
 /// Finds the base apk of a `xapk`/`apkm`/`apks` container, the same way
 /// [`Apk::new`] does.
 ///
-/// Returns `Ok(None)` for a plain apk, `Ok(Some((name, base)))` for a
-/// container, where `base` is the parsed inner apk, and an error when the
-/// archive is neither, e.g. a broken apk or a container without a usable base.
+/// Returns `None` for a plain apk and `Some((name, base))` for a container,
+/// where `base` is the parsed inner apk.
+///
+/// # Errors
+///
+/// Returns an [`APKError`] when the archive is neither: a broken apk, an app
+/// bundle, or a container without a usable base apk.
 pub fn find_base_apk(zip: &ZipEntry) -> Result<Option<(String, ZipEntry)>, APKError> {
     match Apk::resolve(zip)? {
         Resolved::Apk { .. } => Ok(None),
@@ -1174,6 +1178,11 @@ impl Apk {
     ///
     /// The signing block is parsed on the first call; later calls return a
     /// copy of the result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`APKError`] when the base apk of a container can't be read,
+    /// or when there is no v1 signature and the signing block can't be parsed.
     pub fn get_signatures(&self) -> Result<Vec<Signature>, APKError> {
         if let Some(signatures) = self.signatures.get() {
             return Ok(signatures.clone());
@@ -1188,6 +1197,11 @@ impl Apk {
     /// This is the signature of the outer archive that carries the split APKs.
     /// It belongs to the distributor, not to the app.
     /// Most `xapk`/`apkm`/`apks` containers are unsigned, so an empty result is expected and normal.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`APKError`] when there is no v1 signature and the signing
+    /// block can't be parsed.
     pub fn get_container_signatures(&self) -> Result<Vec<Signature>, APKError> {
         if self.base_apk_name.is_none() {
             return Ok(Vec::new());

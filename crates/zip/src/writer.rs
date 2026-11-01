@@ -51,7 +51,6 @@ impl<'a> LE<'a> {
 }
 
 /// Writes a local file header and its file name.
-#[allow(clippy::too_many_arguments)]
 fn write_local_header(
     out: &mut Vec<u8>,
     name: &[u8],
@@ -76,7 +75,6 @@ fn write_local_header(
 }
 
 /// Writes a central directory file header and its file name.
-#[allow(clippy::too_many_arguments)]
 fn write_central_header(
     cd: &mut Vec<u8>,
     name: &[u8],

@@ -310,7 +310,9 @@ impl ZipEntry {
             return Self::parse(Source::from_file(file)?);
         }
 
-        let reader = reader.expect("taken only for a file");
+        let Some(reader) = reader else {
+            unreachable!("the reader is taken only when it is a file");
+        };
         Self::parse(Source::new(Box::new(reader))?)
     }
 
@@ -1158,7 +1160,7 @@ impl ZipEntry {
         None
     }
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "describes the signer layout, not called yet")]
     fn parse_digest<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             // digest_block_length, signature_algorithm_id, digest_length, digest
@@ -1185,7 +1187,7 @@ impl ZipEntry {
         }
     }
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "describes the signer layout, not called yet")]
     fn parse_attribute_v2<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
@@ -1195,7 +1197,7 @@ impl ZipEntry {
         }
     }
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "describes the signer layout, not called yet")]
     fn parse_attribute_v3<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             let (attribute_length, id) = (le_u32, le_u32).parse_next(input)?;
@@ -1207,7 +1209,7 @@ impl ZipEntry {
         }
     }
 
-    #[allow(unused)]
+    #[expect(dead_code, reason = "describes the signer layout, not called yet")]
     fn parse_signature<'a>() -> impl Parser<&'a [u8], (u32, &'a [u8]), ContextError> {
         move |input: &mut &'a [u8]| {
             // signature_block_length, signature_algorithm_id, signature_length, signature

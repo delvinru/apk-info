@@ -28,7 +28,7 @@ pub(crate) fn command_axml(path: &Path) -> Result<()> {
     printer.input_from_bytes(xml.as_bytes()).language("xml");
 
     if stdout_is_tty {
-        printer.print().unwrap();
+        printer.print().context("can't print the manifest")?;
     } else {
         print!("{}", xml);
     }

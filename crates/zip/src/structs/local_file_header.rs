@@ -7,30 +7,30 @@ use winnow::token::take;
 
 #[derive(Debug, Clone)]
 pub(crate) struct LocalFileHeader {
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) version_needed: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) general_purpose_bit_flag: u16,
 
     pub(crate) compression_method: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) last_modification_time: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) last_modification_date: u16,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) crc32: u32,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) compressed_size: u32,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) uncompressed_size: u32,
 
-    #[allow(unused)]
+    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) file_name_length: u16,
 
     pub(crate) extra_field_length: u16,
