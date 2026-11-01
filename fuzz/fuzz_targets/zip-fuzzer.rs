@@ -4,6 +4,9 @@ use apk_info_zip::ZipEntry;
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
-    let input = data.to_vec();
-    let _ = ZipEntry::new(input);
+    let Ok(zip) = ZipEntry::new(data.to_vec()) else {
+        return;
+    };
+
+    apk_info_fuzz::exercise_zip(&zip);
 });

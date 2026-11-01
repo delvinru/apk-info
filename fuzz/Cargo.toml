@@ -11,10 +11,18 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
+[lib]
+path = "src/lib.rs"
+test = false
+doc = false
+
 [dependencies]
 apk-info-axml.workspace = true
-apk-info-zip.workspace = true
-libfuzzer-sys = "0.4"
+apk-info-zip = { workspace = true, features = ["fuzzing"] }
+crc32fast.workspace = true
+flate2.workspace = true
+libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
+roxmltree = "0.21"
 
 [[bin]]
 name = "axml-fuzzer"
@@ -31,5 +39,23 @@ doc = false
 [[bin]]
 name = "zip-fuzzer"
 path = "fuzz_targets/zip-fuzzer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "zip-structured-fuzzer"
+path = "fuzz_targets/zip-structured-fuzzer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "signing-fuzzer"
+path = "fuzz_targets/signing-fuzzer.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "ber-fuzzer"
+path = "fuzz_targets/ber-fuzzer.rs"
 test = false
 doc = false

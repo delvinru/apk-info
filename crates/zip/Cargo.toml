@@ -25,5 +25,9 @@ thiserror.workspace = true
 winnow.workspace = true
 x509-cert.workspace = true
 
+[features]
+# exposes internals to the fuzz targets
+fuzzing = []
+
 [lib]
 doctest = false

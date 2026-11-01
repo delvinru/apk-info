@@ -38,3 +38,13 @@ pub use entry::*;
 pub use errors::*;
 pub use signature::*;
 pub use source::ReadSeek;
+
+/// Internals reachable from the fuzz targets only.
+#[cfg(feature = "fuzzing")]
+#[doc(hidden)]
+pub mod fuzzing {
+    /// See `ber::to_der`.
+    pub fn ber_to_der(input: &[u8]) -> Option<Vec<u8>> {
+        crate::ber::to_der(input)
+    }
+}
