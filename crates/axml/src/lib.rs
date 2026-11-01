@@ -23,4 +23,4 @@ pub mod errors;
 pub mod structs;
 
 pub use arsc::ARSC;
-pub use axml::{ANDROID_NAMESPACE, AXML};
+pub use axml::{ANDROID_NAMESPACE, AXML, INVALID_ELEMENT_NAME};

@@ -17,6 +17,13 @@ use crate::structs::{
 /// Default android namespace
 pub const ANDROID_NAMESPACE: &str = "http://schemas.android.com/apk/res/android";
 
+/// Name given to an element whose name can't be read or written as XML.
+///
+/// Android doesn't know such a tag and skips it with everything inside, so the
+/// element is kept with its children under this name rather than dropped or
+/// flattened into its parent.
+pub const INVALID_ELEMENT_NAME: &str = "invalid-element";
+
 /// Represents an Android Binary XML (AXML) file.
 ///
 /// This struct holds the root element of the parsed XML structure.
@@ -130,9 +137,17 @@ impl AXML {
                     };
 
                     // why is_attribute_name == true? idk, but this works, for example - b1e83615e07999862f15f5649656941f754db4ed31458b4b6b5ba9d36bc1b1b3
-                    let Some(name) = string_pool.get_with_resources(node.name, xml_resource, true)
-                    else {
-                        continue;
+                    // an element with a name that can't be read or written as xml
+                    // stays in the tree under a placeholder: skipping it would let
+                    // its end element close the parent instead
+                    let name = match string_pool.get_with_resources(node.name, xml_resource, true) {
+                        Some(name) if is_valid_name(&name) => name,
+                        name => {
+                            warn!(
+                                "invalid element name {name:?}, replaced with {INVALID_ELEMENT_NAME:?}"
+                            );
+                            Cow::Borrowed(INVALID_ELEMENT_NAME)
+                        }
                     };
 
                     let mut element = Element::with_capacity(&name, node.attributes.len());
