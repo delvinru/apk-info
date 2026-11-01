@@ -1,12 +1,14 @@
 //! Python bindings for apk-info, built as the `apk_info` module.
 //!
 //! - [`apk`]: the `APK` class over [`apk_info::Apk`];
+//! - [`anomaly`]: structural anomalies of an apk;
 //! - [`components`]: activities, services and other manifest elements;
 //! - [`signature`]: signatures and certificates.
 
 #[global_allocator]
 static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+mod anomaly;
 mod apk;
 mod components;
 mod signature;
@@ -30,6 +32,7 @@ fn apk_info(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     m.add_class::<apk::Apk>()?;
+    m.add_class::<anomaly::Anomaly>()?;
     m.add_class::<signature::CertificateInfo>()?;
     m.add_class::<signature::Signature>()?;
     m.add_class::<components::IntentFilter>()?;

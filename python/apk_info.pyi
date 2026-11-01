@@ -864,6 +864,35 @@ class APK:
             A list of certificate signatures
         """
 
+    def anomalies(self) -> list[Anomaly]:
+        """
+        Inspects the APK for structural defects: tampered zip headers
+        (BadPack), a damaged manifest or resource table, and the like.
+
+        Not part of the constructor: it reads the local header of every zip
+        entry, once per call. For a `xapk`/`apkm`/`apks` container both the
+        container and its base APK are checked.
+
+        Returns
+        -------
+        list[Anomaly]
+            The defects found, empty for a well-formed APK
+        """
+
+    def is_tampered(self) -> bool:
+        """
+        Checks whether the APK shows a known technique against static
+        analysis, i.e. any anomaly with the `tampered` severity.
+
+        Runs the full ``anomalies`` scan; call that instead when the details
+        are needed as well.
+
+        Returns
+        -------
+        bool
+            True if any anomaly is rated `tampered`
+        """
+
     def get_supported_abis(self) -> list[str]:
         """
         Retrieves all available native platforms: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`
@@ -873,6 +902,34 @@ class APK:
         list[str]
             A sorted list of supported platforms
         """
+
+@dataclass(frozen=True)
+class Anomaly:
+    code: str
+    """
+    Stable identifier of the anomaly kind, e.g. `compression_method_mismatch`
+    """
+
+    severity: Literal["info", "suspicious", "tampered"]
+    """
+    How strongly the anomaly points at tampering:
+
+    - `info`: a quirk that ordinary build tools produce too;
+    - `suspicious`: no ordinary build tool produces it, but plain corruption,
+      an exotic tool or a commercial protector can;
+    - `tampered`: a known technique against static analysis tools.
+    """
+
+    location: str | None
+    """
+    Where: an entry name, `base.apk!classes.dex` for an entry of a
+    container's base APK, or None for the archive itself
+    """
+
+    detail: str
+    """
+    Human-readable description
+    """
 
 @dataclass(frozen=True)
 class CertificateInfo:

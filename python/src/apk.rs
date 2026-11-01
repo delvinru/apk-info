@@ -10,6 +10,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyString;
 
 use crate::APKError;
+use crate::anomaly::Anomaly;
 use crate::components::{
     Activity, ActivityAlias, Attribution, Permission, Provider, Receiver, Service,
 };
@@ -201,5 +202,17 @@ apk_methods! {
 
     fn get_container_signatures(&self, py: Python<'_>) -> PyResult<Vec<Signature>> {
         signatures(py.detach(|| self.apkrs.get_container_signatures()))
+    }
+
+    fn anomalies(&self, py: Python<'_>) -> Vec<Anomaly> {
+        // reads the local header of every zip entry
+        py.detach(|| self.apkrs.anomalies())
+            .into_iter()
+            .map(Anomaly::from)
+            .collect()
+    }
+
+    fn is_tampered(&self, py: Python<'_>) -> bool {
+        py.detach(|| self.apkrs.is_tampered())
     }
 }
