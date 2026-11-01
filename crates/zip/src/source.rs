@@ -111,6 +111,12 @@ impl Source {
 
     /// Reads `len` bytes at `offset` into a fresh buffer.
     pub(crate) fn read_bytes_at(&self, offset: usize, len: usize) -> Result<Vec<u8>, ZipError> {
+        // bounds first: a size from tampered metadata must not allocate
+        // gigabytes only to fail the read
+        if offset.checked_add(len).is_none_or(|end| end > self.len) {
+            return Err(ZipError::EOF);
+        }
+
         let mut buf = vec![0u8; len];
         self.read_exact_at(offset, &mut buf)?;
         Ok(buf)
