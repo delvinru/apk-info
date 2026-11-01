@@ -138,3 +138,75 @@
   letter-spacing: 0.02em;
   color: var(--md-default-fg-color);
 }
+
+/* Terminal demo, rendered by scripts/render-demo.py: real apk-info output
+   whose ANSI colors map to the theme, so it follows light and dark mode */
+[data-md-color-scheme="default"] {
+  --apk-term-green: var(--apk-olive);
+  --apk-term-red: #b91c1c;
+  --apk-term-yellow: #a16207;
+}
+
+[data-md-color-scheme="slate"] {
+  --apk-term-green: var(--apk-olive-bright);
+  --apk-term-red: #f87171;
+  --apk-term-yellow: #facc15;
+}
+
+.md-typeset .apk-terminal {
+  margin: 1em 0;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.4rem;
+  background: var(--md-code-bg-color);
+  overflow: hidden;
+}
+
+.md-typeset .apk-terminal__bar {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset .apk-terminal__bar span {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--md-default-fg-color--lighter);
+}
+
+.md-typeset .apk-terminal pre {
+  margin: 0;
+}
+
+.md-typeset .apk-terminal pre > code {
+  padding: 0.8em 1.2em;
+  background: transparent;
+  color: var(--md-code-fg-color);
+}
+
+.md-typeset .apk-terminal .t-prompt,
+.md-typeset .apk-terminal .t-green {
+  color: var(--apk-term-green);
+}
+
+.md-typeset .apk-terminal .t-red {
+  color: var(--apk-term-red);
+}
+
+.md-typeset .apk-terminal .t-yellow {
+  color: var(--apk-term-yellow);
+}
+
+/* section headers: the one accent stays olive, headers just stand out */
+.md-typeset .apk-terminal .t-blue {
+  color: var(--md-default-fg-color);
+}
+
+.md-typeset .apk-terminal .t-bold {
+  font-weight: 700;
+}
+
+.md-typeset .apk-terminal .t-dim {
+  color: var(--md-default-fg-color--light);
+}
