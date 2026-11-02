@@ -168,15 +168,15 @@ Methodology, per-file timings and failure reasons: [Benchmarks](https://delvinru
 - Why not just use androguard?
 
 Almost all of my projects are born from something that is inconvenient to use.
-Androguard is a great tool in itself, but it is simply not possible to maintain it (in my opinion) and it is not suitable for production-ready code. It is also not suitable for analyzing a large number of files due to the fact that all the logic is written in not very optimized way.
+Androguard is a great tool in itself, but in my opinion it is simply not possible to maintain, and it is not suitable for production-ready code. It is also not suitable for analyzing a large number of files, because its logic isn't well optimized.
 
-- I want to modify the apk, how do I do it using this library?
+- I want to modify an APK. How do I do it with this library?
 
-The library is designed for read-only mode, because i need a good tool with which i can easily and quickly extract information from the apk. There are many other good tools out there.
+The library is read-only by design: I needed a good tool to extract information from an APK easily and quickly. There are many other good tools for modifying APKs.
 
-- I repacked an apk, how do I sign it?
+- I repacked an APK. How do I sign it?
 
-The `repack` command produces an unsigned apk. To re-sign it, we recommend [uber-apk-signer](https://github.com/patrickfav/uber-apk-signer) - a simple one-command tool that signs with v1/v2/v3 and zipaligns in a single pass:
+The `repack` command produces an unsigned APK. To re-sign it, I recommend [uber-apk-signer](https://github.com/patrickfav/uber-apk-signer), a simple one-command tool that signs with v1/v2/v3 and zipaligns in a single pass:
 
 ```bash
 java -jar uber-apk-signer.jar --apks ./malware.repacked.apk
