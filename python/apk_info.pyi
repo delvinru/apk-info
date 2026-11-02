@@ -705,6 +705,14 @@ class APK:
         See: <a href="https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features" target="_blank">https://developer.android.com/guide/topics/manifest/uses-feature-element#device-ui-hw-features</a>
         """
 
+    def is_xr(self) -> bool:
+        """
+        Checks whether the app is designed to show its UI on Android XR headsets,
+        via the Jetpack XR SDK (`android.software.xr.api.spatial`) or OpenXR (`android.software.xr.api.openxr`).
+
+        See: <a href="https://developer.android.com/develop/xr/package-and-distribute" target="_blank">https://developer.android.com/develop/xr/package-and-distribute</a>
+        """
+
     def get_declared_permissions(self) -> set[Permission]:
         """
         Retrieves all user defines permissions.

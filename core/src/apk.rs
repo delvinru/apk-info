@@ -921,6 +921,18 @@ impl Apk {
         self.get_features().any(|x| x == "android.hardware.type.pc")
     }
 
+    /// Checks whether the app is designed to show its UI on Android XR headsets,
+    /// via the Jetpack XR SDK (`android.software.xr.api.spatial`) or OpenXR
+    /// (`android.software.xr.api.openxr`).
+    ///
+    /// See: <https://developer.android.com/develop/xr/package-and-distribute>
+    #[inline]
+    pub fn is_xr(&self) -> bool {
+        self.get_features().any(|x| {
+            x == "android.software.xr.api.spatial" || x == "android.software.xr.api.openxr"
+        })
+    }
+
     /// Retrieves all user-defined permissions.
     ///
     /// See: <https://developer.android.com/guide/topics/manifest/permission-element>

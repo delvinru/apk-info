@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Apk::is_xr()` / `APK.is_xr()`: the app targets Android XR (`android.software.xr.api.spatial` or `android.software.xr.api.openxr`).
+
 ## [1.1.0] - 2026-11-02
 
 ### Added

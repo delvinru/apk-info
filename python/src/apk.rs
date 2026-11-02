@@ -120,6 +120,7 @@ apk_methods! {
         is_leanback() -> bool;
         is_wearable() -> bool;
         is_chromebook() -> bool;
+        is_xr() -> bool;
     }
 
     collect {

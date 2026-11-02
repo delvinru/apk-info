@@ -36,6 +36,7 @@ targets = [
         ("Wear OS", apk.is_wearable()),
         ("Android Automotive", apk.is_automotive()),
         ("ChromeOS", apk.is_chromebook()),
+        ("Android XR", apk.is_xr()),
     ]
     if matches
 ]

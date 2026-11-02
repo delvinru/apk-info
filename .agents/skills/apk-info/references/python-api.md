@@ -121,6 +121,7 @@ apk.is_automotive()  # bool — android.hardware.type.automotive
 apk.is_leanback()    # bool — TV (android.hardware.type.television or android.software.leanback)
 apk.is_wearable()    # bool — watch (android.hardware.type.watch)
 apk.is_chromebook()  # bool — android.hardware.type.pc
+apk.is_xr()          # bool — Android XR (android.software.xr.api.spatial or android.software.xr.api.openxr)
 ```
 
 ## Manifest components

@@ -49,6 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("Wear OS", apk.is_wearable()),
         ("Android Automotive", apk.is_automotive()),
         ("ChromeOS", apk.is_chromebook()),
+        ("Android XR", apk.is_xr()),
     ]
     .into_iter()
     .filter_map(|(name, matches)| matches.then_some(name))

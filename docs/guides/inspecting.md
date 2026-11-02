@@ -98,6 +98,7 @@ You get activity names as written in the manifest, so they may be relative (`.Ma
 | `is_wearable()` | `android.hardware.type.watch` |
 | `is_automotive()` | `android.hardware.type.automotive` |
 | `is_chromebook()` | `android.hardware.type.pc` |
+| `is_xr()` | `android.software.xr.api.spatial` or `android.software.xr.api.openxr` |
 
 ## Any manifest attribute
 

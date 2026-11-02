@@ -129,7 +129,7 @@ for a in apk.anomalies():
 | File listing                                  | `extract`     | `namelist()`                                                                   |
 | Decoded resources (apktool-style)             | `extract -r`  | —                                                                              |
 | Multidex check                                | —             | `is_multidex()`                                                                |
-| Device-type checks (TV/watch/auto/chromebook) | —             | `is_leanback()` / `is_wearable()` / `is_automotive()` / `is_chromebook()`      |
+| Device-type checks (TV/watch/auto/chromebook/XR) | —          | `is_leanback()` / `is_wearable()` / `is_automotive()` / `is_chromebook()` / `is_xr()` |
 | Any manifest attribute                        | —             | `get_attribute_value(tag, name)`                                               |
 | Resolve `@string/...` references              | —             | `get_resource_value("@string/app_name")`                                       |
 

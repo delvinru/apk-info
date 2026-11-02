@@ -367,6 +367,7 @@ if apk.is_leanback():    targets.append("TV/Leanback")
 if apk.is_wearable():    targets.append("Wear/Watch")
 if apk.is_automotive():  targets.append("Automotive")
 if apk.is_chromebook():  targets.append("Chromebook")
+if apk.is_xr():          targets.append("Android XR")
 print("Targets:", targets or ["Phone/Tablet"])
 ```
 
