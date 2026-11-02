@@ -69,29 +69,35 @@ apk-info --version
 
 ### Shell completion
 
-`apk-info completion <SHELL>` prints a completion script for `bash`, `elvish`, `fish`, `powershell` or `zsh`. The Nix package installs it for bash, fish and zsh already; otherwise:
+`apk-info completion <SHELL>` prints a completion script for `bash`, `elvish`, `fish`, `powershell` or `zsh`. The Homebrew and Nix packages install it for bash, fish and zsh already (for Homebrew, see [Shell Completion](https://docs.brew.sh/Shell-Completion) if zsh doesn't pick it up). Otherwise:
 
 === "zsh"
 
     ```bash
-    apk-info completion zsh > "${fpath[1]}/_apk-info"
+    mkdir -p ~/.zfunc
+    apk-info completion zsh > ~/.zfunc/_apk-info
     ```
+
+    Then add `fpath=(~/.zfunc $fpath)` to `~/.zshrc`, before `compinit` runs.
 
 === "bash"
 
     ```bash
+    mkdir -p ~/.local/share/bash-completion/completions
     apk-info completion bash > ~/.local/share/bash-completion/completions/apk-info
     ```
 
 === "fish"
 
     ```bash
+    mkdir -p ~/.config/fish/completions
     apk-info completion fish > ~/.config/fish/completions/apk-info.fish
     ```
 
 === "PowerShell"
 
     ```powershell
+    New-Item -ItemType Directory -Force (Split-Path $PROFILE) | Out-Null
     apk-info completion powershell >> $PROFILE
     ```
 

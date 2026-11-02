@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand, ValueHint};
 use clap_complete::{Shell, generate};
 
 use crate::commands::{command_axml, command_extract, command_repack, command_show};
@@ -53,13 +53,13 @@ enum Commands {
         paths: Vec<PathBuf>,
 
         /// Output folder (default: ./<filename>.unp)
-        #[arg(short, long)]
+        #[arg(short, long, value_hint = ValueHint::DirPath)]
         output: Option<PathBuf>,
 
         /// A regular expressions for extracting specific files inside zip archive
         ///
         /// example: -f AndroidManifest.xml -f classes\d+.dex
-        #[arg(short, long)]
+        #[arg(short, long, value_hint = ValueHint::Other)]
         files: Vec<String>,
 
         /// Print progress for every extracted file
@@ -102,7 +102,7 @@ enum Commands {
         output: Option<PathBuf>,
 
         /// Output directory (default: same directory as the source file)
-        #[arg(short = 'd', long, value_name = "DIR")]
+        #[arg(short = 'd', long, value_name = "DIR", value_hint = ValueHint::DirPath)]
         output_dir: Option<PathBuf>,
     },
     /// Generate shell completion
