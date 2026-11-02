@@ -7,52 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-02
+
 ### Added
 
-- APKS archives from `bundletool build-apks`, in all build modes.
-- APK Signature Scheme v3.2 (`Signature::V32`).
-- `Signature::ByteDance` for the ByteDance block of Toutiao and Douyin.
-- ZIP64 archives, e.g. containers over 4 GB.
-- A base APK is guessed in containers with an unusual layout.
-- Clear errors for `.aab`, encrypted `.apkm` and a zip without a manifest.
-- Intent filters of services and receivers.
-- Documentation site: <https://delvinru.github.io/apk-info/>.
-- `Apk::anomalies()` lists structural defects (BadPack headers, a damaged manifest or resource table, odd containers) with a severity and a location; `Apk::is_tampered()` gives the verdict. Python: `APK.anomalies()`, `APK.is_tampered()`.
+- Anomaly detection: `Apk::anomalies()` lists structural defects (BadPack headers, a damaged manifest or resource table, odd containers) with a severity and a location; `Apk::is_tampered()` gives the verdict. Python: `APK.anomalies()`, `APK.is_tampered()`.
 - `ZipEntry::anomalies()`, `AXML::anomalies()` and `ARSC::anomalies()` for the individual parsers.
-- `show --anomalies` prints the anomalies and the verdict; with `--json`, as `anomalies` and `tampered`.
+- `show --anomalies` prints the anomalies and the verdict; with `--json`, as `anomalies` and `tampered` fields.
+- APKS archives from `bundletool build-apks`, in all build modes.
+- ZIP64 archives, e.g. containers over 4 GB.
+- APK Signature Scheme v3.2 (`Signature::V32`).
+- `Signature::ByteDance` for the ByteDance signing block of Toutiao and Douyin.
+- Intent filters of services and receivers.
+- The base APK is found in containers with an unusual layout, even when it isn't named `base.apk`.
+- Clear errors for `.aab`, encrypted `.apkm` and a zip without a manifest.
+- Homebrew tap: `brew install delvinru/tap/apk-info`.
+- Documentation site: <https://delvinru.github.io/apk-info/>.
 
 ### Changed
 
-- v1 signers are resolved like apksig; BER certificates are accepted.
-- Signature schemes are listed first; a repeated block ID keeps its first value, like Android.
-- The EOCD is searched for like Android does: truncated archives are rejected.
-- An entry name that isn't UTF-8 no longer hides the entries after it.
-- `get_min_sdk_version()` of an APKS reports the app's lowest SDK, not 21.
-- `show --json` keeps errors on stderr, and also writes a `{"path", "error"}` line for every failed file; a closed pipe exits quietly.
-- `show --json`: a missing value is `null` instead of `"-"`; `main_activity` is the name as written in the manifest, without the package prefix; every signature is `{"scheme", "certificates" | "value"}`.
-- `show` reports a path that doesn't exist instead of skipping it.
-- `show` text output: aligned sections, one entry for schemes signed with the same certificates.
-- Python: `APK` can be shared between threads; reprs are Python-like.
-- `XmlParse::parse` takes the anomaly-collecting `apk_info_axml::anomaly::Input` instead of `&mut &[u8]`.
+- **BREAKING:** CLI `show --sigs` is renamed to `show --signatures`.
+- **BREAKING:** `show --json`: a missing value is `null` instead of `"-"`; `main_activity` is printed as written in the manifest; each signature is `{"scheme", "certificates" | "value"}`; errors go to stderr, plus a `{"path", "error"}` line for each failed file.
+- **BREAKING:** `ZipEntry::get_signature_v1()` returns `Result<Option<Signature>, _>`; `EntryInfo` sizes are `u64`.
+- **BREAKING:** `XAPKManifest` fields changed.
+- **BREAKING:** `XmlParse::parse` takes `apk_info_axml::anomaly::Input` instead of `&mut &[u8]`.
+- 2.4× faster on store apps (XAPK and APKM about 10×), 1.7× on malware samples.
+- Python releases the GIL while parsing, so a thread pool scales with the cores; an `APK` object can be shared between threads, and reprs look like Python.
+- v1 signers are resolved the way apksig does it, and BER-encoded certificates are accepted.
+- Signature schemes are listed first. A repeated block ID keeps its first value, as on Android, and malformed signing block pairs are skipped.
+- The EOCD lookup matches Android's, so truncated archives are rejected.
+- `show` text output has aligned sections and groups schemes signed with the same certificates.
+- `show` reports a path that doesn't exist instead of silently skipping it.
+
+### Removed
+
+- **BREAKING:** Python 3.10 support.
+- **BREAKING:** `Signature::Unknown` and `Signature::V4`.
+- **BREAKING:** `StringPool::strings`.
 
 ### Fixed
 
-- `get_resource_value("@string/...")` missed resources the manifest doesn't use.
+- A deflated entry was cut off at its declared size.
+- An entry name that isn't valid UTF-8 hid every entry after it.
+- `get_resource_value("@string/...")` missed resources that the manifest doesn't reference.
+- `get_min_sdk_version()` on an APKS returned 21 instead of the app's lowest SDK.
+- Malformed AXML: elements with invalid names are kept under a placeholder, and attributes whose names can't be written as XML are dropped, so the XML output stays valid.
+- A closed pipe (`| head`) no longer prints an error.
+
+### Security
+
 - `extract` could write outside the output directory.
-- A deflated entry was cut to its declared size.
-
-### Performance
-
-- 2.4× faster on store apps (XAPK and APKM about 10×), 1.7× on malware samples.
-- Python releases the GIL: a thread pool scales with the cores.
-
-### Breaking Changes
-
-- CLI: `show --sigs` is renamed to `show --signatures`.
-- `Signature::Unknown` and `Signature::V4` are removed.
-- `ZipEntry::get_signature_v1()` returns `Result<Option<Signature>, _>`; `EntryInfo` sizes are `u64`.
-- `XAPKManifest` fields changed; `StringPool::strings` is removed.
-- Python 3.10 is no longer supported.
+- A size taken from tampered metadata could make the parser allocate gigabytes.
 
 ## [1.0.13] - 2026-09-10
 
@@ -61,15 +66,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--list` flag on `extract` prints the archive contents (name, size, compression method) without extracting; it accepts the same regex filter as extraction. ([e756553](https://github.com/delvinru/apk-info/commit/e756553))
 - `repack` gains `--output <FILE>` and `--output-dir <DIR>`: `-o` writes to an explicit path (single input only), `-d` points at a directory for batch runs. ([dbb701d](https://github.com/delvinru/apk-info/commit/dbb701d))
 
+### Changed
+
+- ZIP entries read lazily through a `Read + Seek` cursor instead of loading the whole file, cutting memory use on large archives. ([dda3223](https://github.com/delvinru/apk-info/commit/dda3223))
+
 ### Fixed
 
 - A corrupt `resources.arsc` no longer aborts the parse; the resource table resolves to absent, so manifest, DEX, and signature analysis still complete. ([ba9133a](https://github.com/delvinru/apk-info/commit/ba9133a))
 - Sparse table entries in `resources.arsc` resolve by real entry id, fixing wrong references. ([ac6ebe7](https://github.com/delvinru/apk-info/commit/ac6ebe7))
 - Entry iteration now follows central-directory record order instead of hash-map order, so `namelist()` is deterministic and matches the archive. ([cb85007](https://github.com/delvinru/apk-info/commit/cb85007))
-
-### Performance
-
-- ZIP entries read lazily through a `Read + Seek` cursor instead of loading the whole file, cutting memory use on large archives. ([dda3223](https://github.com/delvinru/apk-info/commit/dda3223))
 
 ## [1.0.12] - 2026-08-17
 
@@ -86,15 +91,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING:** Python `APK.read()` reports compression mode as a string hint (`"stored"`, `"deflated"`, `"stored_tampered"`, `"deflated_tampered"`) instead of the `FileCompressionType` enum. ([476e511](https://github.com/delvinru/apk-info/commit/476e511))
 - `get_signatures()` returns the inner base APK signature for `xapk`/`apkm`, reflecting the real app identity. ([f3d9c5d](https://github.com/delvinru/apk-info/commit/f3d9c5d))
 - ZIP signing verification moved from `openssl` to `x509_cert`. ([3563807](https://github.com/delvinru/apk-info/commit/3563807))
-
-### Breaking Changes
-
-- Python `APK.read()` reports compression mode as a string hint (`"stored"`, `"deflated"`, `"stored_tampered"`, `"deflated_tampered"`) instead of the `FileCompressionType` enum. ([476e511](https://github.com/delvinru/apk-info/commit/476e511))
-
-### Performance
-
 - `mimalloc` global allocator in the CLI and Python: ~2.6x lower peak memory, ~5% faster end-to-end Python parsing, ~22% less user CPU on large batches. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
 - NUL-terminated UTF-16 package names decoded without an intermediate `Vec<u16>` allocation. ([f388c8e](https://github.com/delvinru/apk-info/commit/f388c8e))
 
@@ -213,6 +212,8 @@ Initial release of `apk-info`, a full-featured APK parser.
 - Python bindings.
 - Fuzzing targets.
 
+[Unreleased]: https://github.com/delvinru/apk-info/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/delvinru/apk-info/compare/v1.0.13...v1.1.0
 [1.0.13]: https://github.com/delvinru/apk-info/compare/v1.0.12...v1.0.13
 [1.0.12]: https://github.com/delvinru/apk-info/compare/v1.0.11...v1.0.12
 [1.0.11]: https://github.com/delvinru/apk-info/compare/v1.0.10...v1.0.11
