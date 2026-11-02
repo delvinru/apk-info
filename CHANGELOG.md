@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- `Apk::is_xr()` / `APK.is_xr()`: the app targets Android XR (`android.software.xr.api.spatial` or `android.software.xr.api.openxr`).
-
 ## [1.1.0] - 2026-11-02
 
 ### Added
@@ -23,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - APK Signature Scheme v3.2 (`Signature::V32`).
 - `Signature::ByteDance` for the ByteDance signing block of Toutiao and Douyin.
 - Intent filters of services and receivers.
+- `Apk::is_xr()` / `APK.is_xr()`: the app targets Android XR (`android.software.xr.api.spatial` or `android.software.xr.api.openxr`).
 - The base APK is found in containers with an unusual layout, even when it isn't named `base.apk`.
 - Clear errors for `.aab`, encrypted `.apkm` and a zip without a manifest.
 - Homebrew tap: `brew install delvinru/tap/apk-info`.
