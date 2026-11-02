@@ -22,6 +22,7 @@
     html_favicon_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/favicon-32.png"
 )]
 
+pub mod anomaly;
 pub mod compression;
 pub mod entry;
 pub mod errors;
@@ -33,6 +34,7 @@ mod source;
 mod structs;
 mod writer;
 
+pub use anomaly::ZipAnomaly;
 pub use compression::*;
 pub use entry::*;
 pub use errors::*;

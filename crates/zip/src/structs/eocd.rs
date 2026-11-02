@@ -21,7 +21,6 @@ pub(crate) struct EndOfCentralDirectory {
 
     pub(crate) central_dir_offset: u32,
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) comment_length: u16,
 
     #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]

@@ -8,6 +8,7 @@ use winnow::prelude::*;
 use winnow::token::take;
 
 use crate::ARSC;
+use crate::anomaly::{self, Input, ResAnomaly};
 use crate::errors::AXMLError;
 use crate::structs::{
     ResChunkHeader, ResourceHeaderType, ResourceValueType, StringPool, XMLHeader, XMLResourceMap,
@@ -38,6 +39,9 @@ pub struct AXML {
     /// Lets [`AXML::get_attribute_value`] resolve a reference by its exact id instead of a
     /// (potentially ambiguous/redacted) resource name.
     reference_ids: ReferenceIds,
+
+    /// Defects the parser recovered from, in the order met.
+    anomalies: Vec<ResAnomaly>,
 }
 
 /// Map of `(element name, attribute name)` to the raw resource id of a reference
@@ -52,14 +56,16 @@ impl AXML {
     /// ```ignore
     /// let axml = AXML::new(&mut input_bytes, Some(&arsc))?;
     /// ```
-    pub fn new(input: &mut &[u8], arsc: Option<&ARSC>) -> Result<AXML, AXMLError> {
+    pub fn new(bytes: &mut &[u8], arsc: Option<&ARSC>) -> Result<AXML, AXMLError> {
         // basic sanity check
-        if input.len() < 8 {
+        if bytes.len() < 8 {
             return Err(AXMLError::TooSmallError);
         }
 
+        let mut input = anomaly::input(bytes);
+
         // parse header
-        let header = ResChunkHeader::parse(input).map_err(|_| AXMLError::HeaderError)?;
+        let header = ResChunkHeader::parse(&mut input.input).map_err(|_| AXMLError::HeaderError)?;
 
         // header size must be 8 bytes, otherwise is non valid axml
         if header.header_size != 8 {
@@ -67,60 +73,83 @@ impl AXML {
         }
 
         // parse string pool
-        let string_pool = StringPool::parse(input).map_err(|_| AXMLError::StringPoolError)?;
+        let string_pool = StringPool::parse(&mut input).map_err(|_| AXMLError::StringPoolError)?;
 
         // parse resource map
-        let xml_resource = XMLResourceMap::parse(input).map_err(|_| AXMLError::ResourceMapError)?;
+        let xml_resource =
+            XMLResourceMap::parse(&mut input.input).map_err(|_| AXMLError::ResourceMapError)?;
 
         // parse and get xml tree
-        let (root, reference_ids) = Self::get_xml_tree(input, arsc, &string_pool, &xml_resource)
-            .ok_or(AXMLError::MissingRoot)?;
+        let (root, reference_ids) =
+            Self::get_xml_tree(&mut input, arsc, &string_pool, &xml_resource)
+                .ok_or(AXMLError::MissingRoot)?;
+
+        *bytes = input.input;
 
         Ok(AXML {
             root,
             reference_ids,
+            anomalies: input.state.into_vec(),
         })
     }
 
+    /// Defects in the binary XML that the parser recovered from.
+    ///
+    /// An empty slice means the document is well-formed, as far as the parser
+    /// can tell.
+    #[inline]
+    pub fn anomalies(&self) -> &[ResAnomaly] {
+        &self.anomalies
+    }
+
     fn get_xml_tree<'a>(
-        input: &mut &[u8],
+        input: &mut Input<'_>,
         arsc: Option<&ARSC>,
         string_pool: &'a StringPool,
         xml_resource: &'a XMLResourceMap,
     ) -> Option<(Element, ReferenceIds)> {
         let mut stack: Vec<Element> = Vec::with_capacity(16);
+        // the stack never pops the root, so open elements are counted apart
+        let mut depth = 0usize;
         let mut reference_ids: ReferenceIds = HashMap::new();
 
         loop {
-            let chunk_header = match ResChunkHeader::parse(input) {
+            let chunk_header = match ResChunkHeader::parse(&mut input.input) {
                 Ok(v) => v,
                 Err(ErrMode::Backtrack(_)) => break,
                 Err(_) => return None,
             };
 
             // Skip non-xml chunks
-            if chunk_header.type_ < ResourceHeaderType::XmlStartNamespace
-                || chunk_header.type_ > ResourceHeaderType::XmlLastChunk
-            {
-                warn!("not a xml resource chunk: {chunk_header:?}");
-
-                let _ =
-                    take::<u32, &[u8], ContextError>(chunk_header.content_size()).parse_next(input);
+            if !is_xml_node(&chunk_header) {
+                let skipped = skip_run(&mut input.input, &chunk_header, |h| !is_xml_node(h));
+                warn!("skipped {skipped} non-xml chunks, the first: {chunk_header:?}");
+                input.state.push(ResAnomaly::NonXmlChunk {
+                    chunk_type: (&chunk_header.type_).into(),
+                });
                 continue;
             }
 
             // another malware technique
             if chunk_header.header_size != 0x10 {
-                warn!("xml resource chunk header size is not 0x10: {chunk_header:?}, skipped");
-
-                let _ =
-                    take::<u32, &[u8], ContextError>(chunk_header.content_size()).parse_next(input);
+                let skipped = skip_run(&mut input.input, &chunk_header, |h| {
+                    is_xml_node(h) && h.header_size != 0x10
+                });
+                warn!(
+                    "skipped {skipped} xml chunks with a header size other than 0x10, the first: {chunk_header:?}"
+                );
+                input.state.push(ResAnomaly::XmlNodeHeaderSize {
+                    header_size: chunk_header.header_size,
+                });
                 continue;
             }
 
-            let xml_header = match XMLHeader::parse(input, chunk_header) {
+            let xml_header = match XMLHeader::parse(&mut input.input, chunk_header) {
                 Ok(v) => v,
-                Err(_) => break,
+                Err(_) => {
+                    input.state.push(ResAnomaly::TruncatedXml);
+                    break;
+                }
             };
 
             match xml_header.header.type_ {
@@ -133,7 +162,10 @@ impl AXML {
                 ResourceHeaderType::XmlStartElement => {
                     let node = match XmlStartElement::parse(input, xml_header) {
                         Ok(v) => v,
-                        Err(_) => break,
+                        Err(_) => {
+                            input.state.push(ResAnomaly::TruncatedXml);
+                            break;
+                        }
                     };
 
                     // why is_attribute_name == true? idk, but this works, for example - b1e83615e07999862f15f5649656941f754db4ed31458b4b6b5ba9d36bc1b1b3
@@ -146,6 +178,9 @@ impl AXML {
                             warn!(
                                 "invalid element name {name:?}, replaced with {INVALID_ELEMENT_NAME:?}"
                             );
+                            input.state.push(ResAnomaly::InvalidElementName {
+                                name: name.map(Cow::into_owned),
+                            });
                             Cow::Borrowed(INVALID_ELEMENT_NAME)
                         }
                     };
@@ -171,6 +206,9 @@ impl AXML {
                         // skip garbage strings: they can't be written as xml
                         if !is_valid_name(&attribute_name) {
                             warn!("skipped garbage attribute name: {:?}", attribute_name);
+                            input.state.push(ResAnomaly::InvalidAttributeName {
+                                name: attribute_name.into_owned(),
+                            });
                             continue;
                         }
 
@@ -205,8 +243,10 @@ impl AXML {
                     }
 
                     stack.push(element);
+                    depth += 1;
                 }
                 ResourceHeaderType::XmlEndElement => {
+                    depth = depth.saturating_sub(1);
                     let _ = XmlEndElement::parse(input, xml_header);
 
                     if stack.len() > 1 {
@@ -219,8 +259,17 @@ impl AXML {
                 }
                 _ => {
                     warn!("unknown header type: {:#?}", xml_header.header.type_);
+                    input.state.push(ResAnomaly::UnknownChunk {
+                        chunk_type: (&xml_header.header.type_).into(),
+                    });
                 }
             }
+        }
+
+        if depth != 0 {
+            input
+                .state
+                .push(ResAnomaly::UnclosedElements { count: depth });
         }
 
         // returns root of the tree plus (element, attr) -> resource id
@@ -367,4 +416,42 @@ impl AXML {
                 None
             })
     }
+}
+
+/// Whether a chunk is an XML tree node.
+#[inline]
+fn is_xml_node(header: &ResChunkHeader) -> bool {
+    (ResourceHeaderType::XmlStartNamespace..=ResourceHeaderType::XmlLastChunk)
+        .contains(&header.type_)
+}
+
+/// Skips the chunk whose `first` header was just read, then every following
+/// chunk `skip` accepts. Returns how many chunks were skipped.
+///
+/// A crafted manifest has millions of garbage chunks in a row: the run is
+/// walked on a local copy of the input, which stays in registers.
+fn skip_run(
+    input: &mut &[u8],
+    first: &ResChunkHeader,
+    skip: impl Fn(&ResChunkHeader) -> bool,
+) -> usize {
+    let mut data = *input;
+    let _ = take::<u32, &[u8], ContextError>(first.content_size()).parse_next(&mut data);
+
+    let mut skipped = 1;
+    loop {
+        let mut next = data;
+        match ResChunkHeader::parse(&mut next) {
+            Ok(header) if skip(&header) => {
+                data = next;
+                let _ =
+                    take::<u32, &[u8], ContextError>(header.content_size()).parse_next(&mut data);
+                skipped += 1;
+            }
+            _ => break,
+        }
+    }
+
+    *input = data;
+    skipped
 }

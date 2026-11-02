@@ -25,6 +25,7 @@ nav = [
   { "Reference" = [
     { "CLI" = "reference/cli.md" },
     { "Python API" = "reference/python.md" },
+    { "Anomalies" = "reference/anomalies.md" },
     { "Rust API" = "https://docs.rs/apk-info/latest/apk_info/" },
   ] },
   { "Benchmarks" = "benchmarks.md" },

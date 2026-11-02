@@ -10,7 +10,6 @@ pub(crate) struct LocalFileHeader {
     #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) version_needed: u16,
 
-    #[cfg_attr(not(test), expect(dead_code, reason = "read only by the tests"))]
     pub(crate) general_purpose_bit_flag: u16,
 
     pub(crate) compression_method: u16,

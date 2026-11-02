@@ -34,6 +34,14 @@ enum Commands {
         )]
         signatures: bool,
 
+        #[arg(
+            short,
+            long,
+            default_value_t = false,
+            help = "Check the APK for tampering (slower)"
+        )]
+        anomalies: bool,
+
         #[arg(short, long, default_value_t = false, help = "Show output as jsonl")]
         json: bool,
     },
@@ -121,8 +129,9 @@ fn main() {
         Some(Commands::Show {
             paths,
             signatures,
+            anomalies,
             json,
-        }) => command_show(paths, signatures, json),
+        }) => command_show(paths, signatures, anomalies, json),
         Some(Commands::Extract {
             paths,
             output,

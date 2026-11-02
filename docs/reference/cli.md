@@ -25,16 +25,18 @@ apk-info show [OPTIONS] <PATHS>...
 | Option | Description |
 |---|---|
 | `-s`, `--signatures` | Also print the APK Signing Block contents: v1–v3.2 certificates, source stamps, channel blocks. For XAPK / APKM / APKS files, the outer archive's own signature (if any) is printed separately from the app's. |
+| `-a`, `--anomalies` | Also check the APK for tampering and list its [anomalies](anomalies.md). Reads the local header of every zip entry, which makes `show` several times slower on a slow disk. The text output has a verdict line, then one line per kind of anomaly with the number of entries and the first two locations; the JSON output lists every anomaly. |
 | `-j`, `--json` | Print one JSON object per APK (JSONL) instead of colored text. |
 
 ```bash
 apk-info show app.apk
 apk-info show app.apk other.apk ./folder-of-apks/
 apk-info show --signatures app.apk
+apk-info show --anomalies app.apk
 apk-info show --json ./folder-of-apks/
 ```
 
-`show` reports a file that fails to parse on stderr as `"<path>" - <error>` and moves on, so `show` is safe to run over large collections of broken samples, and stdout stays valid JSONL with `--json`. The exit code stays `0`.
+`show` reports a file that fails to parse, or a path that doesn't exist, on stderr as `"<path>" - <error>` and moves on, so `show` is safe to run over large collections of broken samples. The exit code stays `0`. With `--json`, the failure is also a line on stdout, `{"path": "<path>", "error": "<error>"}`, so a collection can be accounted for from stdout alone: `select(.error)` picks the failures.
 
 ### JSON output
 
@@ -45,15 +47,16 @@ $ apk-info show --json --signatures apkstest.apk | jq
   "package_name": "io.github.delvinru.apkstest",
   "version_name": "1.0.7",
   "version_code": "7",
-  "main_activity": "io.github.delvinru.apkstest/.MainActivity",
+  "main_activity": ".MainActivity",
   "min_sdk_version": "21",
-  "max_sdk_version": "-",
+  "max_sdk_version": null,
   "target_sdk_version": "35",
   "application_label": "APKS Test",
   "abis": ["x86_64"],
   "signatures": [
     {
-      "v1": [
+      "scheme": "v1",
+      "certificates": [
         {
           "serial_number": "1bdde6531ed48e6b",
           "subject": "CN=apk-info apks test",
@@ -67,22 +70,37 @@ $ apk-info show --json --signatures apkstest.apk | jq
         }
       ]
     },
-    { "v2": [ ... ] },
-    { "v3": [ ... ] }
+    { "scheme": "v2", "certificates": [ ... ] },
+    { "scheme": "v3", "certificates": [ ... ] }
   ]
 }
 ```
 
 - `path` is the file the object describes, as passed on the command line or found in a directory.
-- Missing values are printed as `"-"`.
-- `signatures` is present only with `--signatures`. Each element is an object with a single key naming the block, except Google Play Frosting:
-    - `v1`, `v2`, `v3`, `v31`, `v32`: a list of certificates;
-    - `stamp_block_v1`, `stamp_block_v2`: a single certificate;
-    - `apk_channel_block`, `vasdolly_v2`, `bytedance`: a string;
-    - `packer_next_gen_v2`: a list of bytes;
-    - Google Play Frosting is the plain string `"google_play_frosting"` (presence only).
+- A missing value is `null`. Versions and SDK levels are strings, as in the manifest: `minSdkVersion` can be a codename such as `"Q"`.
+- `main_activity` is the name as written in the manifest, often relative to the package (`.MainActivity`). The text output shows it as `package/.MainActivity`, the form `adb shell am start -n` takes.
+- `signatures` is present only with `--signatures`. Every element has a `scheme`, then `certificates` (always a list) or a `value`:
+    - `v1`, `v2`, `v3`, `v31`, `v32`, `stamp_block_v1`, `stamp_block_v2`: `certificates`;
+    - `apk_channel_block`, `vasdolly_v2`, `bytedance`: `value`, a string;
+    - `packer_next_gen_v2`: `value`, the payload in hex;
+    - `google_play_frosting`: neither, presence only.
+
+    Every SHA-256 fingerprint of an APK: `[.signatures[].certificates[]?.sha256_fingerprint]`.
 - `container_signatures` has the same shape. It is present only with `--signatures`, and only when an XAPK / APKM / APKS archive is itself signed, which is rare.
 - Fingerprints are lowercase hex without separators.
+- `tampered` and `anomalies` are present only with `--anomalies`. `tampered` is `true` when any anomaly is rated `tampered`; each anomaly is an object with `code`, `severity`, `location` (`null` for the archive itself) and `detail`, see [Anomalies](anomalies.md):
+
+    ```json
+    "tampered": true,
+    "anomalies": [
+      {
+        "code": "unknown_compression_method",
+        "severity": "tampered",
+        "location": "AndroidManifest.xml",
+        "detail": "unknown compression method 52219"
+      }
+    ]
+    ```
 
 ## `extract` (alias `x`)
 
@@ -226,9 +244,7 @@ apk-info show --json ./apks/ | jq -r .package_name | sort -u
 
 # APKs signed with a given certificate (SHA-256 fingerprint)
 apk-info show --json --signatures ./apks/ | jq -r --arg fp "<sha256>" '
-  select([.signatures[] | objects | to_entries[].value
-          | if type == "array" then .[] else . end
-          | objects | .sha256_fingerprint] | index($fp))
+  select(any(.signatures[].certificates[]?; .sha256_fingerprint == $fp))
   | .package_name'
 
 # one decoded manifest per APK

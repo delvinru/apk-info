@@ -19,10 +19,9 @@ pub(crate) fn get_all_files(paths: &[PathBuf]) -> Vec<PathBuf> {
                     .filter(|e| e.path().is_file())
                     .map(|e| e.path().to_path_buf())
                     .collect::<Vec<_>>()
-            } else if path.is_file() {
-                vec![path.clone()]
             } else {
-                Vec::new()
+                // a missing path goes on too, for the command to report it
+                vec![path.clone()]
             }
         })
         .collect()

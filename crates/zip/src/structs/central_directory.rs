@@ -8,6 +8,8 @@ use winnow::error::{ErrMode, Needed};
 use winnow::prelude::*;
 use winnow::token::take;
 
+use crate::anomaly::ZipAnomaly;
+
 #[derive(Debug)]
 pub(crate) struct CentralDirectoryEntry {
     #[expect(dead_code, reason = "parsed for completeness, not read yet")]
@@ -16,7 +18,6 @@ pub(crate) struct CentralDirectoryEntry {
     #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) version_needed: u16,
 
-    #[expect(dead_code, reason = "parsed for completeness, not read yet")]
     pub(crate) general_purpose: u16,
 
     pub(crate) compression_method: u16,
@@ -226,6 +227,9 @@ pub(crate) struct CentralDirectory {
     /// Iteration over the hash map is random per process; extraction and repack
     /// follow the file's own order instead, so it is preserved here.
     pub(crate) ordered_names: Vec<Arc<str>>,
+
+    /// Defects of the record list.
+    pub(crate) anomalies: Vec<ZipAnomaly>,
 }
 
 impl CentralDirectory {
@@ -247,6 +251,26 @@ impl CentralDirectory {
         )
         .parse_next(&mut input)?;
 
+        let mut anomalies = Vec::new();
+        if parsed.len() < expected_entries {
+            anomalies.push(ZipAnomaly::MissingCentralDirectoryRecords {
+                declared: expected_entries as u64,
+                parsed: parsed.len() as u64,
+            });
+        } else {
+            // records past the count are ignored, as Android does, but noted
+            let mut extra = 0u64;
+            while CentralDirectoryEntry::parse(&mut input).is_ok() {
+                extra += 1;
+            }
+            if extra != 0 {
+                anomalies.push(ZipAnomaly::ExtraCentralDirectoryRecords {
+                    declared: expected_entries as u64,
+                    extra,
+                });
+            }
+        }
+
         // `read` looks names up in the map, so a duplicated name keeps the last
         // record's data; `ordered_names` keeps the first record's position.
         let mut entries = AHashMap::with_capacity(parsed.len());
@@ -257,6 +281,9 @@ impl CentralDirectory {
                     "entry {index}: name is not valid UTF-8, read as {:?}; Android rejects this archive",
                     entry.file_name
                 );
+                anomalies.push(ZipAnomaly::InvalidUtf8Name {
+                    entry: entry.file_name.to_string(),
+                });
             }
 
             let name = Arc::clone(&entry.file_name);
@@ -265,12 +292,31 @@ impl CentralDirectory {
                 .is_none()
             {
                 ordered_names.push(name);
+            } else {
+                anomalies.push(ZipAnomaly::DuplicateEntry {
+                    entry: name.to_string(),
+                });
+            }
+        }
+
+        // a file name used as a directory by another entry
+        for name in &ordered_names {
+            if let Some(file) = name
+                .match_indices('/')
+                .map(|(end, _)| &name[..end])
+                .find(|parent| entries.contains_key(*parent))
+            {
+                anomalies.push(ZipAnomaly::EntryPathConflict {
+                    entry: name.to_string(),
+                    file: file.to_owned(),
+                });
             }
         }
 
         Ok(CentralDirectory {
             entries,
             ordered_names,
+            anomalies,
         })
     }
 }

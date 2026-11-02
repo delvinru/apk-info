@@ -16,11 +16,13 @@
     html_favicon_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/favicon-32.png"
 )]
 
+pub mod anomaly;
 mod arsc;
 mod axml;
 pub mod errors;
 
 pub mod structs;
 
+pub use anomaly::ResAnomaly;
 pub use arsc::ARSC;
 pub use axml::{ANDROID_NAMESPACE, AXML, INVALID_ELEMENT_NAME};

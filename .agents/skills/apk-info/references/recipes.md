@@ -12,7 +12,7 @@ Copy-paste solutions for common APK analysis tasks. Each recipe is self-containe
 - [6. Find exported components (attack surface)](#6-find-exported-components-attack-surface)
 - [7. Batch-process a folder of APKs](#7-batch-process-a-folder-of-apks)
 - [8. Extract specific files (DEX, native libs, etc.)](#8-extract-specific-files-dex-native-libs-etc)
-- [9. Detect BadPack / tampered compression](#9-detect-badpack--tampered-compression)
+- [9. Check for tampering / BadPack](#9-check-for-tampering--badpack)
 - [10. Check if an APK is launchable](#10-check-if-an-apk-is-launchable)
 - [11. Identify device targets (TV, watch, auto, chromebook)](#11-identify-device-targets-tv-watch-auto-chromebook)
 - [12. Resolve a resource reference](#12-resolve-a-resource-reference)
@@ -220,23 +220,46 @@ CLI equivalent:
 apk-info extract ./app.apk -f 'classes\d+\.dex' -f 'assets/.*'
 ```
 
-## 9. Detect BadPack / tampered compression
+## 9. Check for tampering / BadPack
 
-BadPack malware tampers with zip headers to break standard parsers. The most common trick: set the compression method field to a bogus value (e.g. `55914`) while the data is actually stored or deflated normally. Standard tools like `unzip` and `7z` refuse to extract such entries; apk-info detects the mismatch and decompresses correctly.
+BadPack malware tampers with zip headers to break standard parsers. The most common trick: set the compression method field to a bogus value (e.g. `55914`) while the data is actually stored or deflated normally. Standard tools like `unzip` and `7z` refuse to extract such entries; apk-info detects the mismatch and decompresses correctly. Packers add more: fake end-of-central-directory records, decoy directory records, encryption flags, paths through file names, garbage chunks in the manifest and resource table.
 
-Check the compression type returned by `read()` — a short string hint such as `"stored_tampered"`:
+`anomalies()` reports all of them with a severity, without decompressing anything:
 
 ```python
 from apk_info import APK
 
 apk = APK("./suspicious.apk")
-for name in apk.namelist():
-    _, compression = apk.read(name)
-    if compression in ("stored_tampered", "deflated_tampered"):
-        print(f"TAMPERED: {name} ({compression})")
+anomalies = apk.anomalies()
+tampered = any(a.severity == "tampered" for a in anomalies)   # same as apk.is_tampered()
+print("tampered:", tampered)
+for a in anomalies:
+    print(f"[{a.severity}] {a.location or '-'}: {a.detail} ({a.code})")
 ```
 
-CLI: `apk-info extract -v` prints tampered compression types in bold red:
+```
+tampered: True
+[tampered] AndroidManifest.xml: compression method 8 in the central directory, 55914 in the local header (compression_method_mismatch)
+```
+
+CLI:
+
+```
+$ apk-info show --anomalies ./suspicious.apk
+...
+Tampering         YES · 1 tampered
+  ✗ compression_method_mismatch     AndroidManifest.xml: compression method 8 in the central directory, 55914 in the local header
+```
+
+Triage a folder, keeping only tampered files:
+
+```bash
+apk-info show --anomalies --json ./samples/ | jq -c 'select(.tampered) | {path, codes: [.anomalies[].code] | unique}'
+```
+
+`suspicious` findings (truncated directory, shifted local headers, decoy `android:name`) also occur in damaged downloads and protected clean apps; judge them with the rest of the sample. Severities and codes: `python-api.md` → Anomalies & tampering.
+
+Per-entry alternative: `read()` returns a short compression hint, `"stored_tampered"` / `"deflated_tampered"` for a BadPack entry (decompresses the data, so slow over every entry). CLI: `apk-info extract -l` marks such entries with `!`, and `extract -v` prints them in bold red:
 
 ```
 [~] extracted "AndroidManifest.xml" (StoredTampered)
@@ -276,12 +299,12 @@ $ apk-info extract -v ./malware.apk -f AndroidManifest.xml
 [~] extracted "AndroidManifest.xml" (StoredTampered)   # BadPack detected, data recovered
 
 $ apk-info show ./malware.apk
-Package Name: com.example.myapplication
-Main Activity: com.example.myapplication/.MainActivity
-Min SDK Version: 28
-Max SDK Version: -
-Target SDK Version: 33
-Application Label: PENNY
+./malware.apk
+  Package         com.example.myapplication
+  Label           PENNY
+  ...
+  SDK             min 28 · target 33
+  Main activity   com.example.myapplication/.MainActivity
 ```
 
 The same analysis in Python:

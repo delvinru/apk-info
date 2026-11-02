@@ -2,7 +2,7 @@
 //! signed APK carrying one technique that a real device (adb, API 34) installs
 //! and runs, so our reader must extract what Android does.
 
-use apk_info_zip::ZipEntry;
+use apk_info_zip::{ZipAnomaly, ZipEntry};
 
 fn fixture(name: &str) -> String {
     format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))
@@ -51,4 +51,43 @@ fn decoy_cd_record_does_not_shadow_manifest() {
         manifest, b"DECOY-MANIFEST-BYTES",
         "read returned the decoy payload"
     );
+}
+
+/// The planted EOCD is reported, along with nothing else.
+#[test]
+fn fake_eocd_in_comment_is_reported() {
+    let zip = ZipEntry::open(fixture("badpack-fake-eocd-in-comment.apk")).unwrap();
+
+    let codes: Vec<&str> = zip.anomalies().iter().map(ZipAnomaly::code).collect();
+    assert_eq!(codes, ["fake_eocd_in_comment"]);
+}
+
+/// The decoy record past `num_records` is reported, along with nothing else.
+#[test]
+fn decoy_cd_record_is_reported() {
+    let zip = ZipEntry::open(fixture("badpack-decoy-cd-record.apk")).unwrap();
+
+    assert_eq!(
+        zip.anomalies(),
+        [ZipAnomaly::ExtraCentralDirectoryRecords {
+            declared: 6,
+            extra: 1
+        }]
+    );
+}
+
+/// Archives straight from apksig have no anomalies.
+#[test]
+fn golden_archives_have_no_anomalies() {
+    for name in [
+        "golden-rsa-verity-out.apk",
+        "v1-only-with-rsa-2048.apk",
+        "v2-only-with-rsa-pkcs1-sha256-2048.apk",
+        "v3-only-with-rsa-pkcs1-sha256-2048.apk",
+        "v31-tgt-33-no-v3-attr.apk",
+        "stamp-1-v31-tgt-33-signer.apk",
+    ] {
+        let zip = ZipEntry::open(fixture(name)).unwrap();
+        assert_eq!(zip.anomalies(), [], "{name}");
+    }
 }

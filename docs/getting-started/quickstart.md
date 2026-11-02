@@ -7,9 +7,9 @@ The examples use `apkstest.apk`, the small test app from the repository, but any
 unzip -p core/tests/fixtures/apks-universal.apks universal.apk > apkstest.apk
 ```
 
-The CLI on a malware sample, `show` and then `show --signatures`:
+The CLI on a malware sample, a ToxicPanda banker:
 
-![apk-info show and show --signatures on a malware sample](../assets/demo.gif)
+--8<-- "docs/assets/demo.html"
 
 ## Basic information
 
@@ -17,15 +17,13 @@ The CLI on a malware sample, `show` and then `show --signatures`:
 
     ```console
     $ apk-info show apkstest.apk
-    Package Name: io.github.delvinru.apkstest
-    Main Activity: io.github.delvinru.apkstest/.MainActivity
-    Min SDK Version: 21
-    Max SDK Version: -
-    Target SDK Version: 35
-    Application Label: APKS Test
-    Version Name: 1.0.7
-    Version Code: 7
-    ABIs: x86_64
+    apkstest.apk
+      Package         io.github.delvinru.apkstest
+      Label           APKS Test
+      Version         1.0.7 (7)
+      SDK             min 21 · target 35
+      Main activity   io.github.delvinru.apkstest/.MainActivity
+      ABIs            x86_64
     ```
 
     `show` accepts several files and directories at once and walks directories recursively.

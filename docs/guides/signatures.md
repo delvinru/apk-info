@@ -177,9 +177,7 @@ Comparing certificate fingerprints is how you tell an update from a repackaged c
 
     ```bash
     apk-info show --json --signatures ./apks/ | jq -r --arg fp "<sha256>" '
-      select([.signatures[] | objects | to_entries[].value
-              | if type == "array" then .[] else . end
-              | objects | .sha256_fingerprint] | index($fp))
+      select(any(.signatures[].certificates[]?; .sha256_fingerprint == $fp))
       | .package_name'
     ```
 

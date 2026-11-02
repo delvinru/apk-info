@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clear errors for `.aab`, encrypted `.apkm` and a zip without a manifest.
 - Intent filters of services and receivers.
 - Documentation site: <https://delvinru.github.io/apk-info/>.
+- `Apk::anomalies()` lists structural defects (BadPack headers, a damaged manifest or resource table, odd containers) with a severity and a location; `Apk::is_tampered()` gives the verdict. Python: `APK.anomalies()`, `APK.is_tampered()`.
+- `ZipEntry::anomalies()`, `AXML::anomalies()` and `ARSC::anomalies()` for the individual parsers.
+- `show --anomalies` prints the anomalies and the verdict; with `--json`, as `anomalies` and `tampered`.
 
 ### Changed
 
@@ -25,8 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The EOCD is searched for like Android does: truncated archives are rejected.
 - An entry name that isn't UTF-8 no longer hides the entries after it.
 - `get_min_sdk_version()` of an APKS reports the app's lowest SDK, not 21.
-- `show --json` keeps errors on stderr; a closed pipe exits quietly.
+- `show --json` keeps errors on stderr, and also writes a `{"path", "error"}` line for every failed file; a closed pipe exits quietly.
+- `show --json`: a missing value is `null` instead of `"-"`; `main_activity` is the name as written in the manifest, without the package prefix; every signature is `{"scheme", "certificates" | "value"}`.
+- `show` reports a path that doesn't exist instead of skipping it.
+- `show` text output: aligned sections, one entry for schemes signed with the same certificates.
 - Python: `APK` can be shared between threads; reprs are Python-like.
+- `XmlParse::parse` takes the anomaly-collecting `apk_info_axml::anomaly::Input` instead of `&mut &[u8]`.
 
 ### Fixed
 

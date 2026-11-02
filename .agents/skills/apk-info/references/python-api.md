@@ -19,6 +19,7 @@ Complete catalog of the `apk_info` Python API (≥3.11, full type stubs included
 - [Native ABIs](#native-abis)
 - [Pretty-printed manifest](#pretty-printed-manifest)
 - [Generic attribute access](#generic-attribute-access)
+- [Anomalies & tampering](#anomalies--tampering)
 - [Error handling](#error-handling)
 - [Dataclass note](#dataclass-note)
 
@@ -260,6 +261,34 @@ apk.get_all_attribute_values("uses-permission", "name")  # list[str]
 apk.get_resource_value("@string/app_name")  # str | None
 apk.get_resource_value("@drawable/ic_launcher")  # str | None
 ```
+
+## Anomalies & tampering
+
+```python
+apk.is_tampered()            # bool: any anomaly rated "tampered"
+for a in apk.anomalies():    # list[Anomaly], empty for a well-formed APK
+    print(a.code, a.severity, a.location, a.detail)
+```
+
+Not part of `APK()`: each call reads the local header of every zip entry (a few ms per file on a slow disk, near free in the page cache). Call `anomalies()` once and derive the verdict from it when both are needed. Releases the GIL.
+
+**`Anomaly`** fields (frozen, compared by value): `code: str` (stable identifier), `severity: "info" | "suspicious" | "tampered"`, `location: str | None` (entry name, `base.apk!classes.dex` inside a container, `None` for the archive itself), `detail: str` (human-readable).
+
+**Severities:**
+
+- `tampered` — a known technique against analysis tools; no build tool produces it, none of 5,714 clean store apps has one. Doesn't mean Android installs the file.
+- `suspicious` — unusual, but plain corruption, an exotic tool or a commercial protector can produce it. Alone it doesn't make `is_tampered()` true.
+- `info` — a quirk of ordinary build tools.
+
+**Codes:**
+
+| Severity | Zip archive | Manifest / resources / container |
+|---|---|---|
+| `tampered` | `fake_eocd_in_comment`, `extra_central_directory_records`, `duplicate_entry`, `entry_path_conflict`, `invalid_utf8_name`, `compression_method_mismatch` (BadPack), `unknown_compression_method`, `stored_size_mismatch`, `encryption_flag` | `string_pool_garbage_chunk`, `string_count_mismatch`, `string_offsets_out_of_bounds`, `non_xml_chunk`, `xml_node_header_size`, `attribute_start_shifted`, `attribute_size_mismatch`, `element_trailing_bytes`, `invalid_element_name`, `invalid_attribute_name` (garbage name), `package_header_size`, `type_entries_out_of_bounds`, `resources_unreadable` |
+| `suspicious` | `eocd_not_at_end`, `central_directory_shifted`, `missing_central_directory_records`, `local_header_shifted`, `local_header_missing` | `invalid_attribute_name` (decoy `android:name` with no namespace, used by protectors), `unknown_chunk`, `truncated_xml`, `unclosed_elements`, `no_packages`, `duplicate_package_id`, `root_manifest_unreadable` |
+| `info` | — | `duplicate_type_chunk`, `guessed_base_apk` |
+
+Limits: at most 16 anomalies of one kind per manifest / resource table, a run of garbage chunks counts once; zip anomalies are per entry (a packer may flag hundreds). A file `APK()` can't open has no anomalies. Full descriptions: <https://delvinru.github.io/apk-info/reference/anomalies/>.
 
 ## Error handling
 

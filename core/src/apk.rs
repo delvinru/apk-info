@@ -11,6 +11,7 @@ use apk_info_xml::Element;
 use apk_info_zip::{FileCompressionType, Signature, ZipEntry, ZipError};
 use log::{debug, warn};
 
+use crate::anomaly::{Anomaly, AnomalyKind, Severity};
 use crate::errors::APKError;
 use crate::models::{
     Activity, ActivityAlias, Attribution, IntentFilter, Permission, Provider, Receiver, Service,
@@ -1207,6 +1208,116 @@ impl Apk {
             return Ok(Vec::new());
         }
         Self::collect_signatures(&self.zip)
+    }
+
+    /// Inspects the apk for structural defects: tampered zip headers, a
+    /// damaged manifest or resource table, and the like.
+    ///
+    /// Not part of [`Apk::new`]: it reads the local header of every zip entry,
+    /// once per call. For a container both the container and its base apk are
+    /// checked.
+    ///
+    /// ```ignore
+    /// let apk = Apk::new("./file.apk").expect("can't analyze apk file");
+    /// for anomaly in apk.anomalies() {
+    ///     println!("[{}] {}: {anomaly}", anomaly.severity, anomaly.code());
+    /// }
+    /// ```
+    pub fn anomalies(&self) -> Vec<Anomaly> {
+        let mut anomalies = Vec::new();
+
+        let zip_anomalies = |zip: &ZipEntry, prefix: Option<&str>, out: &mut Vec<Anomaly>| {
+            out.extend(zip.anomalies().into_iter().map(|anomaly| {
+                let location = match (prefix, anomaly.entry()) {
+                    (Some(prefix), Some(entry)) => Some(format!("{prefix}!{entry}")),
+                    (Some(prefix), None) => Some(prefix.to_owned()),
+                    (None, entry) => entry.map(str::to_owned),
+                };
+                Anomaly::new(AnomalyKind::Zip(anomaly), location)
+            }));
+        };
+
+        zip_anomalies(&self.zip, None, &mut anomalies);
+
+        let prefix = self.base_apk_name.as_deref();
+        if let Some(name) = prefix {
+            // the root manifest lost to the base apk
+            if let Ok((manifest, _)) = self.zip.read(ANDROID_MANIFEST_PATH)
+                && let Err(err) = Self::parse_manifest(&self.zip, &manifest)
+            {
+                anomalies.push(Anomaly::new(
+                    AnomalyKind::RootManifestUnreadable {
+                        reason: err.to_string(),
+                    },
+                    Some(ANDROID_MANIFEST_PATH.to_owned()),
+                ));
+            }
+
+            let guessed = Self::base_apk_candidates(&self.zip, &mut None)
+                .into_iter()
+                .any(|(candidate, guessed)| guessed && candidate == name);
+            if guessed {
+                anomalies.push(Anomaly::new(
+                    AnomalyKind::GuessedBaseApk,
+                    Some(name.to_owned()),
+                ));
+            }
+
+            if let Ok(base) = self.get_inner_zip() {
+                zip_anomalies(base, Some(name), &mut anomalies);
+            }
+        }
+
+        let located = |path: &str| match prefix {
+            Some(prefix) => format!("{prefix}!{path}"),
+            None => path.to_owned(),
+        };
+
+        anomalies.extend(self.axml.anomalies().iter().map(|anomaly| {
+            Anomaly::new(
+                AnomalyKind::Manifest(anomaly.clone()),
+                Some(located(ANDROID_MANIFEST_PATH)),
+            )
+        }));
+
+        match &self.arsc {
+            Some(arsc) => anomalies.extend(arsc.anomalies().iter().map(|anomaly| {
+                Anomaly::new(
+                    AnomalyKind::Resources(anomaly.clone()),
+                    Some(located(RESOURCE_TABLE_PATH)),
+                )
+            })),
+            // present but dropped: read it again for the reason
+            None => {
+                if let Ok(base) = self.get_base_zip()
+                    && base.contains(RESOURCE_TABLE_PATH)
+                {
+                    let reason = match base.read(RESOURCE_TABLE_PATH) {
+                        Ok((data, _)) => ARSC::new(&mut &data[..]).err().map(|err| err.to_string()),
+                        Err(err) => Some(err.to_string()),
+                    };
+                    if let Some(reason) = reason {
+                        anomalies.push(Anomaly::new(
+                            AnomalyKind::ResourcesUnreadable { reason },
+                            Some(located(RESOURCE_TABLE_PATH)),
+                        ));
+                    }
+                }
+            }
+        }
+
+        anomalies
+    }
+
+    /// Whether the apk shows a known technique against static analysis, see
+    /// [`Apk::anomalies`] for the details.
+    ///
+    /// Does the full [`Apk::anomalies`] scan; call that instead when the
+    /// details are needed as well.
+    pub fn is_tampered(&self) -> bool {
+        self.anomalies()
+            .iter()
+            .any(|anomaly| anomaly.severity == Severity::Tampered)
     }
 
     /// Information about the native code (.so libraries) of the APK file.

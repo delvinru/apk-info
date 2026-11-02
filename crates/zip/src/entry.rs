@@ -5,6 +5,7 @@ use std::fmt::Write;
 use std::fs::File;
 use std::io::Cursor;
 use std::path::Path;
+use std::sync::Arc;
 
 use ahash::AHashSet;
 use cms::signed_data::{SignerIdentifier, SignerInfo};
@@ -24,6 +25,7 @@ use x509_cert::der::oid::db::DB;
 use x509_cert::der::{Decode, Encode};
 use x509_cert::name::Name;
 
+use crate::anomaly::ZipAnomaly;
 use crate::signature::{CertificateInfo, Signature};
 use crate::source::Source;
 use crate::structs::{
@@ -46,6 +48,46 @@ const EOCD_SEARCH_WINDOW: usize = 4096;
 
 /// Fixed part of a local file header: `4 (magic) + 26 (fields)`.
 const LOCAL_HEADER_FIXED_LEN: usize = 30;
+
+/// Reach of one read when scanning local headers in [`ZipEntry::anomalies`]:
+/// covers the headers of many small neighbouring entries at once.
+const HEADER_WINDOW: usize = 64 * 1024;
+
+/// Room for the extra field of a local header, read along with it: zipalign
+/// pads by a few bytes. A longer one is read separately.
+const HEADER_SLACK: usize = 64;
+
+/// A buffered span of the source, for [`ZipEntry::local_headers`].
+#[derive(Default)]
+struct Window {
+    start: usize,
+    data: Vec<u8>,
+}
+
+impl Window {
+    /// Whether `len` bytes at `offset` are in the window.
+    fn covers(&self, offset: usize, len: usize) -> bool {
+        offset >= self.start && offset + len <= self.start + self.data.len()
+    }
+
+    /// The window from `offset` on.
+    fn at(&self, offset: usize) -> Option<&[u8]> {
+        self.data.get(offset.checked_sub(self.start)?..)
+    }
+
+    /// Reads up to `len` bytes at `offset`, fewer at the end of the source;
+    /// empty past it.
+    fn fill(&mut self, zip: &ZipEntry, offset: usize, len: usize) {
+        let len = len.min(zip.source.len().saturating_sub(offset));
+        self.start = offset;
+        // one buffer for the whole scan: a fresh allocation per read costs
+        // more than the read
+        self.data.resize(len, 0);
+        if zip.source.read_exact_at(offset, &mut self.data).is_err() {
+            self.data.clear();
+        }
+    }
+}
 
 /// Upper bound for the APK Signing Block region read out of the source.
 ///
@@ -170,6 +212,11 @@ impl ZipEntry {
     ///
     /// See: <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT> (4.4.5)
     pub const METHOD_DEFLATED: u16 = 8;
+
+    /// General purpose flag bit `0`: the entry is encrypted.
+    ///
+    /// See: <https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT> (4.4.4)
+    const FLAG_ENCRYPTED: u16 = 1;
 
     /// Parses the local file header at `offset`, reading it lazily from the source.
     ///
@@ -343,7 +390,8 @@ impl ZipEntry {
             return Err(ZipError::InvalidHeader);
         }
 
-        let eocd_offset = Self::find_eocd_offset(&source).ok_or(ZipError::NotFoundEOCD)?;
+        let (eocd_offset, decoy_eocd) =
+            Self::find_eocd_offset(&source).ok_or(ZipError::NotFoundEOCD)?;
 
         // the EOCD record plus up to a maximum-size archive comment
         let eocd_len = (source.len() - eocd_offset).min(22 + u16::MAX as usize);
@@ -396,8 +444,31 @@ impl ZipEntry {
         let cd_bytes =
             source.read_bytes_at(central_dir_offset, source.len() - central_dir_offset)?;
         let total_entries = usize::try_from(total_entries).unwrap_or(usize::MAX);
-        let central_directory = CentralDirectory::parse(&cd_bytes, 0, total_entries)
+        let mut central_directory = CentralDirectory::parse(&cd_bytes, 0, total_entries)
             .map_err(|_| ZipError::ParseError)?;
+
+        // archive-level defects go first, before the record list ones
+        let mut anomalies = Vec::new();
+        if let Some(offset) = decoy_eocd {
+            anomalies.push(ZipAnomaly::FakeEocdInComment {
+                offset: offset as u64,
+            });
+        }
+        let eocd_end = eocd_offset + 22 + usize::from(eocd.comment_length);
+        if eocd_end != source.len() {
+            anomalies.push(ZipAnomaly::EocdNotAtEnd {
+                expected_len: eocd_end as u64,
+                actual_len: source.len() as u64,
+            });
+        }
+        if central_dir_offset != declared {
+            anomalies.push(ZipAnomaly::CentralDirectoryShifted {
+                declared: declared as u64,
+                actual: central_dir_offset as u64,
+            });
+        }
+        anomalies.append(&mut central_directory.anomalies);
+        central_directory.anomalies = anomalies;
 
         Ok(ZipEntry {
             source,
@@ -442,11 +513,14 @@ impl ZipEntry {
     /// rightmost match when none qualifies, so an archive with a broken comment
     /// length or trailing data still parses.
     ///
+    /// Returns the offset, and the offset of a rejected signature after it,
+    /// the planted one, if any.
+    ///
     /// Like Android's `libziparchive`, searches only the last `22 + u16::MAX`
     /// bytes, the most a comment can span. Android rejects a file whose EOCD
     /// is further back (a truncated archive, one with data appended after it)
     /// as "not zip", and a full scan of such a file would read all of it.
-    fn find_eocd_offset(source: &Source) -> Option<usize> {
+    fn find_eocd_offset(source: &Source) -> Option<(usize, Option<usize>)> {
         const MAGIC: &[u8; 4] = b"PK\x05\x06";
 
         let total_len = source.len();
@@ -469,7 +543,7 @@ impl ZipEntry {
                     break;
                 }
                 if Self::eocd_spans_to_end(source, &window[..len], start, offset, total_len) {
-                    return Some(offset);
+                    return Some((offset, fallback));
                 }
                 // remember the first (rightmost) candidate as a lenient fallback
                 fallback.get_or_insert(offset);
@@ -478,7 +552,7 @@ impl ZipEntry {
             }
 
             if start <= search_start {
-                return fallback;
+                return fallback.map(|offset| (offset, None));
             }
 
             // step back, overlapping by 3 bytes
@@ -590,6 +664,162 @@ impl ZipEntry {
             uncompressed_size: entry.uncompressed_size,
             tampered: local_method != entry.compression_method,
         })
+    }
+
+    /// Inspects the archive for structural defects.
+    ///
+    /// Reports what was noticed while opening the archive (the end record,
+    /// the central directory), then checks the local header of every entry
+    /// against its central directory record. The entry data is not read, so
+    /// the cost is one small read per entry.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use apk_info_zip::ZipEntry;
+    /// let zip = ZipEntry::open("app.apk").unwrap();
+    /// for anomaly in zip.anomalies() {
+    ///     println!("{}: {anomaly}", anomaly.code());
+    /// }
+    /// ```
+    pub fn anomalies(&self) -> Vec<ZipAnomaly> {
+        let mut anomalies = self.central_directory.anomalies.clone();
+
+        let entries: Vec<(&Arc<str>, &CentralDirectoryEntry)> = self
+            .central_directory
+            .ordered_names
+            .iter()
+            .filter_map(|name| Some((name, self.central_directory.entries.get(name)?)))
+            .collect();
+        let local_headers = self.local_headers(&entries);
+
+        for ((name, entry), local) in entries.into_iter().zip(local_headers) {
+            let entry_name = || name.to_string();
+
+            let method = entry.compression_method;
+            if method != Self::METHOD_STORED && method != Self::METHOD_DEFLATED {
+                anomalies.push(ZipAnomaly::UnknownCompressionMethod {
+                    entry: entry_name(),
+                    method,
+                });
+            } else if method == Self::METHOD_STORED
+                && entry.compressed_size != entry.uncompressed_size
+            {
+                anomalies.push(ZipAnomaly::StoredSizeMismatch {
+                    entry: entry_name(),
+                    compressed: entry.compressed_size,
+                    uncompressed: entry.uncompressed_size,
+                });
+            }
+
+            let Some(local) = local else {
+                anomalies.push(ZipAnomaly::LocalHeaderMissing {
+                    entry: entry_name(),
+                });
+                continue;
+            };
+
+            if local.offset as u64 != entry.local_header_offset {
+                anomalies.push(ZipAnomaly::LocalHeaderShifted {
+                    entry: entry_name(),
+                    declared: entry.local_header_offset,
+                    actual: local.offset as u64,
+                });
+            }
+            if local.compression_method != method {
+                anomalies.push(ZipAnomaly::CompressionMethodMismatch {
+                    entry: entry_name(),
+                    central: method,
+                    local: local.compression_method,
+                });
+            }
+
+            if (entry.general_purpose | local.general_purpose_bit_flag) & Self::FLAG_ENCRYPTED != 0
+            {
+                anomalies.push(ZipAnomaly::EncryptionFlag {
+                    entry: entry_name(),
+                });
+            }
+        }
+
+        anomalies
+    }
+
+    /// Reads the local headers of `entries`, in the same order; `None` for an
+    /// entry whose header isn't found even by the self-healing scan.
+    ///
+    /// A read is a system call, slow on some filesystems, and an apk has
+    /// thousands of entries. The headers are walked in file order, and one
+    /// read covers every header that starts within [`HEADER_WINDOW`] of the
+    /// first: the headers of small neighbouring entries come together, while
+    /// the data of a large entry is never read.
+    fn local_headers(
+        &self,
+        entries: &[(&Arc<str>, &CentralDirectoryEntry)],
+    ) -> Vec<Option<LocalFileHeader>> {
+        // an offset past `usize` has no header to read: `None`
+        let mut order: Vec<(usize, usize)> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(i, (_, entry))| {
+                Some((usize::try_from(entry.local_header_offset).ok()?, i))
+            })
+            .collect();
+        order.sort_unstable();
+
+        let mut headers = vec![None; entries.len()];
+        let mut window = Window::default();
+
+        for (position, &(claim, i)) in order.iter().enumerate() {
+            let entry = entries[i].1;
+            let expected_name = entry
+                .raw_file_name
+                .as_deref()
+                .unwrap_or(entry.file_name.as_bytes());
+
+            if !window.covers(claim, LOCAL_HEADER_FIXED_LEN) {
+                // up to the end of the last header that starts within reach;
+                // a longer extra field is read on its own below
+                let span_end = order[position..]
+                    .iter()
+                    .take_while(|(offset, _)| offset - claim < HEADER_WINDOW)
+                    .map(|&(offset, j)| {
+                        offset
+                            + LOCAL_HEADER_FIXED_LEN
+                            + entries[j].1.file_name.len()
+                            + HEADER_SLACK
+                    })
+                    .max()
+                    .unwrap_or(claim + LOCAL_HEADER_FIXED_LEN);
+                window.fill(self, claim, span_end - claim);
+            }
+
+            let header = self
+                .window_local_header(claim, &mut window)
+                .filter(|header| header.file_name.as_ref() == expected_name);
+
+            // a missing or foreign header goes through the self-healing scan
+            headers[i] = header.or_else(|| self.read_local_header_verified(entry).ok());
+        }
+
+        headers
+    }
+
+    /// Parses the local header at `claim` out of `window`, reading the header
+    /// alone when the window doesn't hold all of it.
+    fn window_local_header(&self, claim: usize, window: &mut Window) -> Option<LocalFileHeader> {
+        let fixed = window.at(claim)?;
+        let name_len = u16::from_le_bytes([*fixed.get(26)?, *fixed.get(27)?]) as usize;
+        let extra_len = u16::from_le_bytes([*fixed.get(28)?, *fixed.get(29)?]) as usize;
+        let total = LOCAL_HEADER_FIXED_LEN + name_len + extra_len;
+
+        if !window.covers(claim, total) {
+            window.fill(self, claim, total);
+        }
+
+        let mut header = LocalFileHeader::parse(window.at(claim)?, 0).ok()?;
+        header.offset = claim;
+        Some(header)
     }
 
     /// Reads the contents of a file from the ZIP archive.

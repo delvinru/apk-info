@@ -1,4 +1,4 @@
-//! Reading files from an APK: listing, DEX files and tampered entries.
+//! Reading files from an APK: listing, DEX files, tampered entries and anomalies.
 //!
 //! Usage: `cargo run --example files -- <path-to-apk> <output-dir>`
 
@@ -49,6 +49,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     // --8<-- [end:tampered]
+
+    // --8<-- [start:anomalies]
+    for anomaly in apk.anomalies() {
+        let location = anomaly.location.as_deref().unwrap_or("-");
+        println!("[{}] {location}: {anomaly}", anomaly.severity);
+    }
+    println!("tampered: {}", apk.is_tampered());
+    // --8<-- [end:anomalies]
 
     Ok(())
 }
