@@ -89,6 +89,12 @@ apk-info --version
     apk-info completion fish > ~/.config/fish/completions/apk-info.fish
     ```
 
+=== "PowerShell"
+
+    ```powershell
+    apk-info completion powershell >> $PROFILE
+    ```
+
 ## Python
 
 PyPI has wheels for Linux, macOS and Windows. You need CPython 3.11 or newer.

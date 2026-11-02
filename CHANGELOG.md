@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `get_min_sdk_version()` on an APKS returned 21 instead of the app's lowest SDK.
 - Malformed AXML: elements with invalid names are kept under a placeholder, and attributes whose names can't be written as XML are dropped, so the XML output stays valid.
 - A closed pipe (`| head`) no longer prints an error.
+- Shell completion scripts completed `apk-info-cli` instead of the `apk-info` binary.
 
 ### Security
 

@@ -11,7 +11,7 @@ static GLOBAL_ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 mod commands;
 
 #[derive(Parser)]
-#[command(version, about, arg_required_else_help(true))]
+#[command(name = "apk-info", version, about, arg_required_else_help(true))]
 struct Cli {
     #[command(subcommand)]
     commands: Option<Commands>,
