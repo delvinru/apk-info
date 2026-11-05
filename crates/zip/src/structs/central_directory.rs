@@ -300,12 +300,21 @@ impl CentralDirectory {
         }
 
         // a file name used as a directory by another entry
+        //
+        // Entries of one directory usually come in a run, so the answer for
+        // the previous entry's directory is reused instead of hashing every
+        // prefix again.
+        let mut last_dir: (&str, Option<&str>) = ("", None);
         for name in &ordered_names {
-            if let Some(file) = name
-                .match_indices('/')
-                .map(|(end, _)| &name[..end])
-                .find(|parent| entries.contains_key(*parent))
-            {
+            let dir = name.rfind('/').map_or("", |end| &name[..end]);
+            if dir != last_dir.0 {
+                let conflict = name
+                    .match_indices('/')
+                    .map(|(end, _)| &name[..end])
+                    .find(|parent| entries.contains_key(*parent));
+                last_dir = (dir, conflict);
+            }
+            if let Some(file) = last_dir.1 {
                 anomalies.push(ZipAnomaly::EntryPathConflict {
                     entry: name.to_string(),
                     file: file.to_owned(),

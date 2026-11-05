@@ -235,11 +235,14 @@ impl ResTableTypeSpec {
         )
             .parse_next(input)?;
 
-        let type_spec_flags = repeat(
-            entry_count as usize,
-            le_u32.map(ResTableConfigFlags::from_bits_truncate),
-        )
-        .parse_next(input)?;
+        // one bounds check for the whole mask array, then decode it in bulk
+        let masks = take(entry_count as usize * 4).parse_next(input)?;
+        let type_spec_flags = masks
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|c| ResTableConfigFlags::from_bits_truncate(u32::from_le_bytes(*c)))
+            .collect();
 
         Ok(ResTableTypeSpec {
             header,
@@ -487,8 +490,9 @@ pub struct ResTableType {
     /// This always must be last.
     pub config: ResTableConfig,
 
-    /// Sparse tables only: entry id per position in [`ResTableType::entries`];
-    /// `None` for dense/offset16, where id == position.
+    /// Entry id per position in [`ResTableType::entries`], for sparse tables
+    /// and for dense ones with empty slots, which keep only the present
+    /// entries; `None` when every slot is stored and id == position.
     pub(crate) entry_ids: Option<Vec<u16>>,
 
     /// Defined entries in this type
@@ -599,12 +603,31 @@ impl ResTableType {
 
         input.input = rest;
 
-        let mut entries = Vec::with_capacity(entry_count as usize);
         let entries_len = entries_slice.len();
 
-        for &offset in &entry_offsets {
+        // A dense table of a translation holds a slot for every resource of
+        // the type and fills a few. Its present entries are kept with their
+        // ids, as in a sparse table, so the empty slots cost nothing. Ids past
+        // `u16` can't be looked up anyway and keep the dense layout.
+        let compact = entry_ids.is_none() && entry_offsets.len() <= usize::from(u16::MAX) + 1;
+        let present = if compact {
+            entry_offsets.iter().filter(|&&o| o != u32::MAX).count()
+        } else {
+            entry_offsets.len()
+        };
+        let mut entries = Vec::with_capacity(present);
+        let mut entry_ids = if compact && present < entry_offsets.len() {
+            Some(Vec::with_capacity(present))
+        } else {
+            entry_ids
+        };
+        let compacting = compact && entry_ids.is_some();
+
+        for (position, &offset) in entry_offsets.iter().enumerate() {
             if offset == u32::MAX {
-                entries.push(ResTableEntry::NoEntry);
+                if !compacting {
+                    entries.push(ResTableEntry::NoEntry);
+                }
                 continue;
             }
 
@@ -615,6 +638,9 @@ impl ResTableType {
 
             let mut slice = &entries_slice[offset..];
             entries.push(ResTableEntry::parse(&mut slice)?);
+            if compacting && let Some(ids) = entry_ids.as_mut() {
+                ids.push(position as u16);
+            }
         }
 
         Ok(ResTableType {
@@ -881,8 +907,10 @@ impl ResTableStagedAlias {
 /// The stored entry set for a single `(config, type)` pair.
 #[derive(Debug)]
 pub struct ResTableTypeEntries {
-    /// Real entry id per position in [`ResTableTypeEntries::entries`]; `None` for
-    /// dense/offset16 tables where the id is the position itself.
+    /// Real entry id per position in [`ResTableTypeEntries::entries`], for
+    /// sparse tables and for dense ones with empty slots, which keep only the
+    /// present entries; `None` when every slot is stored and the id is the
+    /// position itself.
     pub entry_ids: Option<Vec<u16>>,
 
     /// The parsed entries, in file order.
@@ -892,14 +920,14 @@ pub struct ResTableTypeEntries {
 impl ResTableTypeEntries {
     /// Resolves `entry_id` to its stored entry.
     ///
-    /// Dense/offset16: id == position. Sparse: explicit id per packed entry, sorted
-    /// (AOSP `ResTable_sparseTypeEntry`), so binary search; unsorted (tampered)
-    /// tables get a linear scan.
+    /// Without ids: id == position. With ids: explicit id per packed entry,
+    /// sorted (AOSP `ResTable_sparseTypeEntry`, or a compacted dense table),
+    /// so binary search; unsorted (tampered) tables get a linear scan.
     pub fn find(&self, entry_id: u16) -> Option<&ResTableEntry> {
         let position = match &self.entry_ids {
-            // dense/offset16: position is the id
+            // every slot stored: position is the id
             None => entry_id as usize,
-            // sparse: ids are sorted, binary search
+            // sparse or compacted: ids are sorted, binary search
             Some(ids) => match ids.binary_search(&entry_id) {
                 Ok(position) => position,
                 // missed by the binary search: ids may be unsorted
