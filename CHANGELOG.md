@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Panic when a container without a root manifest holds a file with a non-ASCII name, e.g. `OPNE GIFT🎁.md`.
 - `extract --resources` lost file resources that share a name in an obfuscated resource table, and which one survived changed from run to run. Later duplicates now get their resource id appended, as in apktool.
 
+### Security
+
+- `extract --resources` could write outside the output directory: it built file resource paths from type and key names in `resources.arsc`, e.g. `../../x` or an absolute path. Such names are now replaced by the type or resource id.
+
 ## [1.1.0] - 2026-11-02
 
 ### Added

@@ -210,11 +210,51 @@ fn decode_axml(data: &[u8], arsc: Option<&ARSC>) -> Option<String> {
     Some(axml.get_xml_string())
 }
 
+/// Longest type or key name used as is; leaves room for an id suffix and an
+/// extension within the 255-byte limit of a file name.
+const MAX_NAME_LEN: usize = 200;
+
+/// Whether a name from the table can be one path component of the output.
+fn is_safe_component(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_NAME_LEN
+        && name != "."
+        && name != ".."
+        && !name.contains(['/', '\\', ':', '\0'])
+}
+
+/// Folder and file stem of a file resource: `res/<type><qualifier>/<key>`.
+///
+/// Both names come from the table: an unsafe one, which could write outside
+/// the output directory, is replaced by the type or resource id.
+fn resource_file_names(
+    type_name: &str,
+    qualifier: &str,
+    key: &str,
+    type_id: u8,
+    id: u32,
+) -> (String, String, bool) {
+    let safe_type = is_safe_component(type_name);
+    let safe_key = is_safe_component(key);
+    let folder = if safe_type {
+        format!("{type_name}{qualifier}")
+    } else {
+        format!("0x{type_id:02x}{qualifier}")
+    };
+    let stem = if safe_key {
+        key.to_owned()
+    } else {
+        format!("0x{id:08x}")
+    };
+    (folder, stem, !(safe_type && safe_key))
+}
+
 /// Writes file resources to `res/<type>[-<config>]/`, as apktool does.
 pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Result<()> {
     // obfuscated tables reuse names: later duplicates get their resource id
     let mut written: HashSet<PathBuf> = HashSet::new();
     let mut renamed = 0usize;
+    let mut sanitized = 0usize;
 
     for pkg in arsc.packages() {
         for (config, type_map) in &pkg.resources {
@@ -244,8 +284,6 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
                         continue;
                     }
 
-                    let folder = format!("{type_name}{folder_pfx}");
-
                     let ext = src
                         .rsplit_once('.')
                         .map(|(_, e)| e.trim())
@@ -256,8 +294,6 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
                         })
                         .map(|e| format!(".{e}"))
                         .unwrap_or_default();
-                    let out_name = format!("{key}{ext}");
-
                     let Ok((data, _)) = zip.read(&src) else {
                         continue;
                     };
@@ -270,12 +306,15 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
                         data
                     };
 
-                    let mut path = out_dir.join("res").join(&folder).join(&out_name);
+                    let id =
+                        (pkg.header.id << 24) | (u32::from(type_id) << 16) | u32::from(entry_id);
+                    let (folder, stem, unsafe_name) =
+                        resource_file_names(type_name, &folder_pfx, key, type_id, id);
+                    sanitized += usize::from(unsafe_name);
+                    let dir = out_dir.join("res").join(folder);
+                    let mut path = dir.join(format!("{stem}{ext}"));
                     if !written.insert(path.clone()) {
-                        let id = (pkg.header.id << 24)
-                            | (u32::from(type_id) << 16)
-                            | u32::from(entry_id);
-                        path.set_file_name(format!("{key}_0x{id:08x}{ext}"));
+                        path = dir.join(format!("{stem}_0x{id:08x}{ext}"));
                         written.insert(path.clone());
                         renamed += 1;
                     }
@@ -292,6 +331,11 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
         }
     }
 
+    if sanitized != 0 {
+        println!(
+            "[!] {sanitized} file resources have a type or name unsafe for a path, saved by id"
+        );
+    }
     if renamed != 0 {
         println!(
             "[~] {renamed} file resources share a name with another one, saved with their resource id appended"
@@ -347,6 +391,58 @@ mod tests {
             entry_ids: ids,
             entries: (0..len).map(|_| ResTableEntry::NoEntry).collect(),
         }
+    }
+
+    /// Whatever the table holds, the result is two plain components that stay
+    /// inside `res/`.
+    #[test]
+    fn unsafe_resource_names_stay_inside_res() {
+        let hostile = [
+            "..",
+            ".",
+            "",
+            "../../../../tmp/evil",
+            "/etc/passwd",
+            "a/../../b",
+            "..\\..\\evil",
+            "C:evil",
+            "nul\0byte",
+            &"a".repeat(300),
+        ];
+        for name in hostile {
+            for (type_name, key) in [(name, "icon"), ("drawable", name), (name, name)] {
+                let (folder, stem, sanitized) =
+                    resource_file_names(type_name, "-mdpi", key, 0x02, 0x7f02_0001);
+                assert!(sanitized, "{type_name:?}/{key:?}");
+                let path = Path::new("res").join(&folder).join(format!("{stem}.png"));
+                let components: Vec<_> = path.components().collect();
+                assert_eq!(components.len(), 3, "{path:?}");
+                assert!(
+                    components
+                        .iter()
+                        .all(|c| matches!(c, std::path::Component::Normal(_))),
+                    "{path:?}"
+                );
+                assert!(folder.len() <= 255 && stem.len() + 4 <= 255);
+            }
+        }
+    }
+
+    #[test]
+    fn safe_resource_names_are_kept() {
+        assert_eq!(
+            resource_file_names("drawable", "-mdpi", "ic_launcher", 0x02, 0x7f02_0001),
+            ("drawable-mdpi".to_owned(), "ic_launcher".to_owned(), false)
+        );
+        // an obfuscated name is unusual but harmless
+        assert_eq!(
+            resource_file_names("ㅤㅤ", "", "ㅤ.9", 0x02, 0x7f02_0001),
+            ("ㅤㅤ".to_owned(), "ㅤ.9".to_owned(), false)
+        );
+        assert_eq!(
+            resource_file_names("..", "", "../x", 0x02, 0x7f02_0001),
+            ("0x02".to_owned(), "0x7f020001".to_owned(), true)
+        );
     }
 
     #[test]
