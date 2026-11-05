@@ -160,9 +160,25 @@ impl StringPool {
             });
         }
 
+        // Keep only the part the offsets reach: malware pads the pool with
+        // hundreds of megabytes after the strings, and a copy of the padding
+        // would double the memory. A string that parses here lies within
+        // `end`, and one that doesn't fails on the shorter data too, so every
+        // string decodes as it would from the whole chunk.
+        let is_utf8 = string_header.is_utf8();
+        let end = offsets
+            .iter()
+            .filter_map(|&offset| {
+                let mut rest = slice.get(offset as usize..)?;
+                Self::split_string(&mut rest, is_utf8).ok()?;
+                Some(slice.len() - rest.len())
+            })
+            .max()
+            .unwrap_or(0);
+
         Ok(StringPool {
             header: string_header,
-            data: slice.into(),
+            data: slice[..end].into(),
             offsets,
         })
     }
@@ -214,8 +230,19 @@ impl StringPool {
         }
     }
 
-    // some shitty implementation, maybe we can do better?
     fn parse_string<'a>(input: &mut &'a [u8], is_utf8: bool) -> ModalResult<Cow<'a, str>> {
+        let content = Self::split_string(input, is_utf8)?;
+        Ok(if is_utf8 {
+            String::from_utf8_lossy(content)
+        } else {
+            Cow::Owned(Self::get_utf16_string(content))
+        })
+    }
+
+    /// Takes one encoded string from the front of `input`, its length prefix
+    /// and terminator included, and returns its content bytes. It fails only
+    /// when `input` ends before the string does.
+    fn split_string<'a>(input: &mut &'a [u8], is_utf8: bool) -> ModalResult<&'a [u8]> {
         if !is_utf8 {
             // utf-16
             let u16len = le_u16(input)?;
@@ -229,11 +256,14 @@ impl StringPool {
                 u16len as usize
             };
 
-            let content = take(real_len * 2).parse_next(input)?;
+            let byte_len = real_len
+                .checked_mul(2)
+                .ok_or_else(|| ErrMode::Incomplete(Needed::Unknown))?;
+            let content = take(byte_len).parse_next(input)?;
             // skip last two bytes
             let _ = le_u16(input)?;
 
-            Ok(Cow::Owned(Self::get_utf16_string(content)))
+            Ok(content)
         } else {
             // UTF-8 strings carry two independent varint-style lengths: first the
             // character (UTF-16 code unit) count, then the UTF-8 byte count. Each is
@@ -252,7 +282,7 @@ impl StringPool {
             // skip trailing null byte
             let _ = le_u8(input)?;
 
-            Ok(String::from_utf8_lossy(content))
+            Ok(content)
         }
     }
 
@@ -386,6 +416,12 @@ mod tests {
     /// Builds a utf-16 string pool chunk from raw entry bytes and parses it
     /// through [`StringPool::parse`].
     fn utf16_pool(entries: &[Vec<u8>]) -> StringPool {
+        utf16_pool_padded(entries, 0)
+    }
+
+    /// Like [`utf16_pool`], with `padding` zero bytes after the strings that
+    /// no offset points to.
+    fn utf16_pool_padded(entries: &[Vec<u8>], padding: usize) -> StringPool {
         const HEADER_SIZE: u32 = 28;
 
         let mut data = Vec::new();
@@ -394,6 +430,7 @@ mod tests {
             offsets.push(data.len() as u32);
             data.extend_from_slice(entry);
         }
+        data.resize(data.len() + padding, 0);
 
         let strings_start = HEADER_SIZE + 4 * entries.len() as u32;
         let mut chunk = Vec::new();
@@ -503,6 +540,24 @@ mod tests {
         let pool = utf16_pool(&[entry("ok"), bad]);
         assert_eq!(pool.get(0).as_deref(), Some("ok"));
         assert_eq!(pool.get(1).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn padding_after_the_strings_is_not_kept() {
+        let pool = utf16_pool_padded(&[entry("ok"), entry("next")], 1 << 20);
+        assert_eq!(pool.data.len(), entry("ok").len() + entry("next").len());
+        assert_eq!(pool.get(0).as_deref(), Some("ok"));
+        assert_eq!(pool.get(1).as_deref(), Some("next"));
+    }
+
+    #[test]
+    fn string_running_into_padding_is_kept_whole() {
+        // declares 10 units but carries 2: the padding completes it
+        let mut long = 10u16.to_le_bytes().to_vec();
+        long.extend_from_slice(&[b'h', 0, b'i', 0]);
+        let pool = utf16_pool_padded(&[entry("ok"), long], 64);
+        assert_eq!(pool.get(1).as_deref(), Some("hi\0\0\0\0\0\0\0\0"));
+        assert_eq!(pool.data.len(), entry("ok").len() + 2 + 20 + 2);
     }
 
     #[test]

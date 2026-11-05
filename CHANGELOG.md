@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Half the peak memory on a manifest or resource table whose string pool is padded with garbage, e.g. a 537 MB manifest takes 544 MB instead of 1.08 GB.
+
 ### Fixed
 
 - Panic when a container without a root manifest holds a file with a non-ASCII name, e.g. `OPNE GIFT🎁.md`.
