@@ -499,6 +499,13 @@ impl Apk {
         self.axml.get_xml_string()
     }
 
+    /// The parsed `AndroidManifest.xml`, e.g. to walk its tree or render it
+    /// with colors through [`Element::colored`].
+    #[inline]
+    pub fn get_manifest(&self) -> &AXML {
+        &self.axml
+    }
+
     /// Checks if the APK has multiple `classes.dex` files or not.
     pub fn is_multidex(&self) -> bool {
         let entries = match self.base_apk_name.as_deref() {

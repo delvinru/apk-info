@@ -17,7 +17,6 @@ apk-info-axml.workspace = true
 apk-info-xml.workspace = true
 apk-info-zip.workspace = true
 apk-info.workspace = true
-bat.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 colored.workspace = true

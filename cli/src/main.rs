@@ -121,6 +121,10 @@ fn main() {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
 
+    // the legacy Windows console (conhost) prints ANSI colors as raw escape sequences
+    #[cfg(windows)]
+    let _ = colored::control::set_virtual_terminal(true);
+
     env_logger::init();
 
     let cli = Cli::parse();

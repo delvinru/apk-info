@@ -7,7 +7,7 @@
     html_favicon_url = "https://raw.githubusercontent.com/delvinru/apk-info/main/docs/assets/logo/favicon-32.png"
 )]
 
-use std::fmt::{Display as _, Write as _};
+use std::fmt::Write as _;
 
 /// Represents a single XML attribute, including an optional namespace prefix.
 ///
@@ -63,21 +63,84 @@ impl Attribute {
     }
 }
 
-impl std::fmt::Display for Attribute {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Attribute {
+    fn fmt_painted(&self, f: &mut std::fmt::Formatter<'_>, palette: &Palette) -> std::fmt::Result {
         // attribute value may contain characters that break XML output:
         // - control chars (except \t \n \r) are invalid in XML entirely
         // - newlines would break the pretty-printed structure
         // - &, <, >, ", ' need to be escaped for valid XML
+        f.write_str(palette.attribute)?;
         if let Some(prefix) = &self.prefix {
             f.write_str(prefix)?;
             f.write_char(':')?;
         }
         f.write_str(&self.name)?;
-        f.write_str("=\"")?;
-        write_attr_value(f, &self.value)?; // empty -> writes nothing here
-        f.write_str("\"")
+        f.write_str(palette.reset)?;
+        paint(f, palette.text, "=", palette)?;
+        f.write_str(palette.value)?;
+        f.write_char('"')?;
+        write_attr_value(f, &self.value, palette)?; // empty -> writes nothing here
+        f.write_char('"')?;
+        f.write_str(palette.reset)
     }
+}
+
+impl std::fmt::Display for Attribute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_painted(f, &Palette::PLAIN)
+    }
+}
+
+/// Escape sequences written around each part of the document; empty strings
+/// for plain output.
+struct Palette {
+    /// `<`, `>`, `/>`, `</`, `<?` and `?>`
+    punctuation: &'static str,
+    tag: &'static str,
+    attribute: &'static str,
+    /// `=` between an attribute and its value, and text content
+    text: &'static str,
+    value: &'static str,
+    /// `&amp;` and the other escaped characters
+    entity: &'static str,
+    reset: &'static str,
+}
+
+impl Palette {
+    const PLAIN: Palette = Palette {
+        punctuation: "",
+        tag: "",
+        attribute: "",
+        text: "",
+        value: "",
+        entity: "",
+        reset: "",
+    };
+
+    /// The colors bat painted the manifest with before: its default theme,
+    /// Monokai Extended, in 24-bit color.
+    const ANSI: Palette = Palette {
+        punctuation: "\x1b[38;2;255;255;255m",
+        tag: "\x1b[38;2;249;38;114m",
+        attribute: "\x1b[38;2;166;226;46m",
+        text: "\x1b[38;2;248;248;242m",
+        value: "\x1b[38;2;230;219;116m",
+        entity: "\x1b[38;2;190;132;255m",
+        reset: "\x1b[0m",
+    };
+}
+
+/// Writes `text` in `color`.
+#[inline]
+fn paint(
+    f: &mut std::fmt::Formatter<'_>,
+    color: &str,
+    text: &str,
+    palette: &Palette,
+) -> std::fmt::Result {
+    f.write_str(color)?;
+    f.write_str(text)?;
+    f.write_str(palette.reset)
 }
 
 /// Returns whether `ch` is a code point permitted in XML 1.0 attribute values.
@@ -189,7 +252,11 @@ fn is_name_char(ch: char) -> bool {
 /// assert_eq!(attr.to_string(), "a=\"\"");
 /// ```
 #[inline]
-fn write_attr_value(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::Result {
+fn write_attr_value(
+    f: &mut std::fmt::Formatter<'_>,
+    value: &str,
+    palette: &Palette,
+) -> std::fmt::Result {
     let bytes = value.as_bytes();
     let mut run_start = 0;
     let mut i = 0;
@@ -212,11 +279,11 @@ fn write_attr_value(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::R
         let ch = value[i..].chars().next().unwrap();
         match ch {
             '\t' | '\n' | '\r' => f.write_char(' ')?,
-            '&' => f.write_str("&amp;")?,
-            '<' => f.write_str("&lt;")?,
-            '>' => f.write_str("&gt;")?,
-            '"' => f.write_str("&quot;")?,
-            '\'' => f.write_str("&apos;")?,
+            '&' => write_entity(f, "&amp;", palette, palette.value)?,
+            '<' => write_entity(f, "&lt;", palette, palette.value)?,
+            '>' => write_entity(f, "&gt;", palette, palette.value)?,
+            '"' => write_entity(f, "&quot;", palette, palette.value)?,
+            '\'' => write_entity(f, "&apos;", palette, palette.value)?,
             c if is_valid_xml_char(c) => f.write_char(c)?, // non-ASCII valid char
             _ => {} // invalid XML char, drop it (same as before)
         }
@@ -238,18 +305,32 @@ fn write_attr_value(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::R
 /// `&amp;`, `&lt;` and `&gt;`; code points that are not valid in XML 1.0 are
 /// dropped.
 #[inline]
-fn write_text(f: &mut std::fmt::Formatter<'_>, value: &str) -> std::fmt::Result {
+fn write_text(f: &mut std::fmt::Formatter<'_>, value: &str, palette: &Palette) -> std::fmt::Result {
+    f.write_str(palette.text)?;
     for ch in value.chars() {
         match ch {
-            '&' => f.write_str("&amp;")?,
-            '<' => f.write_str("&lt;")?,
-            '>' => f.write_str("&gt;")?,
+            '&' => write_entity(f, "&amp;", palette, palette.text)?,
+            '<' => write_entity(f, "&lt;", palette, palette.text)?,
+            '>' => write_entity(f, "&gt;", palette, palette.text)?,
             '\t' | '\n' | '\r' => f.write_char(ch)?, // valid XML whitespace in content
             c if is_valid_xml_char(c) => f.write_char(c)?,
             _ => {} // invalid XML char, drop it
         }
     }
-    Ok(())
+    f.write_str(palette.reset)
+}
+
+/// Writes an escaped character in the entity color, then switches back to
+/// the color of the surrounding text.
+#[inline]
+fn write_entity(
+    f: &mut std::fmt::Formatter<'_>,
+    entity: &str,
+    palette: &Palette,
+    resume: &str,
+) -> std::fmt::Result {
+    paint(f, palette.entity, entity, palette)?;
+    f.write_str(resume)
 }
 
 /// Represents an XML element, including its name, attributes, and child elements.
@@ -461,27 +542,47 @@ impl Element {
             .map(|x| x.value())
     }
 
-    pub(crate) fn fmt_with_indent(
+    /// Renders the document with ANSI colors for a terminal: tag names,
+    /// attribute names and values each get their own color.
+    ///
+    /// The text is the same as the [`Display`](std::fmt::Display) output
+    /// plus the escape sequences.
+    ///
+    /// # Example
+    /// ```
+    /// use apk_info_xml::Element;
+    ///
+    /// let e = Element::new("manifest");
+    /// assert!(e.colored().to_string().contains("manifest"));
+    /// ```
+    pub fn colored(&self) -> impl std::fmt::Display + '_ {
+        Painted {
+            element: self,
+            palette: &Palette::ANSI,
+        }
+    }
+
+    fn fmt_with_indent(
         &self,
         f: &mut std::fmt::Formatter<'_>,
         indent: usize,
+        palette: &Palette,
     ) -> std::fmt::Result {
         write_indent(f, indent)?;
-        f.write_char('<')?;
-        f.write_str(&self.name)?;
+        write_tag(f, palette, "<", &self.name)?;
 
         match self.attributes.len() {
             0 => {}
             1 => {
                 f.write_char(' ')?;
-                self.attributes[0].fmt(f)?;
+                self.attributes[0].fmt_painted(f, palette)?;
             }
             n => {
                 let child_indent = indent + 1;
                 f.write_char('\n')?;
                 write_indent(f, child_indent)?;
                 for (idx, attr) in self.attributes.iter().enumerate() {
-                    attr.fmt(f)?;
+                    attr.fmt_painted(f, palette)?;
                     if idx + 1 != n {
                         f.write_char('\n')?;
                         write_indent(f, child_indent)?;
@@ -493,30 +594,71 @@ impl Element {
         if self.childrens.is_empty() {
             match self.text.as_deref() {
                 Some(text) => {
-                    f.write_char('>')?;
-                    write_text(f, text)?;
-                    f.write_str("</")?;
-                    f.write_str(&self.name)?;
-                    f.write_str(">")?;
+                    paint(f, palette.punctuation, ">", palette)?;
+                    write_text(f, text, palette)?;
+                    write_tag(f, palette, "</", &self.name)?;
+                    paint(f, palette.punctuation, ">", palette)?;
                 }
                 None => {
-                    f.write_str("/>")?;
+                    paint(f, palette.punctuation, "/>", palette)?;
                 }
             }
             f.write_char('\n')?;
         } else {
-            f.write_char('>')?;
+            paint(f, palette.punctuation, ">", palette)?;
             f.write_char('\n')?;
             for child in &self.childrens {
-                child.fmt_with_indent(f, indent + 1)?;
+                child.fmt_with_indent(f, indent + 1, palette)?;
             }
             write_indent(f, indent)?;
-            f.write_str("</")?;
-            f.write_str(&self.name)?;
-            f.write_str(">\n")?;
+            write_tag(f, palette, "</", &self.name)?;
+            paint(f, palette.punctuation, ">", palette)?;
+            f.write_char('\n')?;
         }
         Ok(())
     }
+
+    fn fmt_document(&self, f: &mut std::fmt::Formatter<'_>, palette: &Palette) -> std::fmt::Result {
+        // default xml header: `<?xml version="1.0" encoding="utf-8"?>`
+        write_tag(f, palette, "<?", "xml")?;
+        for (name, value) in [("version", "1.0"), ("encoding", "utf-8")] {
+            f.write_char(' ')?;
+            paint(f, palette.attribute, name, palette)?;
+            paint(f, palette.text, "=", palette)?;
+            f.write_str(palette.value)?;
+            write!(f, "\"{value}\"")?;
+            f.write_str(palette.reset)?;
+        }
+        paint(f, palette.punctuation, "?>", palette)?;
+        f.write_char('\n')?;
+
+        // pretty print
+        self.fmt_with_indent(f, 0, palette)
+    }
+}
+
+/// An [`Element`] rendered with a [`Palette`].
+struct Painted<'a> {
+    element: &'a Element,
+    palette: &'static Palette,
+}
+
+impl std::fmt::Display for Painted<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.element.fmt_document(f, self.palette)
+    }
+}
+
+/// Writes `open` (`<`, `</` or `<?`) and the tag `name` in their colors.
+#[inline]
+fn write_tag(
+    f: &mut std::fmt::Formatter<'_>,
+    palette: &Palette,
+    open: &str,
+    name: &str,
+) -> std::fmt::Result {
+    paint(f, palette.punctuation, open, palette)?;
+    paint(f, palette.tag, name, palette)
 }
 
 /// Writes `indent` levels of two-space indentation into `f` without allocating.
@@ -530,11 +672,7 @@ fn write_indent(f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Res
 
 impl std::fmt::Display for Element {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // default xml header
-        writeln!(f, "<?xml version=\"1.0\" encoding=\"utf-8\"?>")?;
-
-        // pretty print
-        self.fmt_with_indent(f, 0)
+        self.fmt_document(f, &Palette::PLAIN)
     }
 }
 
@@ -572,6 +710,43 @@ impl<'a> Iterator for Descendants<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Removes the SGR escape sequences of [`Palette::ANSI`].
+    fn strip_ansi(text: &str) -> String {
+        let mut out = String::with_capacity(text.len());
+        let mut rest = text;
+        while let Some(start) = rest.find('\x1b') {
+            out.push_str(&rest[..start]);
+            let end = rest[start..].find('m').expect("escape ends with m");
+            rest = &rest[start + end + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    #[test]
+    fn colored_is_plain_text_plus_escapes() {
+        let mut root = Element::new("manifest");
+        root.set_attribute_with_prefix(Some("xmlns"), "android", "http://x");
+        root.set_attribute("package", "a&b \"c\"");
+        let mut app = Element::new("application");
+        app.set_attribute_with_prefix(Some("android"), "label", "<label>");
+        let mut text = Element::new("string");
+        text.set_text("line 1\nline & 2");
+        app.append_child(text);
+        app.append_child(Element::new("empty"));
+        root.append_child(app);
+
+        let colored = root.colored().to_string();
+        assert_ne!(colored, root.to_string());
+        assert_eq!(strip_ansi(&colored), root.to_string());
+        assert!(colored.contains("\x1b[38;2;249;38;114mmanifest\x1b[0m"));
+        assert!(colored.contains(
+            "\x1b[38;2;166;226;46mandroid:label\x1b[0m\x1b[38;2;248;248;242m=\x1b[0m\x1b[38;2;230;219;116m\""
+        ));
+        // an escaped character stands out, then the value color goes on
+        assert!(colored.contains("\x1b[38;2;190;132;255m&lt;\x1b[0m\x1b[38;2;230;219;116mlabel"));
+    }
 
     #[test]
     fn attribute_plain_renders_quoted() {

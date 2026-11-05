@@ -1,35 +1,33 @@
-use std::io::IsTerminal;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use apk_info::{Apk, ZipEntry};
 use apk_info_axml::AXML;
-use bat::PrettyPrinter;
+use apk_info_xml::Element;
 
 pub(crate) fn command_axml(path: &Path) -> Result<()> {
-    let stdout_is_tty = std::io::stdout().is_terminal();
-
-    let xml = match Apk::new(path) {
-        Ok(apk) => apk.get_xml_string(),
+    match Apk::new(path) {
+        Ok(apk) => print_xml(&apk.get_manifest().root),
         // a zip that isn't an apk keeps its own error
-        Err(err) if ZipEntry::open(path).is_ok() => return Err(err.into()),
+        Err(err) if ZipEntry::open(path).is_ok() => Err(err.into()),
         Err(_) => {
             let file = std::fs::read(path)
                 .with_context(|| format!("can't open and read file: {:?}", path))?;
             let axml = AXML::new(&mut &file[..], None)?;
-
-            axml.get_xml_string()
+            print_xml(&axml.root)
         }
-    };
-
-    let mut printer = PrettyPrinter::new();
-    printer.input_from_bytes(xml.as_bytes()).language("xml");
-
-    if stdout_is_tty {
-        printer.print().context("can't print the manifest")?;
-    } else {
-        print!("{}", xml);
     }
+}
 
-    Ok(())
+/// Prints the document, colored by the rules of the other commands: a
+/// terminal, `NO_COLOR`, `CLICOLOR` and `CLICOLOR_FORCE`.
+fn print_xml(root: &Element) -> Result<()> {
+    let mut out = BufWriter::new(std::io::stdout().lock());
+    if colored::control::SHOULD_COLORIZE.should_colorize() {
+        write!(out, "{}", root.colored())?;
+    } else {
+        write!(out, "{root}")?;
+    }
+    out.flush().context("can't print the manifest")
 }
