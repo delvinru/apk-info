@@ -26,7 +26,9 @@ create_exception!(
 
 #[pymodule]
 fn apk_info(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    env_logger::init();
+    // another extension may have set the global logger already: keep it,
+    // a panic here would fail the import
+    let _ = env_logger::try_init();
 
     m.add("APKError", m.py().get_type::<APKError>())?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

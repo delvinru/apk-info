@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use apk_info_xml::{Element, is_valid_name};
 use log::warn;
@@ -46,6 +46,9 @@ pub struct AXML {
 
 /// Map of `(element name, attribute name)` to the raw resource id of a reference
 /// attribute, captured while parsing an AXML tree.
+///
+/// Only the attribute [`AXML::get_attribute_value`] reads is kept: the first one
+/// with the name, in the first element with the tag.
 type ReferenceIds = HashMap<(String, String), u32>;
 
 impl AXML {
@@ -112,6 +115,8 @@ impl AXML {
         // the stack never pops the root, so open elements are counted apart
         let mut depth = 0usize;
         let mut reference_ids: ReferenceIds = HashMap::new();
+        // tags met so far: the first element with a tag owns its reference ids
+        let mut seen_tags: HashSet<String> = HashSet::new();
         // attribute names repeat across elements: each string is decoded and
         // checked once, `None` for a missing one, `(name, is_valid)` otherwise
         let mut attribute_names: HashMap<u32, Option<(Cow<'a, str>, bool)>> = HashMap::new();
@@ -188,6 +193,9 @@ impl AXML {
                         }
                     };
 
+                    let first_of_tag =
+                        !seen_tags.contains(name.as_ref()) && seen_tags.insert(name.to_string());
+
                     let mut element = Element::with_capacity(&name, node.attributes.len());
 
                     // The `android` namespace is always in scope in decoded binary XML.
@@ -238,10 +246,16 @@ impl AXML {
                             Cow::Owned(attribute.typed_value.to_string(string_pool, arsc))
                         });
 
-                        if matches!(
-                            attribute.typed_value.data_type,
-                            ResourceValueType::Reference | ResourceValueType::DynamicReference
-                        ) {
+                        // a later element with the same tag, or a later attribute
+                        // with the same name, must not lend its id to the value
+                        // `get_attribute_value` reads
+                        if first_of_tag
+                            && element.attr(attribute_name).is_none()
+                            && matches!(
+                                attribute.typed_value.data_type,
+                                ResourceValueType::Reference | ResourceValueType::DynamicReference
+                            )
+                        {
                             reference_ids.insert(
                                 (name.to_string(), attribute_name.to_string()),
                                 attribute.typed_value.data,
@@ -463,4 +477,169 @@ fn skip_run(
 
     *input = data;
     skipped
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// No string, no namespace.
+    const NONE: u32 = u32::MAX;
+    const REFERENCE: u8 = 0x01;
+    const STRING: u8 = 0x03;
+
+    fn push_u16(out: &mut Vec<u8>, value: u16) {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn push_u32(out: &mut Vec<u8>, value: u32) {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+
+    /// A utf-8 string pool chunk.
+    fn string_pool(strings: &[&str]) -> Vec<u8> {
+        let mut data = Vec::new();
+        let mut offsets = Vec::new();
+        for s in strings {
+            offsets.push(data.len() as u32);
+            data.extend_from_slice(&[s.len() as u8, s.len() as u8]);
+            data.extend_from_slice(s.as_bytes());
+            data.push(0);
+        }
+        data.resize(data.len().next_multiple_of(4), 0);
+
+        let strings_start = 28 + 4 * strings.len() as u32;
+        let mut chunk = Vec::new();
+        push_u16(&mut chunk, 0x0001);
+        push_u16(&mut chunk, 28);
+        push_u32(&mut chunk, strings_start + data.len() as u32);
+        push_u32(&mut chunk, strings.len() as u32);
+        push_u32(&mut chunk, 0); // style count
+        push_u32(&mut chunk, 0x100); // utf-8
+        push_u32(&mut chunk, strings_start);
+        push_u32(&mut chunk, 0); // styles start
+        for offset in offsets {
+            push_u32(&mut chunk, offset);
+        }
+        chunk.extend_from_slice(&data);
+        chunk
+    }
+
+    /// A start element; an attribute is `(namespace, name, type, data)`.
+    fn start(name: u32, attributes: &[(u32, u32, u8, u32)]) -> Vec<u8> {
+        let mut chunk = Vec::new();
+        push_u16(&mut chunk, 0x0102);
+        push_u16(&mut chunk, 0x10);
+        push_u32(&mut chunk, 36 + 20 * attributes.len() as u32);
+        push_u32(&mut chunk, 1); // line
+        push_u32(&mut chunk, NONE); // comment
+        push_u32(&mut chunk, NONE); // namespace
+        push_u32(&mut chunk, name);
+        for value in [0x14, 0x14, attributes.len() as u16, 0, 0, 0] {
+            push_u16(&mut chunk, value);
+        }
+        for &(namespace, attribute, data_type, data) in attributes {
+            push_u32(&mut chunk, namespace);
+            push_u32(&mut chunk, attribute);
+            push_u32(&mut chunk, if data_type == STRING { data } else { NONE });
+            push_u16(&mut chunk, 8);
+            chunk.extend_from_slice(&[0, data_type]);
+            push_u32(&mut chunk, data);
+        }
+        chunk
+    }
+
+    fn end(name: u32) -> Vec<u8> {
+        let mut chunk = Vec::new();
+        push_u16(&mut chunk, 0x0103);
+        push_u16(&mut chunk, 0x10);
+        push_u32(&mut chunk, 24);
+        push_u32(&mut chunk, 1); // line
+        push_u32(&mut chunk, NONE); // comment
+        push_u32(&mut chunk, NONE); // namespace
+        push_u32(&mut chunk, name);
+        chunk
+    }
+
+    /// A binary xml document: the string pool, an empty resource map, the nodes.
+    fn document(strings: &[&str], nodes: &[Vec<u8>]) -> Vec<u8> {
+        let mut body = string_pool(strings);
+        push_u16(&mut body, 0x0180);
+        push_u16(&mut body, 8);
+        push_u32(&mut body, 8);
+        for node in nodes {
+            body.extend_from_slice(node);
+        }
+
+        let mut doc = Vec::new();
+        push_u16(&mut doc, 0x0003);
+        push_u16(&mut doc, 8);
+        push_u32(&mut doc, 8 + body.len() as u32);
+        doc.extend_from_slice(&body);
+        doc
+    }
+
+    #[test]
+    fn reference_id_belongs_to_the_attribute_get_attribute_value_reads() {
+        const MANIFEST: u32 = 0;
+        const ACTIVITY: u32 = 1;
+        const LABEL: u32 = 2;
+        const SERVICE: u32 = 3;
+        const LITERAL: u32 = 4;
+        const RECEIVER: u32 = 5;
+        const ANDROID: u32 = 6;
+        let strings = [
+            "manifest",
+            "activity",
+            "label",
+            "service",
+            "@literal",
+            "receiver",
+            "http://schemas.android.com/apk/res/android",
+        ];
+
+        let doc = document(
+            &strings,
+            &[
+                start(MANIFEST, &[]),
+                // two elements with one tag
+                start(ACTIVITY, &[(NONE, LABEL, REFERENCE, 0x7f01_0001)]),
+                end(ACTIVITY),
+                start(ACTIVITY, &[(NONE, LABEL, REFERENCE, 0x7f01_0002)]),
+                end(ACTIVITY),
+                // a string that looks like a reference, then a reference
+                start(SERVICE, &[(NONE, LABEL, STRING, LITERAL)]),
+                end(SERVICE),
+                start(SERVICE, &[(NONE, LABEL, REFERENCE, 0x7f01_0003)]),
+                end(SERVICE),
+                // the same name twice in one element, the string first
+                start(
+                    RECEIVER,
+                    &[
+                        (NONE, LABEL, STRING, LITERAL),
+                        (ANDROID, LABEL, REFERENCE, 0x7f01_0004),
+                    ],
+                ),
+                end(RECEIVER),
+                end(MANIFEST),
+            ],
+        );
+
+        let axml = AXML::new(&mut &doc[..], None).unwrap();
+        let id = |tag: &str| {
+            axml.reference_ids
+                .get(&(tag.to_owned(), "label".to_owned()))
+                .copied()
+        };
+        let value = |tag: &str| axml.get_attribute_value(tag, "label", None);
+
+        assert_eq!(value("activity").as_deref(), Some("@7f010001"));
+        assert_eq!(id("activity"), Some(0x7f01_0001));
+
+        assert_eq!(value("service").as_deref(), Some("@literal"));
+        assert_eq!(id("service"), None);
+
+        assert_eq!(value("receiver").as_deref(), Some("@literal"));
+        assert_eq!(id("receiver"), None);
+    }
 }

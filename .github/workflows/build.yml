@@ -105,7 +105,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
+          args: --profile release-python --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: manylinux_2_28
       - name: Upload wheels
@@ -134,7 +134,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
+          args: --profile release-python --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: musllinux_1_2
       - name: Upload wheels
@@ -159,7 +159,7 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
+          args: --profile release-python --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
       - uses: actions/upload-artifact@v7
         with:
           name: wheels-windows-${{ matrix.target }}
@@ -180,7 +180,7 @@ jobs:
       - uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --profile release-lto --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
+          args: --profile release-python --out dist --find-interpreter --target-dir target --manifest-path ./python/Cargo.toml
       - uses: actions/upload-artifact@v7
         with:
           name: wheels-macos-${{ matrix.target }}

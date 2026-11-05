@@ -1107,8 +1107,6 @@ impl ZipEntry {
     /// }
     /// ```
     pub fn get_signature_v1(&self) -> Result<Option<Signature>, CertificateError> {
-        let names: AHashSet<&str> = self.namelist().collect();
-
         let mut certificates: Vec<CertificateInfo> = Vec::new();
         let mut parsed = false;
         let mut failed = false;
@@ -1118,7 +1116,7 @@ impl ZipEntry {
             .filter(|name| Self::is_v1_signature_block(name))
         {
             let stem = &block[..block.rfind('.').unwrap_or(block.len())];
-            if !names.contains(format!("{stem}.SF").as_str()) {
+            if !self.contains(&format!("{stem}.SF")) {
                 warn!("v1 signature block {block} has no matching .SF file, ignoring it");
                 continue;
             }

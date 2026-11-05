@@ -64,6 +64,12 @@ panic = "abort"
 inherits = "release"
 lto = true
 
+# Python wheels: a panic reaches Python as an exception instead of aborting
+# the interpreter, which `panic = "abort"` of the profiles above would do
+[profile.release-python]
+inherits = "release-lto"
+panic = "unwind"
+
 [profile.profiling]
 inherits = "release"
 debug = true
