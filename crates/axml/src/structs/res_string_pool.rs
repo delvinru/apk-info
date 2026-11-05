@@ -286,12 +286,32 @@ impl StringPool {
         }
     }
 
+    /// Whether every little-endian UTF-16 unit in `bytes` is ASCII (below
+    /// 0x80). Checks 4 units per step with no early exit, so it vectorizes.
+    #[inline]
+    fn is_ascii_utf16(bytes: &[u8]) -> bool {
+        // any bit of 0x80..=0xFFFF in any unit
+        const NOT_ASCII: u64 = 0xFF80_FF80_FF80_FF80;
+
+        let (words, rest) = bytes.as_chunks::<8>();
+        let wide = words
+            .iter()
+            .fold(0, |acc, word| acc | u64::from_le_bytes(*word));
+        let narrow = rest
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .fold(0, |acc, unit| acc | u16::from_le_bytes(*unit));
+
+        wide & NOT_ASCII == 0 && narrow & 0xFF80 == 0
+    }
+
     #[inline]
     fn get_utf16_string(slice: &[u8]) -> String {
         let units = slice.as_chunks::<2>().0;
 
         // fast path for ascii, the common case in manifests and resource keys
-        if units.iter().all(|c| c[1] == 0 && c[0] < 0x80) {
+        if Self::is_ascii_utf16(units.as_flattened()) {
             let bytes = units.iter().map(|c| c[0]).collect();
             // SAFETY: the check above proves every byte is ascii
             return unsafe { String::from_utf8_unchecked(bytes) };
@@ -342,6 +362,13 @@ impl StringPool {
                 })
             })
             .or_else(|| self.get(idx))
+    }
+
+    /// Whether [`StringPool::get_with_resources`] finds a string at `idx`,
+    /// without decoding it.
+    #[inline]
+    pub fn contains_with_resources(&self, idx: u32, xml_resource: &XMLResourceMap) -> bool {
+        xml_resource.get_attr(idx).is_some() || (idx as usize) < self.offsets.len()
     }
 }
 
@@ -605,5 +632,31 @@ mod tests {
     fn debug_shows_short_pools_in_full() {
         let out = format!("{:?}", StringPool::from_strs(&["a", "b"]));
         assert!(out.contains(r#"strings: ["a", "b"]"#), "{out}");
+    }
+
+    #[test]
+    fn ascii_utf16_check_matches_per_unit_check() {
+        let per_unit = |bytes: &[u8]| {
+            bytes
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .all(|c| c[1] == 0 && c[0] < 0x80)
+        };
+
+        // every length across the 8-byte steps, one odd unit at every position
+        for len in 0..20 {
+            let ascii: Vec<u8> = (0..len).flat_map(|i| [b'a' + i as u8, 0]).collect();
+            assert!(StringPool::is_ascii_utf16(&ascii));
+
+            for at in 0..len {
+                for unit in [0x0080u16, 0x00ff, 0x0100, 0x8000, 0x0441] {
+                    let mut bytes = ascii.clone();
+                    bytes[at * 2..at * 2 + 2].copy_from_slice(&unit.to_le_bytes());
+                    assert_eq!(StringPool::is_ascii_utf16(&bytes), per_unit(&bytes));
+                    assert!(!StringPool::is_ascii_utf16(&bytes));
+                }
+            }
+        }
     }
 }

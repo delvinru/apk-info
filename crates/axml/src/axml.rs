@@ -112,6 +112,9 @@ impl AXML {
         // the stack never pops the root, so open elements are counted apart
         let mut depth = 0usize;
         let mut reference_ids: ReferenceIds = HashMap::new();
+        // attribute names repeat across elements: each string is decoded and
+        // checked once, `None` for a missing one, `(name, is_valid)` otherwise
+        let mut attribute_names: HashMap<u32, Option<(Cow<'a, str>, bool)>> = HashMap::new();
 
         loop {
             let chunk_header = match ResChunkHeader::parse(&mut input.input) {
@@ -197,24 +200,30 @@ impl AXML {
                     }
 
                     for attribute in &node.attributes {
-                        let Some(attribute_name) =
-                            string_pool.get_with_resources(attribute.name, xml_resource, true)
-                        else {
+                        let cached = attribute_names.entry(attribute.name).or_insert_with(|| {
+                            string_pool
+                                .get_with_resources(attribute.name, xml_resource, true)
+                                .map(|name| {
+                                    let valid = is_valid_name(&name);
+                                    (name, valid)
+                                })
+                        });
+                        let Some((attribute_name, valid)) = cached else {
                             continue;
                         };
 
                         // skip garbage strings: they can't be written as xml
-                        if !is_valid_name(&attribute_name) {
+                        if !*valid {
                             warn!("skipped garbage attribute name: {:?}", attribute_name);
                             input.state.push(ResAnomaly::InvalidAttributeName {
-                                name: attribute_name.into_owned(),
+                                name: attribute_name.to_string(),
                             });
                             continue;
                         }
+                        let attribute_name: &str = attribute_name;
 
                         let ns_prefix = if string_pool
-                            .get_with_resources(attribute.namespace_uri, xml_resource, false)
-                            .is_some()
+                            .contains_with_resources(attribute.namespace_uri, xml_resource)
                         {
                             Some("android")
                         } else {
@@ -222,7 +231,7 @@ impl AXML {
                         };
 
                         let value_str = attrs_manifest::get_attr_value(
-                            &attribute_name,
+                            attribute_name,
                             &attribute.typed_value.data,
                         )
                         .unwrap_or_else(|| {
@@ -239,7 +248,7 @@ impl AXML {
                             );
                         }
 
-                        element.set_attribute_with_prefix(ns_prefix, &attribute_name, &value_str);
+                        element.set_attribute_with_prefix(ns_prefix, attribute_name, &value_str);
                     }
 
                     stack.push(element);
