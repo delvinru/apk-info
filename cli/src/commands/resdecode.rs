@@ -29,7 +29,6 @@ fn entry_ids(entries: &ResTableTypeEntries) -> impl Iterator<Item = (u16, &ResTa
     })
 }
 
-/// The values file of a resource type.
 #[inline]
 fn type_file(type_name: &str) -> &'static str {
     match type_name {
@@ -67,11 +66,9 @@ fn plural_quantity(name: u32) -> &'static str {
     }
 }
 
-/// Writes `res/values*/` from `resources.arsc`.
 pub(crate) fn decode_arsc(out_dir: &Path, bytes: &[u8]) -> Result<()> {
     let arsc = ARSC::new(&mut &bytes[..]).context("can't parse resources.arsc")?;
 
-    // folder -> file -> elements
     let mut files: BTreeMap<String, BTreeMap<String, Vec<Element>>> = BTreeMap::new();
 
     for pkg in arsc.packages() {
@@ -190,10 +187,10 @@ pub(crate) fn decode_arsc(out_dir: &Path, bytes: &[u8]) -> Result<()> {
                 root.append_child(element);
             }
 
+            // one write: formatting straight into the file is a syscall per char
             let path = dir.join(file);
-            let mut f =
-                std::fs::File::create(&path).with_context(|| format!("can't create {:?}", path))?;
-            write!(f, "{root}").with_context(|| format!("can't write {:?}", path))?;
+            std::fs::write(&path, root.to_string())
+                .with_context(|| format!("can't write {:?}", path))?;
         }
     }
 
@@ -210,11 +207,9 @@ fn decode_axml(data: &[u8], arsc: Option<&ARSC>) -> Option<String> {
     Some(axml.get_xml_string())
 }
 
-/// Longest type or key name used as is; leaves room for an id suffix and an
-/// extension within the 255-byte limit of a file name.
+/// Leaves room for an id suffix and an extension in a 255-byte file name.
 const MAX_NAME_LEN: usize = 200;
 
-/// Whether a name from the table can be one path component of the output.
 fn is_safe_component(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= MAX_NAME_LEN
@@ -223,10 +218,8 @@ fn is_safe_component(name: &str) -> bool {
         && !name.contains(['/', '\\', ':', '\0'])
 }
 
-/// Folder and file stem of a file resource: `res/<type><qualifier>/<key>`.
-///
-/// Both names come from the table: an unsafe one, which could write outside
-/// the output directory, is replaced by the type or resource id.
+/// Folder and stem of a file resource; an unsafe name from the table, which
+/// could leave the output directory, becomes the type or resource id.
 fn resource_file_names(
     type_name: &str,
     qualifier: &str,
@@ -344,7 +337,6 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
     Ok(())
 }
 
-/// Decodes the manifest and resources of an apk or a container's base.
 pub(crate) fn decode_resources(out_dir: &Path, zip: &ZipEntry) -> Result<()> {
     decode_resources_impl(out_dir, zip, true)
 }
@@ -393,8 +385,6 @@ mod tests {
         }
     }
 
-    /// Whatever the table holds, the result is two plain components that stay
-    /// inside `res/`.
     #[test]
     fn unsafe_resource_names_stay_inside_res() {
         let hostile = [
@@ -434,7 +424,6 @@ mod tests {
             resource_file_names("drawable", "-mdpi", "ic_launcher", 0x02, 0x7f02_0001),
             ("drawable-mdpi".to_owned(), "ic_launcher".to_owned(), false)
         );
-        // an obfuscated name is unusual but harmless
         assert_eq!(
             resource_file_names("ㅤㅤ", "", "ㅤ.9", 0x02, 0x7f02_0001),
             ("ㅤㅤ".to_owned(), "ㅤ.9".to_owned(), false)

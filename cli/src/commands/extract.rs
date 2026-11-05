@@ -15,10 +15,8 @@ use regex::Regex;
 use crate::commands::path_helpers::get_all_files;
 use crate::commands::resdecode::{decode_resources, decode_resources_split};
 
-/// Maximum length (in bytes) of a single path component on most filesystems.
 const MAX_COMPONENT_LEN: usize = 255;
 
-/// Conservative maximum length (in bytes) of the full output path
 const MAX_PATH_LEN: usize = 1024;
 
 pub(crate) fn command_extract(
@@ -61,12 +59,8 @@ fn compile_regexes(files: &[String]) -> Result<Vec<Regex>> {
         .collect()
 }
 
-/// `--list` mode: prints the archive contents without extracting anything.
-///
-/// Names are sorted: the central directory is stored in a hash map, so its
-/// iteration order is random per process.
+/// Names are sorted: the central directory is a hash map.
 fn list_archive(path: &Path, regexes: &[Regex]) -> Result<()> {
-    // the archive is opened lazily, without reading the whole file into memory
     let zip = ZipEntry::open(path).with_context(|| format!("can't open file: {:?}", path))?;
 
     let mut names: Vec<&str> = zip
@@ -123,45 +117,32 @@ fn make_output_dir(path: &Path, output: &Option<PathBuf>) -> PathBuf {
 
     match output {
         Some(out) => {
-            // ./<output>/<file_name>.unp
             let mut p = PathBuf::from(out);
             p.push(file_name);
             p
         }
-        None => {
-            // ./<file_name>.unp
-            PathBuf::from(file_name)
-        }
+        None => PathBuf::from(file_name),
     }
 }
 
-/// Whether `name` stays inside `out_dir` once joined. Rejects `..` in any
-/// segment, an absolute root, a Windows drive, or a NUL. Both `/` and `\` count
-/// as separators so a crafted name can't escape on Windows either.
+/// Whether `name` stays inside the output directory, on Windows too.
 fn is_safe_relative_name(name: &str) -> bool {
     if name.is_empty() {
         return false;
     }
-    // unix root, windows drive-relative `\`, or a UNC `\\server` share
     if name.starts_with('/') || name.starts_with('\\') {
         return false;
     }
     name.split(['/', '\\']).all(|segment| match segment {
-        // empty segments come from interior/trailing separators; they stay put
         "" | "." => true,
         ".." => false,
-        // `:` marks a windows drive or an alternate data stream
+        // a windows drive or an alternate data stream
         _ => !segment.contains([':', '\0']),
     })
 }
 
-/// Resolves where an entry should be written inside `out_dir`.
-///
-/// Returns `None` for traversal or directory entries that must never be written.
-/// Returns `Some((path, renamed))`, where `renamed` is `true` when the original
-/// name was a malicious/broken path (a component or the full path is too long for
-/// the filesystem) designed to break extraction tools - in that case the data is
-/// saved under an md5 hash of the original name.
+/// `None` for an unsafe or directory entry; a name too long for the
+/// filesystem is saved as its md5 (`true`).
 fn resolve_output_path(out_dir: &Path, file_name: &str) -> Option<(PathBuf, bool)> {
     if file_name.ends_with('/') || !is_safe_relative_name(file_name) {
         return None;
@@ -191,9 +172,7 @@ fn resolve_output_path(out_dir: &Path, file_name: &str) -> Option<(PathBuf, bool
     }
 }
 
-/// The entry name as a relative path: empty and `.` components dropped, so
-/// `/a//b` is `a/b`. `None` for a directory entry or a name that could leave
-/// the output directory.
+/// `/a//b` as `a/b`; `None` for a directory entry or an unsafe name.
 fn normalized_name(name: &str) -> Option<String> {
     if name.ends_with('/') {
         return None;
@@ -206,7 +185,6 @@ fn normalized_name(name: &str) -> Option<String> {
     is_safe_relative_name(&normalized).then_some(normalized)
 }
 
-/// `stem~n.ext` for the `n`-th entry that wants the same file name.
 fn numbered(name: &str, n: usize) -> String {
     match name.rsplit_once('.') {
         Some((stem, ext)) if !stem.is_empty() => format!("{stem}~{n}.{ext}"),
@@ -214,13 +192,10 @@ fn numbered(name: &str, n: usize) -> String {
     }
 }
 
-/// A distinct path on disk for every entry Android tells apart.
-///
-/// Android finds entries by exact name, but on disk `a//b` and `a/b` are one
-/// file, and `classes.dex` can't be both a file and the directory of
-/// `classes.dex/x`. The file keeps its name and the directory becomes
-/// `classes.dex.dir`; a second entry on one path becomes `name~2.ext`. An
-/// entry whose name is already a plain path keeps it. Unsafe names are absent.
+/// A distinct path on disk for every entry Android tells apart: `a//b` and
+/// `a/b` are one file on disk, and `classes.dex` can't also be the directory
+/// of `classes.dex/x`. The directory becomes `classes.dex.dir`, a second entry
+/// on a path `name~2.ext`; plain names keep their path.
 fn disk_names<'a>(names: &[&'a str]) -> HashMap<&'a str, String> {
     let normalized: Vec<(&str, String)> = names
         .iter()
@@ -228,7 +203,6 @@ fn disk_names<'a>(names: &[&'a str]) -> HashMap<&'a str, String> {
         .collect();
 
     let files: HashSet<&str> = normalized.iter().map(|(_, path)| path.as_str()).collect();
-    // every path an entry uses, as a file or a directory
     let mut taken: HashSet<String> = HashSet::new();
     for (_, path) in &normalized {
         taken.extend(
@@ -238,7 +212,7 @@ fn disk_names<'a>(names: &[&'a str]) -> HashMap<&'a str, String> {
         taken.insert(path.clone());
     }
 
-    // plain names first, so they keep their path; the sort is stable
+    // plain names first: they keep their path
     let mut order: Vec<&(&str, String)> = normalized.iter().collect();
     order.sort_by_key(|(name, path)| name != path);
 
@@ -246,7 +220,6 @@ fn disk_names<'a>(names: &[&'a str]) -> HashMap<&'a str, String> {
     let mut used: HashSet<String> = HashSet::new();
     let mut out = HashMap::with_capacity(order.len());
     for (name, path) in order {
-        // the mapped directory so far, ending with `/` once it has one
         let mut mapped = String::with_capacity(path.len() + 4);
         let mut start = 0;
         for (end, _) in path.match_indices('/') {
@@ -287,14 +260,11 @@ fn disk_names<'a>(names: &[&'a str]) -> HashMap<&'a str, String> {
     out
 }
 
-/// Enumerates the config/other split inner APKs of a `xapk`/`apkm`/`apks` container
-/// (everything that is *not* the base).
-///
-/// Each carries its own `resources.arsc` with locale/configuration string variations that complement the base's.
+/// The split apks of a container, everything but the base.
 fn container_split_apks(zip: &ZipEntry, base: &str) -> Vec<(String, ZipEntry)> {
     let mut names: BTreeSet<String> = BTreeSet::new();
 
-    // xapk: manifest.json split_apks -> file names (skip the id == "base" module)
+    // xapk
     if let Ok((m, _)) = zip.read("manifest.json")
         && let Ok(manifest) = XAPKManifest::from_json(&m)
     {
@@ -309,8 +279,7 @@ fn container_split_apks(zip: &ZipEntry, base: &str) -> Vec<(String, ZipEntry)> {
         }
     }
 
-    // apks: the splits of the base's variant; bundletool names the splits
-    // of further sdk variants with a `_<n>` suffix (`base-ru_2.apk`)
+    // apks: the splits of the base's variant
     if let Some(base) = apks_base_apk_name(zip)
         && let Some(dir) = apks_splits_dir(&base)
     {
@@ -326,7 +295,7 @@ fn container_split_apks(zip: &ZipEntry, base: &str) -> Vec<(String, ZipEntry)> {
         }
     }
 
-    // heuristic fallback (apkm / manifestless containers): config.*/split_* APKs
+    // apkm and containers without a manifest
     for name in zip.namelist() {
         if name.ends_with(".apk") && (name.starts_with("config.") || name.starts_with("split_")) {
             names.insert(name.to_string());
@@ -346,8 +315,6 @@ fn container_split_apks(zip: &ZipEntry, base: &str) -> Vec<(String, ZipEntry)> {
         .collect()
 }
 
-/// Directory holding the splits that complement an apks base: `system` mode
-/// keeps its language and feature splits in `splits/` next to `system/system.apk`.
 fn apks_splits_dir(base: &str) -> Option<&'static str> {
     match base {
         "splits/base-master.apk" | "system/system.apk" => Some("splits/"),
@@ -356,11 +323,8 @@ fn apks_splits_dir(base: &str) -> Option<&'static str> {
     }
 }
 
-/// Checks whether an apks split is the `_<n>` copy of another entry for a further
-/// sdk variant, e.g. `splits/base-ru_2.apk` next to `splits/base-ru.apk`.
-///
-/// The unsuffixed entry must exist, and the `_64` of `x86_64` is part of the
-/// abi, not a variant: `splits/base-x86_64.apk` sits next to `splits/base-x86.apk`.
+/// `splits/base-ru_2.apk`, the copy of `splits/base-ru.apk` for another sdk
+/// variant; the `_64` of `x86_64` is part of the abi.
 fn is_apks_variant_copy(name: &str, names: &BTreeSet<&str>) -> bool {
     name.strip_suffix(".apk")
         .filter(|stem| !stem.ends_with("-x86_64"))
@@ -396,9 +360,6 @@ fn write_bytes(path: &Path, contents: &[u8]) -> Result<()> {
         .with_context(|| format!("can't write to {:?}", path))
 }
 
-/// `resources` toggles apktool-style decoding: the manifest, binary XML resources
-/// and `resources.arsc` are decoded arsc-driven (see [`decode_resources`]); every
-/// non-resource entry (dex, libs, assets, ...) is still copied as-is.
 fn extract(
     path: &PathBuf,
     out_dir: &PathBuf,
@@ -406,7 +367,6 @@ fn extract(
     verbose: bool,
     resources: bool,
 ) -> Result<()> {
-    // the archive is opened lazily, without reading the whole file into memory
     let zip = ZipEntry::open(path).with_context(|| format!("can't open file: {:?}", path))?;
 
     std::fs::create_dir_all(out_dir)
@@ -414,8 +374,6 @@ fn extract(
 
     let regexes = compile_regexes(files)?;
 
-    // the same base apk `show` uses; the outer archive of a container has
-    // no resources of its own to decode
     let base = if resources {
         match find_base_apk(&zip) {
             Ok(None) => {
@@ -475,7 +433,6 @@ fn extract(
         write_bytes(&file_path, &data)?;
         moved += usize::from(out_name != file_name);
 
-        // show interesting files (native libs) and tampered entries
         let display_name = if renamed {
             file_path
                 .file_name()
@@ -532,7 +489,6 @@ fn extract(
 mod tests {
     use super::*;
 
-    /// Entries saved under a path other than their name.
     fn mapped(names: &[&str]) -> Vec<(String, String)> {
         let mut out: Vec<_> = disk_names(names)
             .into_iter()
@@ -557,7 +513,6 @@ mod tests {
 
     #[test]
     fn file_wins_over_a_directory_of_the_same_name() {
-        // the directory entries come first, as in the sample that lost its dex
         let names = [
             "classes.dex/a.xml",
             "classes.dex/b/c.png",
@@ -571,7 +526,6 @@ mod tests {
                 ("classes.dex/b/c.png", "classes.dex.dir/b/c.png"),
             ])
         );
-        // the order of the entries doesn't matter
         let reversed: Vec<&str> = names.iter().rev().copied().collect();
         assert_eq!(mapped(&reversed), mapped(&names));
     }
@@ -594,7 +548,6 @@ mod tests {
 
     #[test]
     fn names_that_collapse_to_one_path_get_numbered() {
-        // the plain name keeps the path even when it comes last
         let names = ["a//x.xml", "/a/x.xml", "a/./x.xml", "a/x.xml"];
         assert_eq!(
             mapped(&names),
@@ -640,7 +593,6 @@ mod tests {
         let paths: HashSet<&String> = disk.values().collect();
         assert_eq!(disk.len(), names.len());
         assert_eq!(paths.len(), names.len(), "{disk:?}");
-        // no path is the directory of another one
         for path in &paths {
             assert!(
                 !paths

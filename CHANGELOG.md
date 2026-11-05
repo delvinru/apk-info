@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Half the peak memory on a manifest or resource table whose string pool is padded with garbage, e.g. a 537 MB manifest takes 544 MB instead of 1.08 GB.
+- `extract --resources` is 1.6–2.2× faster on large apps: `res/values*` files were written one character per system call.
 
 ### Fixed
 

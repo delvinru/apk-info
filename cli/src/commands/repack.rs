@@ -15,7 +15,6 @@ pub(crate) fn command_repack(
 ) -> Result<()> {
     let all_files = get_all_files(paths);
 
-    // a single explicit file name cannot cover several inputs
     if output.is_some() && all_files.len() > 1 {
         bail!(
             "--output can only be used with a single input file, use --output-dir for multiple inputs"
@@ -39,13 +38,8 @@ fn default_output_name(path: &Path) -> PathBuf {
         .unwrap_or_else(|| "unknown.repacked.apk".into())
 }
 
-/// Resolves the output path from the `-o/--output` and `-d/--output-dir` options:
-///
-/// - `-o FILE`: the output path as given (bare relative names resolve against
-///   the working directory, unix-style)
-/// - `-d DIR`: the directory for `<name>.repacked.apk`
-/// - both: `DIR/FILE`; FILE must then be a bare name
-/// - neither: next to the source file
+/// `-o FILE` as given, `-d DIR` for `<name>.repacked.apk`, both for
+/// `DIR/FILE`, neither next to the source.
 fn make_output_path(
     path: &Path,
     output: &Option<PathBuf>,
@@ -65,7 +59,6 @@ fn make_output_path(
 }
 
 fn repack(path: &PathBuf, out_path: &PathBuf) -> Result<()> {
-    // the archive is opened lazily, without reading the whole file into memory
     let zip = ZipEntry::open(path).with_context(|| format!("can't open file: {:?}", path))?;
 
     let mut tampered = 0usize;

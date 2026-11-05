@@ -11,11 +11,9 @@ pub(crate) fn command_axml(path: &Path) -> Result<()> {
 
     let xml = match Apk::new(path) {
         Ok(apk) => apk.get_xml_string(),
-        // a zip archive that doesn't open as an apk has its own error, it is
-        // not raw axml
+        // a zip that isn't an apk keeps its own error
         Err(err) if ZipEntry::open(path).is_ok() => return Err(err.into()),
         Err(_) => {
-            // raw axml?
             let file = std::fs::read(path)
                 .with_context(|| format!("can't open and read file: {:?}", path))?;
             let axml = AXML::new(&mut &file[..], None)?;

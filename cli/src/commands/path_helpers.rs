@@ -20,7 +20,6 @@ pub(crate) fn get_all_files(paths: &[PathBuf]) -> Vec<PathBuf> {
                     .map(|e| e.path().to_path_buf())
                     .collect::<Vec<_>>()
             } else {
-                // a missing path goes on too, for the command to report it
                 vec![path.clone()]
             }
         })

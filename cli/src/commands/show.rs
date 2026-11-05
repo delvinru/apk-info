@@ -21,8 +21,7 @@ pub(crate) fn command_show(
             Ok(v) => v,
             Err(e) => {
                 eprintln!("{:?} - {}", path, e.to_string().red());
-                // a failed file is a record too, so a collection can be
-                // accounted for from stdout alone
+                // a failed file is a record too
                 if *jsonl {
                     let record = ErrorRecord {
                         path: &path,
@@ -37,7 +36,6 @@ pub(crate) fn command_show(
         if *jsonl {
             println!("{}", serde_json::to_string(&info)?);
         } else {
-            // a blank line between APKs
             if printed {
                 println!();
             }
@@ -89,8 +87,7 @@ struct ApkInfo {
     pub anomalies: Option<Vec<AnomalyInfo>>,
 }
 
-/// A signing block in the JSON output: every block has a `scheme`, then
-/// `certificates` (always a list) or a `value`.
+/// A signing block in JSON: `scheme`, then `certificates` or `value`.
 #[derive(Serialize)]
 struct SignatureRecord<'a> {
     scheme: &'static str,
@@ -208,14 +205,11 @@ fn collect_apk_info(path: &Path, show_signatures: &bool, show_anomalies: &bool) 
     })
 }
 
-/// Width of the key column in the text output.
 const KEY_WIDTH: usize = 18;
 
-/// Locations listed per anomaly kind; a packer flags hundreds of entries the same way.
+/// Locations listed per anomaly kind.
 const LOCATIONS_PER_CODE: usize = 2;
 
-/// Prints `key` padded to the key column, then `value`; a longer key keeps
-/// one space before the value.
 fn field(indent: usize, key: &str, value: impl std::fmt::Display) {
     let pad = (KEY_WIDTH.saturating_sub(indent))
         .saturating_sub(key.chars().count())
@@ -272,8 +266,7 @@ fn pretty_print(info: &ApkInfo) {
     }
 }
 
-/// Prints the signing blocks; schemes signed with the same certificates
-/// (usually v2 and v3) share one entry.
+/// Schemes signed with the same certificates share one entry.
 fn print_signatures(signatures: &[Signature]) {
     if signatures.is_empty() {
         println!("  {}", "none".yellow());
@@ -324,7 +317,6 @@ fn print_signatures(signatures: &[Signature]) {
 }
 
 fn print_certificate(certificate: &CertificateInfo) {
-    // the date is enough to read the validity at a glance
     let date = |time: &str| time.split('T').next().unwrap_or(time).to_owned();
 
     if certificate.issuer != certificate.subject {
@@ -346,7 +338,6 @@ fn print_certificate(certificate: &CertificateInfo) {
     field(4, "MD5", &certificate.md5_fingerprint);
 }
 
-/// Prints the verdict, then one line per anomaly kind, the most severe first.
 fn print_anomalies(tampered: bool, anomalies: &[AnomalyInfo]) {
     let mut groups: Vec<Vec<&AnomalyInfo>> = Vec::new();
     for anomaly in anomalies {
@@ -361,7 +352,6 @@ fn print_anomalies(tampered: bool, anomalies: &[AnomalyInfo]) {
     // stable: kinds of one severity keep the order they were found in
     groups.sort_by_key(|group| std::cmp::Reverse(group[0].severity));
 
-    // the verdict, with the number of kinds per severity
     let verdict = if tampered {
         "YES".red().bold()
     } else {
@@ -408,7 +398,6 @@ fn print_anomalies(tampered: bool, anomalies: &[AnomalyInfo]) {
             _ => "·".normal(),
         };
 
-        // one: where and what; many: how many and where, the description repeats
         let (count, rest) = match group.as_slice() {
             [one] => (
                 String::new(),
