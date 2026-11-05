@@ -1,14 +1,35 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use apk_info_axml::structs::ResTableEntry;
+use apk_info_axml::structs::{ResTableEntry, ResTableTypeEntries};
 use apk_info_axml::{ARSC, AXML};
 use apk_info_xml::Element;
 use apk_info_zip::ZipEntry;
 
-/// Maps a resource type name to the file that holds it (including the `.xml` suffix).
+/// Types in id order: hash map order changes between runs.
+fn types_in_order(type_map: &HashMap<u8, ResTableTypeEntries>) -> Vec<(u8, &ResTableTypeEntries)> {
+    let mut types: Vec<_> = type_map
+        .iter()
+        .map(|(&id, entries)| (id, entries))
+        .collect();
+    types.sort_unstable_by_key(|&(id, _)| id);
+    types
+}
+
+fn entry_ids(entries: &ResTableTypeEntries) -> impl Iterator<Item = (u16, &ResTableEntry)> {
+    entries.entries.iter().enumerate().map(|(position, entry)| {
+        let id = entries
+            .entry_ids
+            .as_ref()
+            .and_then(|ids| ids.get(position).copied())
+            .unwrap_or(position as u16);
+        (id, entry)
+    })
+}
+
+/// The values file of a resource type.
 #[inline]
 fn type_file(type_name: &str) -> &'static str {
     match type_name {
@@ -25,7 +46,6 @@ fn type_file(type_name: &str) -> &'static str {
     }
 }
 
-/// Returns the scalar value of a simple (non-complex) entry, if it has one.
 #[inline]
 fn scalar_value(arsc: &ARSC, entry: &ResTableEntry) -> Option<String> {
     match entry {
@@ -34,10 +54,7 @@ fn scalar_value(arsc: &ARSC, entry: &ResTableEntry) -> Option<String> {
     }
 }
 
-/// Encodes a plural item's quantity from the map item name.
-///
-/// Android encodes the quantity as a special map-id `0x01000004 + rule`:
-/// 0x04=other, 0x05=zero, 0x06=one, 0x07=two, 0x08=few, 0x09=many.
+/// Plural quantity from its map id, `0x01000004 + rule`.
 #[inline]
 fn plural_quantity(name: u32) -> &'static str {
     match name & 0xff {
@@ -50,16 +67,15 @@ fn plural_quantity(name: u32) -> &'static str {
     }
 }
 
-/// Decodes `resources.arsc` (`bytes`) into `<out_dir>/res/values*/...` files.
+/// Writes `res/values*/` from `resources.arsc`.
 pub(crate) fn decode_arsc(out_dir: &Path, bytes: &[u8]) -> Result<()> {
     let arsc = ARSC::new(&mut &bytes[..]).context("can't parse resources.arsc")?;
 
-    // folder (e.g. "values", "values-en-rUS") -> file ("strings.xml") -> child elements
+    // folder -> file -> elements
     let mut files: BTreeMap<String, BTreeMap<String, Vec<Element>>> = BTreeMap::new();
 
     for pkg in arsc.packages() {
         for (config, type_map) in &pkg.resources {
-            // one `folder` bucket per config, handed out once and reused by every entry
             let qualifier = config.as_string();
             let folder = if qualifier.is_empty() {
                 "values".to_string()
@@ -68,13 +84,13 @@ pub(crate) fn decode_arsc(out_dir: &Path, bytes: &[u8]) -> Result<()> {
             };
             let file_map = files.entry(folder).or_default();
 
-            for (type_id, entries) in type_map {
+            for (type_id, entries) in types_in_order(type_map) {
                 for entry in &entries.entries {
                     if matches!(entry, ResTableEntry::NoEntry) {
                         continue;
                     }
 
-                    let Some(full_name) = pkg.get_entry_full_name(entry, *type_id) else {
+                    let Some(full_name) = pkg.get_entry_full_name(entry, type_id) else {
                         continue;
                     };
                     let Some((type_name, key)) = full_name.split_once('/') else {
@@ -148,10 +164,8 @@ pub(crate) fn decode_arsc(out_dir: &Path, bytes: &[u8]) -> Result<()> {
         }
     }
 
-    // write everything out
     let res_dir = out_dir.join("res");
     for (folder, file_map) in files {
-        // skip configs that produced no value files (e.g. density-only drawables)
         if file_map.is_empty() {
             continue;
         }
@@ -186,21 +200,22 @@ pub(crate) fn decode_arsc(out_dir: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Returns `true` when `data` looks like a binary AXML document (magic `0x00080003`).
 #[inline]
 fn is_axml(data: &[u8]) -> bool {
     data.len() >= 4 && data[0] == 3 && data[1] == 0 && data[2] == 8 && data[3] == 0
 }
 
-/// Decodes a binary AXML blob into a readable XML string, if possible.
 fn decode_axml(data: &[u8], arsc: Option<&ARSC>) -> Option<String> {
     let axml = AXML::new(&mut &data[..], arsc).ok()?;
     Some(axml.get_xml_string())
 }
 
-/// Writes the file resources declared in `resources.arsc` into their canonical
-/// `res/<type>[-<config>]/` folders (apktool/jadx layout).
+/// Writes file resources to `res/<type>[-<config>]/`, as apktool does.
 pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Result<()> {
+    // obfuscated tables reuse names: later duplicates get their resource id
+    let mut written: HashSet<PathBuf> = HashSet::new();
+    let mut renamed = 0usize;
+
     for pkg in arsc.packages() {
         for (config, type_map) in &pkg.resources {
             let qualifier = config.as_string();
@@ -210,18 +225,17 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
                 format!("-{qualifier}")
             };
 
-            for (type_id, entries) in type_map {
-                for entry in &entries.entries {
+            for (type_id, entries) in types_in_order(type_map) {
+                for (entry_id, entry) in entry_ids(entries) {
                     if matches!(entry, ResTableEntry::NoEntry) {
                         continue;
                     }
-                    let Some(full_name) = pkg.get_entry_full_name(entry, *type_id) else {
+                    let Some(full_name) = pkg.get_entry_full_name(entry, type_id) else {
                         continue;
                     };
                     let Some((type_name, key)) = full_name.split_once('/') else {
                         continue;
                     };
-                    // file resources store their `res/...` path as a String value
                     let ResTableEntry::Default(e) = entry else {
                         continue;
                     };
@@ -230,10 +244,8 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
                         continue;
                     }
 
-                    // canonical folder: `res/<type>` or `res/<type>-<qualifier>`
                     let folder = format!("{type_name}{folder_pfx}");
 
-                    // output basename: the resource key name + the source extension
                     let ext = src
                         .rsplit_once('.')
                         .map(|(_, e)| e.trim())
@@ -250,7 +262,6 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
                         continue;
                     };
 
-                    // decode AXML in place, otherwise keep the bytes as-is
                     let contents = if is_axml(&data) {
                         decode_axml(&data, Some(arsc))
                             .map(String::into_bytes)
@@ -259,7 +270,15 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
                         data
                     };
 
-                    let path = out_dir.join("res").join(&folder).join(&out_name);
+                    let mut path = out_dir.join("res").join(&folder).join(&out_name);
+                    if !written.insert(path.clone()) {
+                        let id = (pkg.header.id << 24)
+                            | (u32::from(type_id) << 16)
+                            | u32::from(entry_id);
+                        path.set_file_name(format!("{key}_0x{id:08x}{ext}"));
+                        written.insert(path.clone());
+                        renamed += 1;
+                    }
                     if let Some(parent) = path.parent() {
                         std::fs::create_dir_all(parent)
                             .with_context(|| format!("can't create res dir {:?}", parent))?;
@@ -272,20 +291,21 @@ pub(crate) fn decode_files(out_dir: &Path, arsc: &ARSC, zip: &ZipEntry) -> Resul
             }
         }
     }
+
+    if renamed != 0 {
+        println!(
+            "[~] {renamed} file resources share a name with another one, saved with their resource id appended"
+        );
+    }
     Ok(())
 }
 
-/// Decodes `resources.arsc` into both `res/values*/...` and the canonical file-
-/// resource layout, plus the decoded `AndroidManifest.xml`, driven entirely by the
-/// resource table. This is the public entry used for a standalone APK or the base
-/// inner APK of a split container.
+/// Decodes the manifest and resources of an apk or a container's base.
 pub(crate) fn decode_resources(out_dir: &Path, zip: &ZipEntry) -> Result<()> {
     decode_resources_impl(out_dir, zip, true)
 }
 
-/// Like [`decode_resources`], but skips `AndroidManifest.xml`. Used for the config
-/// splits of a container, whose resource variations are merged into the shared
-/// `res` tree without clobbering the base APK's manifest.
+/// [`decode_resources`] without the manifest, for splits.
 pub(crate) fn decode_resources_split(out_dir: &Path, zip: &ZipEntry) -> Result<()> {
     decode_resources_impl(out_dir, zip, false)
 }
@@ -303,7 +323,6 @@ fn decode_resources_impl(out_dir: &Path, zip: &ZipEntry, with_manifest: bool) ->
         println!("[-] can't decode resources.arsc files - {e}");
     }
 
-    // decode AndroidManifest.xml (with reference resolution) into the output root
     if with_manifest
         && let Ok((mdata, _)) = zip.read("AndroidManifest.xml")
         && let Some(xml) = decode_axml(&mdata, Some(&arsc))
@@ -317,4 +336,35 @@ fn decode_resources_impl(out_dir: &Path, zip: &ZipEntry, with_manifest: bool) ->
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entries(ids: Option<Vec<u16>>, len: usize) -> ResTableTypeEntries {
+        ResTableTypeEntries {
+            entry_ids: ids,
+            entries: (0..len).map(|_| ResTableEntry::NoEntry).collect(),
+        }
+    }
+
+    #[test]
+    fn types_come_in_id_order() {
+        let map: HashMap<u8, ResTableTypeEntries> =
+            (1..=50).rev().map(|id| (id, entries(None, 0))).collect();
+        let ids: Vec<u8> = types_in_order(&map).into_iter().map(|(id, _)| id).collect();
+        assert_eq!(ids, (1..=50).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn entry_ids_follow_sparse_tables() {
+        let dense = entries(None, 3);
+        let ids: Vec<u16> = entry_ids(&dense).map(|(id, _)| id).collect();
+        assert_eq!(ids, [0, 1, 2]);
+
+        let sparse = entries(Some(vec![2, 7, 40]), 3);
+        let ids: Vec<u16> = entry_ids(&sparse).map(|(id, _)| id).collect();
+        assert_eq!(ids, [2, 7, 40]);
+    }
 }

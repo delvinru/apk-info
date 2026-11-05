@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Panic when a container without a root manifest holds a file with a non-ASCII name, e.g. `OPNE GIFT🎁.md`.
+- `extract --resources` lost file resources that share a name in an obfuscated resource table, and which one survived changed from run to run. Later duplicates now get their resource id appended, as in apktool.
 
 ## [1.1.0] - 2026-11-02
 
