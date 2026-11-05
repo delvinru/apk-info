@@ -7,20 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-05
+
+### Added
+
+- `Apk::get_manifest()` to walk the parsed manifest tree.
+- `Element::colored()` for ANSI-colored XML; `apk-info axml` colors its output in a terminal and prints plain text when piped.
+
 ### Changed
 
-- Half the peak memory on a manifest or resource table whose string pool is padded with garbage, e.g. a 537 MB manifest takes 544 MB instead of 1.08 GB.
-- `extract --resources` is 1.6–2.2× faster on large apps: `res/values*` files were written one character per system call.
+- Half the peak memory on a manifest or resource table with a garbage-padded string pool: a 537 MB manifest takes 544 MB instead of 1.08 GB.
+- `extract --resources` is 1.6–2.2× faster on large apps: each `res/values*` file is written in one call.
+- Faster parsing of manifests and resource tables: attribute names are decoded once per document, and empty entries are skipped.
+- Python type stubs are now part of the `apk_info` package and ship in the sdist, so type checkers work after a source install.
 
 ### Fixed
 
-- Panic when a container without a root manifest holds a file with a non-ASCII name, e.g. `OPNE GIFT🎁.md`.
-- `extract --resources` lost file resources that share a name in an obfuscated resource table, and which one survived changed from run to run. Later duplicates now get their resource id appended, as in apktool.
-- `extract` lost entries whose names give one path on disk: `classes.dex` next to `classes.dex/x` (the file turned into a directory, so the dex wasn't saved), `a//b` next to `a/b`, or a name starting with `/`. Every entry is now saved: the directory becomes `classes.dex.dir`, a second entry on one path `name~2.ext`.
+- Panic when the base APK of a container is guessed from non-ASCII entry names.
+- `get_attribute_value()` could resolve a value with another element's resource id when a tag or attribute name repeated.
+- `extract --resources` kept only one of several file resources that share a name, and the survivor changed between runs; duplicates now keep their resource id, as in apktool.
+- `extract` skipped entries whose names map to one path on disk, e.g. `classes.dex` and `classes.dex/x`; every entry is saved now.
+- A Rust panic in the Python bindings aborted the interpreter instead of raising an exception.
+- Importing `apk_info` failed when another extension had already set the global logger.
 
 ### Security
 
-- `extract --resources` could write outside the output directory: it built file resource paths from type and key names in `resources.arsc`, e.g. `../../x` or an absolute path. Such names are now replaced by the type or resource id.
+- `extract --resources` could write outside the output directory via `..` or an absolute path in `resources.arsc`; such names are now replaced by the type or resource id.
 
 ## [1.1.0] - 2026-11-02
 
@@ -229,7 +241,8 @@ Initial release of `apk-info`, a full-featured APK parser.
 - Python bindings.
 - Fuzzing targets.
 
-[Unreleased]: https://github.com/delvinru/apk-info/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/delvinru/apk-info/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/delvinru/apk-info/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/delvinru/apk-info/compare/v1.0.13...v1.1.0
 [1.0.13]: https://github.com/delvinru/apk-info/compare/v1.0.12...v1.0.13
 [1.0.12]: https://github.com/delvinru/apk-info/compare/v1.0.11...v1.0.12

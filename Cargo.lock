@@ -82,7 +82,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apk-info"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "apk-info-axml",
  "apk-info-xml",
@@ -95,7 +95,7 @@ dependencies = [
 
 [[package]]
 name = "apk-info-axml"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "apk-info-xml",
  "bitflags 2.13.2",
@@ -106,7 +106,7 @@ dependencies = [
 
 [[package]]
 name = "apk-info-cli"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "apk-info",
@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "apk-info-fuzz"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "apk-info-axml",
  "apk-info-zip",
@@ -141,7 +141,7 @@ dependencies = [
 
 [[package]]
 name = "apk-info-python"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "apk-info",
  "apk-info-zip",
@@ -152,11 +152,11 @@ dependencies = [
 
 [[package]]
 name = "apk-info-xml"
-version = "1.1.0"
+version = "1.1.1"
 
 [[package]]
 name = "apk-info-zip"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "ahash",
  "cms",
