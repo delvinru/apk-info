@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Panic when a container without a root manifest holds a file with a non-ASCII name, e.g. `OPNE GIFT🎁.md`.
 - `extract --resources` lost file resources that share a name in an obfuscated resource table, and which one survived changed from run to run. Later duplicates now get their resource id appended, as in apktool.
+- `extract` lost entries whose names give one path on disk: `classes.dex` next to `classes.dex/x` (the file turned into a directory, so the dex wasn't saved), `a//b` next to `a/b`, or a name starting with `/`. Every entry is now saved: the directory becomes `classes.dex.dir`, a second entry on one path `name~2.ext`.
 
 ### Security
 

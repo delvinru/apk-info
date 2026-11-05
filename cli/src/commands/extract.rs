@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -191,6 +191,102 @@ fn resolve_output_path(out_dir: &Path, file_name: &str) -> Option<(PathBuf, bool
     }
 }
 
+/// The entry name as a relative path: empty and `.` components dropped, so
+/// `/a//b` is `a/b`. `None` for a directory entry or a name that could leave
+/// the output directory.
+fn normalized_name(name: &str) -> Option<String> {
+    if name.ends_with('/') {
+        return None;
+    }
+    let normalized = name
+        .split('/')
+        .filter(|c| !c.is_empty() && *c != ".")
+        .collect::<Vec<_>>()
+        .join("/");
+    is_safe_relative_name(&normalized).then_some(normalized)
+}
+
+/// `stem~n.ext` for the `n`-th entry that wants the same file name.
+fn numbered(name: &str, n: usize) -> String {
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => format!("{stem}~{n}.{ext}"),
+        _ => format!("{name}~{n}"),
+    }
+}
+
+/// A distinct path on disk for every entry Android tells apart.
+///
+/// Android finds entries by exact name, but on disk `a//b` and `a/b` are one
+/// file, and `classes.dex` can't be both a file and the directory of
+/// `classes.dex/x`. The file keeps its name and the directory becomes
+/// `classes.dex.dir`; a second entry on one path becomes `name~2.ext`. An
+/// entry whose name is already a plain path keeps it. Unsafe names are absent.
+fn disk_names<'a>(names: &[&'a str]) -> HashMap<&'a str, String> {
+    let normalized: Vec<(&str, String)> = names
+        .iter()
+        .filter_map(|&name| normalized_name(name).map(|path| (name, path)))
+        .collect();
+
+    let files: HashSet<&str> = normalized.iter().map(|(_, path)| path.as_str()).collect();
+    // every path an entry uses, as a file or a directory
+    let mut taken: HashSet<String> = HashSet::new();
+    for (_, path) in &normalized {
+        taken.extend(
+            path.match_indices('/')
+                .map(|(end, _)| path[..end].to_owned()),
+        );
+        taken.insert(path.clone());
+    }
+
+    // plain names first, so they keep their path; the sort is stable
+    let mut order: Vec<&(&str, String)> = normalized.iter().collect();
+    order.sort_by_key(|(name, path)| name != path);
+
+    let mut renamed_dirs: HashMap<&str, String> = HashMap::new();
+    let mut used: HashSet<String> = HashSet::new();
+    let mut out = HashMap::with_capacity(order.len());
+    for (name, path) in order {
+        // the mapped directory so far, ending with `/` once it has one
+        let mut mapped = String::with_capacity(path.len() + 4);
+        let mut start = 0;
+        for (end, _) in path.match_indices('/') {
+            let dir = &path[..end];
+            let component = &path[start..end];
+            start = end + 1;
+            if files.contains(dir) {
+                let renamed = renamed_dirs.entry(dir).or_insert_with(|| {
+                    let new = (1..)
+                        .map(|n| match n {
+                            1 => format!("{mapped}{component}.dir"),
+                            n => format!("{mapped}{component}.dir{n}"),
+                        })
+                        .find(|candidate| !taken.contains(candidate))
+                        .expect("an unused name exists");
+                    taken.insert(new.clone());
+                    new
+                });
+                mapped.clone_from(renamed);
+            } else {
+                mapped.push_str(component);
+            }
+            mapped.push('/');
+        }
+
+        let file = &path[start..];
+        let mut target = format!("{mapped}{file}");
+        if used.contains(&target) {
+            target = (2..)
+                .map(|n| format!("{mapped}{}", numbered(file, n)))
+                .find(|candidate| !used.contains(candidate) && !taken.contains(candidate))
+                .expect("an unused name exists");
+            taken.insert(target.clone());
+        }
+        used.insert(target.clone());
+        out.insert(*name, target);
+    }
+    out
+}
+
 /// Enumerates the config/other split inner APKs of a `xapk`/`apkm`/`apks` container
 /// (everything that is *not* the base).
 ///
@@ -338,12 +434,20 @@ fn extract(
         None
     };
 
-    for file_name in zip.namelist() {
+    let names: Vec<&str> = zip.namelist().collect();
+    let disk = disk_names(&names);
+    let mut moved = 0usize;
+
+    for file_name in names {
         if !regexes.is_empty() && !regexes.iter().any(|re| re.is_match(file_name)) {
             continue;
         }
 
-        let Some((file_path, renamed)) = resolve_output_path(out_dir, file_name) else {
+        let Some(out_name) = disk.get(file_name).map(String::as_str) else {
+            warn!("got bad filename: {:?}, skipped", file_name);
+            continue;
+        };
+        let Some((file_path, renamed)) = resolve_output_path(out_dir, out_name) else {
             warn!("got bad filename: {:?}, skipped", file_name);
             continue;
         };
@@ -369,6 +473,7 @@ fn extract(
         };
 
         write_bytes(&file_path, &data)?;
+        moved += usize::from(out_name != file_name);
 
         // show interesting files (native libs) and tampered entries
         let display_name = if renamed {
@@ -398,6 +503,12 @@ fn extract(
         }
     }
 
+    if moved != 0 {
+        println!(
+            "[~] {moved} entries share a path on disk with another one or aren't a plain path, saved under another name"
+        );
+    }
+
     if let Some((base_name, inner)) = base {
         println!("[*] decoding resources of the base inner apk \"{base_name}\"");
         if let Err(e) = decode_resources(out_dir, &inner) {
@@ -420,6 +531,125 @@ fn extract(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Entries saved under a path other than their name.
+    fn mapped(names: &[&str]) -> Vec<(String, String)> {
+        let mut out: Vec<_> = disk_names(names)
+            .into_iter()
+            .filter(|(name, path)| name != path)
+            .map(|(name, path)| (name.to_owned(), path))
+            .collect();
+        out.sort();
+        out
+    }
+
+    fn pairs(expected: &[(&str, &str)]) -> Vec<(String, String)> {
+        expected
+            .iter()
+            .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+            .collect()
+    }
+
+    #[test]
+    fn ordinary_archive_has_no_conflicts() {
+        assert!(mapped(&["AndroidManifest.xml", "classes.dex", "res/a.xml", "res/"]).is_empty());
+    }
+
+    #[test]
+    fn file_wins_over_a_directory_of_the_same_name() {
+        // the directory entries come first, as in the sample that lost its dex
+        let names = [
+            "classes.dex/a.xml",
+            "classes.dex/b/c.png",
+            "classes.dex",
+            "x.txt",
+        ];
+        assert_eq!(
+            mapped(&names),
+            pairs(&[
+                ("classes.dex/a.xml", "classes.dex.dir/a.xml"),
+                ("classes.dex/b/c.png", "classes.dex.dir/b/c.png"),
+            ])
+        );
+        // the order of the entries doesn't matter
+        let reversed: Vec<&str> = names.iter().rev().copied().collect();
+        assert_eq!(mapped(&reversed), mapped(&names));
+    }
+
+    #[test]
+    fn nested_conflicts_are_all_resolved() {
+        assert_eq!(
+            mapped(&["a", "a/b", "a/b/c"]),
+            pairs(&[("a/b", "a.dir/b"), ("a/b/c", "a.dir/b.dir/c")])
+        );
+    }
+
+    #[test]
+    fn taken_dir_name_is_skipped() {
+        assert_eq!(
+            mapped(&["a", "a/x", "a.dir", "a.dir2/y"]),
+            pairs(&[("a/x", "a.dir3/x")])
+        );
+    }
+
+    #[test]
+    fn names_that_collapse_to_one_path_get_numbered() {
+        // the plain name keeps the path even when it comes last
+        let names = ["a//x.xml", "/a/x.xml", "a/./x.xml", "a/x.xml"];
+        assert_eq!(
+            mapped(&names),
+            pairs(&[
+                ("/a/x.xml", "a/x~3.xml"),
+                ("a/./x.xml", "a/x~4.xml"),
+                ("a//x.xml", "a/x~2.xml"),
+            ])
+        );
+        assert_eq!(disk_names(&names)["a/x.xml"], "a/x.xml");
+    }
+
+    #[test]
+    fn absolute_name_is_saved_relative() {
+        assert_eq!(
+            mapped(&["/etc/x.png"]),
+            pairs(&[("/etc/x.png", "etc/x.png")])
+        );
+    }
+
+    #[test]
+    fn unsafe_and_directory_names_are_left_out() {
+        let names = ["../x", "a/../../x", "C:x", "res/", "//", "ok"];
+        let disk = disk_names(&names);
+        assert_eq!(disk.len(), 1);
+        assert_eq!(disk["ok"], "ok");
+    }
+
+    #[test]
+    fn every_entry_gets_its_own_path() {
+        let names = [
+            "classes.dex/a",
+            "classes.dex",
+            "classes.dex//a",
+            "/classes.dex/a",
+            "a",
+            "a~2",
+            "a/b",
+            "a.dir",
+            "a.dir/c",
+        ];
+        let disk = disk_names(&names);
+        let paths: HashSet<&String> = disk.values().collect();
+        assert_eq!(disk.len(), names.len());
+        assert_eq!(paths.len(), names.len(), "{disk:?}");
+        // no path is the directory of another one
+        for path in &paths {
+            assert!(
+                !paths
+                    .iter()
+                    .any(|other| other.starts_with(&format!("{path}/"))),
+                "{path}"
+            );
+        }
+    }
 
     #[test]
     fn apks_splits_dir_follows_the_base() {
