@@ -1,4 +1,5 @@
-//! Python bindings for apk-info, built as the `apk_info` module.
+//! Python bindings for apk-info, built as the `apk_info._apk_info` module and
+//! re-exported by the `apk_info` package.
 //!
 //! - [`apk`]: the `APK` class over [`apk_info::Apk`];
 //! - [`anomaly`]: structural anomalies of an apk;
@@ -25,6 +26,7 @@ create_exception!(
 );
 
 #[pymodule]
+#[pyo3(name = "_apk_info")]
 fn apk_info(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // another extension may have set the global logger already: keep it,
     // a panic here would fail the import

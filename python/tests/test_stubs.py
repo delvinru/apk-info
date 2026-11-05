@@ -1,4 +1,4 @@
-"""Checks that apk_info.pyi describes the compiled module.
+"""Checks that apk_info/__init__.pyi describes the compiled module.
 
 The stub is written by hand, so it drifts: a field that no longer exists, a
 missing signature variant, a set annotated as a list. These tests compare it
@@ -24,7 +24,7 @@ import apk_info
 from apk_info import APK
 
 ROOT = Path(__file__).resolve().parents[2]
-STUB = ROOT / "python" / "apk_info.pyi"
+STUB = ROOT / "python" / "apk_info" / "__init__.pyi"
 FIXTURES = sorted(
     path
     for directory in ("crates/zip/tests/fixtures", "core/tests/fixtures")

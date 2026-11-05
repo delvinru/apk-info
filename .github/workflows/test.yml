@@ -88,8 +88,8 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v10.3.3
 
-      # apk_info.pyi is written by hand: check it against the built module
-      - name: Check apk_info.pyi
+      # apk_info/__init__.pyi is written by hand: check it against the built module
+      - name: Check the type stubs
         working-directory: python
         run: |
           uv venv --python 3.13

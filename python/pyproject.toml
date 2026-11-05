@@ -27,9 +27,11 @@ Issues = "https://github.com/delvinru/apk-info/issues"
 Changelog = "https://github.com/delvinru/apk-info/releases"
 
 [tool.maturin]
+module-name = "apk_info._apk_info"
 profile = "release-python"
 features = ["pyo3/extension-module"]
 strip = true
+exclude = [{ path = "**/tests/fixtures/**/*", format = "sdist" }]
 
 [build-system]
 requires = ["maturin>=1.14.1,<2.0"]
