@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Panic when a container without a root manifest holds a file with a non-ASCII name, e.g. `OPNE GIFT🎁.md`.
+
 ## [1.1.0] - 2026-11-02
 
 ### Added

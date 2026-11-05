@@ -19,12 +19,14 @@ fn base_apk() -> Vec<u8> {
     apks.read("universal.apk").unwrap().0
 }
 
-/// Builds a stored zip archive with the given files.
-fn stored_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
+/// Builds a stored zip archive with the given files. Names are raw bytes, so
+/// a test can write one that isn't UTF-8.
+fn stored_zip<N: AsRef<[u8]>>(files: &[(N, &[u8])]) -> Vec<u8> {
     let mut out = Vec::new();
     let mut central_directory = Vec::new();
 
     for (name, data) in files {
+        let name = name.as_ref();
         let offset = out.len() as u32;
         let crc = crc32(data);
 
@@ -36,7 +38,7 @@ fn stored_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
         out.extend_from_slice(&(data.len() as u32).to_le_bytes());
         out.extend_from_slice(&(name.len() as u16).to_le_bytes());
         out.extend_from_slice(&0u16.to_le_bytes()); // extra len
-        out.extend_from_slice(name.as_bytes());
+        out.extend_from_slice(name);
         out.extend_from_slice(data);
 
         central_directory.extend_from_slice(&0x0201_4b50u32.to_le_bytes());
@@ -49,7 +51,7 @@ fn stored_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
         central_directory.extend_from_slice(&(name.len() as u16).to_le_bytes());
         central_directory.extend_from_slice(&[0u8; 12]); // extra, comment, disk, attrs
         central_directory.extend_from_slice(&offset.to_le_bytes());
-        central_directory.extend_from_slice(name.as_bytes());
+        central_directory.extend_from_slice(name);
     }
 
     let cd_offset = out.len() as u32;
@@ -81,20 +83,20 @@ fn crc32(data: &[u8]) -> u32 {
 }
 
 /// Writes the container to a unique temp file, `Apk::new` takes a path.
-fn container(test: &str, files: &[(&str, &[u8])]) -> PathBuf {
+fn container<N: AsRef<[u8]>>(test: &str, files: &[(N, &[u8])]) -> PathBuf {
     let path = std::env::temp_dir().join(format!("apk-info-{}-{test}.xapk", std::process::id()));
     std::fs::write(&path, stored_zip(files)).unwrap();
     path
 }
 
-fn open(test: &str, files: &[(&str, &[u8])]) -> Result<Apk, APKError> {
+fn open<N: AsRef<[u8]>>(test: &str, files: &[(N, &[u8])]) -> Result<Apk, APKError> {
     let path = container(test, files);
     let apk = Apk::new(&path);
     std::fs::remove_file(path).unwrap();
     apk
 }
 
-fn package(test: &str, files: &[(&str, &[u8])]) -> String {
+fn package<N: AsRef<[u8]>>(test: &str, files: &[(N, &[u8])]) -> String {
     open(test, files)
         .unwrap_or_else(|err| panic!("{test}: {err}"))
         .get_package_name()
@@ -225,6 +227,27 @@ fn base_apk_is_guessed_by_case_and_directory() {
         package("no-toc", &[("splits/base-master.apk", &base)]),
         PACKAGE
     );
+}
+
+/// Non-ASCII root names next to the apk, e.g. `OPNE GIFT🎁.md` in
+/// dropper archives, must not break the `.apk` suffix check.
+#[test]
+fn base_apk_is_guessed_next_to_non_ascii_names() {
+    let base = base_apk();
+    let files = [("GIFT🎁.md", &b"x"[..]), ("app-release.apk", &base)];
+    assert_eq!(package("non-ascii", &files), PACKAGE);
+}
+
+/// A name that isn't UTF-8 is read lossily: `\xff` becomes U+FFFD, three
+/// bytes, which the suffix check must not cut either.
+#[test]
+fn base_apk_is_guessed_next_to_non_utf8_names() {
+    let base = base_apk();
+    let files = [
+        (&b"note\xff.md"[..], &b"x"[..]),
+        (b"app-release.apk", &base),
+    ];
+    assert_eq!(package("non-utf8", &files), PACKAGE);
 }
 
 #[test]

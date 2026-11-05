@@ -355,7 +355,7 @@ impl Apk {
                     .filter(|name| {
                         !name.contains('/')
                             && name.len() > 4
-                            && name[name.len() - 4..].eq_ignore_ascii_case(".apk")
+                            && name.as_bytes()[name.len() - 4..].eq_ignore_ascii_case(b".apk")
                     })
                     .map(str::to_owned),
             );
