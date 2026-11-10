@@ -40,5 +40,5 @@ build-backend = "maturin"
 [dependency-groups]
 docs = [
     "mkdocstrings-python>=2.0.6",
-    "zensical>=0.0.74",
+    "zensical>=0.1.0",
 ]
